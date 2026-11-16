@@ -1,0 +1,123 @@
+{
+  "device_id": "SIM-CAM1",
+  "source_id": "sim",
+  "origin": "simulated",
+  "seq": 30311,
+  "t_us": 303829000,
+  "device_time_us": 303741210,
+  "time_quality": "estimated",
+  "calibration_ref": null,
+  "confidence": 0.97,
+  "data": {
+    "kind": "landmarks_2d",
+    "landmarks": {
+      "frame_meta": {
+        "device_id": "SIM-CAM1",
+        "frame_seq": 9114,
+        "t_us": 303800000,
+        "device_time_us": 303712345,
+        "time_quality": "estimated",
+        "image_size_px": [
+          1280,
+          720
+        ]
+      },
+      "frame": {
+        "type": "image",
+        "id": "SIM-CAM1"
+      },
+      "origin": "simulated",
+      "schema_id": "kinexa.body.v1.joints",
+      "detector": "simulated-projection",
+      "points": [
+        {
+          "x_px": 640.0,
+          "y_px": 425.7,
+          "confidence": 0.98
+        },
+        {
+          "x_px": 640.0,
+          "y_px": 400.4,
+          "confidence": 0.98
+        },
+        {
+          "x_px": 640.0,
+          "y_px": 354.0,
+          "confidence": 0.98
+        },
+        {
+          "x_px": 640.0,
+          "y_px": 304.1,
+          "confidence": 0.98
+        },
+        {
+          "x_px": 640.0,
+          "y_px": 282.2,
+          "confidence": 0.98
+        },
+        {
+          "x_px": 648.4,
+          "y_px": 311.7,
+          "confidence": 0.98
+        },
+        {
+          "x_px": 694.7,
+          "y_px": 304.1,
+          "confidence": 0.98
+        },
+        {
+          "x_px": 773.2,
+          "y_px": 304.1,
+          "confidence": 0.98
+        },
+        null,
+        {
+          "x_px": 631.6,
+          "y_px": 311.7,
+          "confidence": 0.98
+        },
+        {
+          "x_px": 585.3,
+          "y_px": 304.1,
+          "confidence": 0.98
+        },
+        {
+          "x_px": 506.8,
+          "y_px": 304.1,
+          "confidence": 0.98
+        },
+        null,
+        {
+          "x_px": 680.3,
+          "y_px": 425.7,
+          "confidence": 0.98
+        },
+        {
+          "x_px": 680.3,
+          "y_px": 529.2,
+          "confidence": 0.98
+        },
+        {
+          "x_px": 680.3,
+          "y_px": 633.0,
+          "confidence": 0.98
+        },
+        {
+          "x_px": 599.7,
+          "y_px": 425.7,
+          "confidence": 0.98
+        },
+        {
+          "x_px": 599.7,
+          "y_px": 529.2,
+          "confidence": 0.98
+        },
+        {
+          "x_px": 599.7,
+          "y_px": 633.0,
+          "confidence": 0.98
+        }
+      ]
+    }
+  }
+}

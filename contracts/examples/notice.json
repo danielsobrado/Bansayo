@@ -1,0 +1,6 @@
+{
+  "type": "notice",
+  "level": "warning",
+  "code": "device_disconnected",
+  "message": "Tracker SIM-T04 is disconnected."
+}

@@ -1,0 +1,29 @@
+.tag {
+  display: inline-block;
+  padding: 0 var(--space-4);
+  border: var(--hairline) solid var(--ink-3);
+  border-radius: var(--radius-tag);
+  color: var(--ink-2);
+  font-size: var(--text-small);
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.tag[data-prov="measured"] {
+  color: var(--prov-measured);
+  border-color: var(--prov-measured);
+}
+.tag[data-prov="derived"] {
+  color: var(--prov-derived);
+  border-color: var(--prov-derived);
+}
+.tag[data-prov="inferred"] {
+  color: var(--prov-inferred);
+  border-color: var(--prov-inferred);
+  border-style: dashed;
+}
+.tag[data-prov="unavailable"] {
+  color: var(--prov-unavailable);
+  border-color: var(--prov-unavailable);
+  border-style: dotted;
+}

@@ -1,0 +1,32 @@
+[workspace]
+members = ["crates/*"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+rust-version = "1.92"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ts-rs = "12"
+kinexa-contracts = { path = "crates/kinexa-contracts" }
+axum = { version = "0.8", features = ["ws"] }
+clap = { version = "4", features = ["derive"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+humantime = "2"
+nalgebra = "0.35"
+rand = { version = "0.9", default-features = false }
+rand_chacha = { version = "0.9", default-features = false }
+serde-saphyr = { version = "2", default-features = false, features = ["deserialize"] }
+thiserror = "2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync", "signal"] }
+tokio-util = "0.7"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+http-body-util = "0.1"
+tempfile = "3"
+tokio-tungstenite = "0.29"
+tower = { version = "0.5", features = ["util"] }

@@ -1,0 +1,35 @@
+{
+  "ok": true,
+  "data": {
+    "source_id": "sim",
+    "motion": "standing",
+    "available_motions": [
+      {
+        "id": "reference_pose",
+        "label": "Reference pose"
+      },
+      {
+        "id": "standing",
+        "label": "Standing"
+      },
+      {
+        "id": "squat",
+        "label": "Squat"
+      },
+      {
+        "id": "knee_flexion",
+        "label": "Knee flexion"
+      },
+      {
+        "id": "arm_raise",
+        "label": "Arm raise"
+      },
+      {
+        "id": "front_kick",
+        "label": "Front kick"
+      }
+    ],
+    "speed": 1.0,
+    "paused": false
+  }
+}

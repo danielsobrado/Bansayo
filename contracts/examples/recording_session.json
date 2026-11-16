@@ -1,0 +1,13 @@
+{
+  "id": "20261116T102205Z-a3f9",
+  "name": "Squat set 1",
+  "created_utc": "2026-11-16T10:22:05Z",
+  "duration_us": 42500000,
+  "size_bytes": 18734112,
+  "origins": [
+    "simulated"
+  ],
+  "device_count": 5,
+  "engine_version": "0.1.0",
+  "protocol_version": 1
+}

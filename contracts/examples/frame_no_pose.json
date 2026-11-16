@@ -1,0 +1,131 @@
+{
+  "type": "frame",
+  "seq": 412,
+  "t_us": 6866666,
+  "origins": [
+    "simulated"
+  ],
+  "pose": null,
+  "joints": [
+    {
+      "value": null,
+      "provenance": "unavailable",
+      "confidence": null,
+      "reasons": [
+        {
+          "code": "no_orientation_source",
+          "subject": null,
+          "message": "No device provides orientation."
+        }
+      ]
+    },
+    {
+      "value": null,
+      "provenance": "unavailable",
+      "confidence": null,
+      "reasons": [
+        {
+          "code": "no_orientation_source",
+          "subject": null,
+          "message": "No device provides orientation."
+        }
+      ]
+    },
+    {
+      "value": null,
+      "provenance": "unavailable",
+      "confidence": null,
+      "reasons": [
+        {
+          "code": "no_orientation_source",
+          "subject": null,
+          "message": "No device provides orientation."
+        }
+      ]
+    },
+    {
+      "value": null,
+      "provenance": "unavailable",
+      "confidence": null,
+      "reasons": [
+        {
+          "code": "no_orientation_source",
+          "subject": null,
+          "message": "No device provides orientation."
+        }
+      ]
+    },
+    {
+      "value": null,
+      "provenance": "unavailable",
+      "confidence": null,
+      "reasons": [
+        {
+          "code": "no_orientation_source",
+          "subject": null,
+          "message": "No device provides orientation."
+        }
+      ]
+    },
+    {
+      "value": null,
+      "provenance": "unavailable",
+      "confidence": null,
+      "reasons": [
+        {
+          "code": "no_orientation_source",
+          "subject": null,
+          "message": "No device provides orientation."
+        }
+      ]
+    },
+    {
+      "value": null,
+      "provenance": "unavailable",
+      "confidence": null,
+      "reasons": [
+        {
+          "code": "no_orientation_source",
+          "subject": null,
+          "message": "No device provides orientation."
+        }
+      ]
+    },
+    {
+      "value": null,
+      "provenance": "unavailable",
+      "confidence": null,
+      "reasons": [
+        {
+          "code": "no_orientation_source",
+          "subject": null,
+          "message": "No device provides orientation."
+        }
+      ]
+    },
+    {
+      "value": null,
+      "provenance": "unavailable",
+      "confidence": null,
+      "reasons": [
+        {
+          "code": "no_orientation_source",
+          "subject": null,
+          "message": "No device provides orientation."
+        }
+      ]
+    }
+  ],
+  "quality": {
+    "state": "unavailable",
+    "observed_segments": 0,
+    "total_segments": 19,
+    "reasons": [
+      {
+        "code": "no_orientation_source",
+        "subject": null,
+        "message": "No device provides orientation."
+      }
+    ]
+  }
+}

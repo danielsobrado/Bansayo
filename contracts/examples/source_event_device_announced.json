@@ -1,0 +1,20 @@
+{
+  "type": "device_announced",
+  "descriptor": {
+    "id": "SIM-T01",
+    "source_id": "sim",
+    "kind": "imu_tracker",
+    "origin": "simulated",
+    "model": "Simulated IMU",
+    "firmware": null,
+    "transport": "simulated",
+    "capabilities": [
+      "orientation",
+      "battery",
+      "signal_strength",
+      "quality"
+    ],
+    "nominal_rate_hz": 100.0,
+    "camera": null
+  }
+}

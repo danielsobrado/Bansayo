@@ -1,0 +1,24 @@
+{
+  "device_id": "SIM-T01",
+  "source_id": "sim",
+  "origin": "simulated",
+  "seq": 30311,
+  "t_us": 303829000,
+  "device_time_us": 303741210,
+  "time_quality": "estimated",
+  "calibration_ref": null,
+  "confidence": 0.97,
+  "data": {
+    "kind": "orientation",
+    "frame": {
+      "type": "sensor_reference",
+      "id": "SIM-T01"
+    },
+    "q": [
+      0.0,
+      0.0,
+      0.70710677,
+      0.70710677
+    ]
+  }
+}

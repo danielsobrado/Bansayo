@@ -1,0 +1,18 @@
+{
+  "device_id": "SIM-T01",
+  "source_id": "sim",
+  "origin": "simulated",
+  "seq": 30311,
+  "t_us": 303829000,
+  "device_time_us": 303741210,
+  "time_quality": "estimated",
+  "calibration_ref": null,
+  "confidence": 0.97,
+  "data": {
+    "kind": "diagnostics",
+    "battery_level": 0.82,
+    "charging": false,
+    "rssi_dbm": -54,
+    "quality": 0.97
+  }
+}

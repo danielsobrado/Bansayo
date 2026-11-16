@@ -1,0 +1,440 @@
+{
+  "type": "frame",
+  "seq": 18230,
+  "t_us": 303833333,
+  "origins": [
+    "simulated"
+  ],
+  "pose": {
+    "skeleton_rev": 1,
+    "root_position_m": [
+      0.0,
+      0.9275,
+      0.0
+    ],
+    "root_position_provenance": "inferred",
+    "segments": [
+      {
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "position_m": [
+          0.0,
+          0.9275,
+          0.0
+        ],
+        "provenance": "derived",
+        "confidence": 0.97,
+        "sources": [
+          "SIM-T01"
+        ]
+      },
+      {
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "position_m": [
+          0.0,
+          1.0325,
+          0.0
+        ],
+        "provenance": "inferred",
+        "confidence": null,
+        "sources": []
+      },
+      {
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "position_m": [
+          0.0,
+          1.225,
+          0.0
+        ],
+        "provenance": "derived",
+        "confidence": 0.97,
+        "sources": [
+          "SIM-T02"
+        ]
+      },
+      {
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "position_m": [
+          0.0,
+          1.4315,
+          0.0
+        ],
+        "provenance": "inferred",
+        "confidence": null,
+        "sources": []
+      },
+      {
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "position_m": [
+          0.0,
+          1.5225,
+          0.0
+        ],
+        "provenance": "inferred",
+        "confidence": null,
+        "sources": []
+      },
+      {
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "position_m": [
+          0.035,
+          1.4,
+          0.0
+        ],
+        "provenance": "inferred",
+        "confidence": null,
+        "sources": []
+      },
+      {
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "position_m": [
+          0.226625,
+          1.4315,
+          0.0
+        ],
+        "provenance": "inferred",
+        "confidence": null,
+        "sources": []
+      },
+      {
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "position_m": [
+          0.552125,
+          1.4315,
+          0.0
+        ],
+        "provenance": "inferred",
+        "confidence": null,
+        "sources": []
+      },
+      {
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "position_m": [
+          0.807625,
+          1.4315,
+          0.0
+        ],
+        "provenance": "inferred",
+        "confidence": null,
+        "sources": []
+      },
+      {
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "position_m": [
+          -0.035,
+          1.4,
+          0.0
+        ],
+        "provenance": "inferred",
+        "confidence": null,
+        "sources": []
+      },
+      {
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "position_m": [
+          -0.226625,
+          1.4315,
+          0.0
+        ],
+        "provenance": "inferred",
+        "confidence": null,
+        "sources": []
+      },
+      {
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "position_m": [
+          -0.552125,
+          1.4315,
+          0.0
+        ],
+        "provenance": "inferred",
+        "confidence": null,
+        "sources": []
+      },
+      {
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "position_m": [
+          -0.807625,
+          1.4315,
+          0.0
+        ],
+        "provenance": "inferred",
+        "confidence": null,
+        "sources": []
+      },
+      {
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "position_m": [
+          0.167125,
+          0.9275,
+          0.0
+        ],
+        "provenance": "derived",
+        "confidence": 0.97,
+        "sources": [
+          "SIM-T03"
+        ]
+      },
+      {
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "position_m": [
+          0.167125,
+          0.49875,
+          0.0
+        ],
+        "provenance": "derived",
+        "confidence": 0.97,
+        "sources": [
+          "SIM-T04"
+        ]
+      },
+      {
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "position_m": [
+          0.167125,
+          0.06825,
+          0.0
+        ],
+        "provenance": "inferred",
+        "confidence": null,
+        "sources": []
+      },
+      {
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "position_m": [
+          -0.167125,
+          0.9275,
+          0.0
+        ],
+        "provenance": "inferred",
+        "confidence": null,
+        "sources": []
+      },
+      {
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "position_m": [
+          -0.167125,
+          0.49875,
+          0.0
+        ],
+        "provenance": "inferred",
+        "confidence": null,
+        "sources": []
+      },
+      {
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "position_m": [
+          -0.167125,
+          0.06825,
+          0.0
+        ],
+        "provenance": "inferred",
+        "confidence": null,
+        "sources": []
+      }
+    ]
+  },
+  "joints": [
+    {
+      "value": 0.0,
+      "provenance": "derived",
+      "confidence": 0.95,
+      "reasons": []
+    },
+    {
+      "value": null,
+      "provenance": "unavailable",
+      "confidence": null,
+      "reasons": [
+        {
+          "code": "segment_not_observed",
+          "subject": "right_thigh",
+          "message": "Segment right_thigh is not observed."
+        }
+      ]
+    },
+    {
+      "value": null,
+      "provenance": "unavailable",
+      "confidence": null,
+      "reasons": [
+        {
+          "code": "segment_not_observed",
+          "subject": "left_upper_arm",
+          "message": "Segment left_upper_arm is not observed."
+        }
+      ]
+    },
+    {
+      "value": null,
+      "provenance": "unavailable",
+      "confidence": null,
+      "reasons": [
+        {
+          "code": "segment_not_observed",
+          "subject": "right_upper_arm",
+          "message": "Segment right_upper_arm is not observed."
+        }
+      ]
+    },
+    {
+      "value": 0.0,
+      "provenance": "derived",
+      "confidence": 0.95,
+      "reasons": []
+    },
+    {
+      "value": null,
+      "provenance": "unavailable",
+      "confidence": null,
+      "reasons": [
+        {
+          "code": "segment_not_observed",
+          "subject": "right_thigh",
+          "message": "Segment right_thigh is not observed."
+        }
+      ]
+    },
+    {
+      "value": null,
+      "provenance": "unavailable",
+      "confidence": null,
+      "reasons": [
+        {
+          "code": "segment_not_observed",
+          "subject": "left_upper_arm",
+          "message": "Segment left_upper_arm is not observed."
+        }
+      ]
+    },
+    {
+      "value": null,
+      "provenance": "unavailable",
+      "confidence": null,
+      "reasons": [
+        {
+          "code": "segment_not_observed",
+          "subject": "right_upper_arm",
+          "message": "Segment right_upper_arm is not observed."
+        }
+      ]
+    },
+    {
+      "value": 0.0,
+      "provenance": "derived",
+      "confidence": 0.95,
+      "reasons": []
+    }
+  ],
+  "quality": {
+    "state": "tracking",
+    "observed_segments": 4,
+    "total_segments": 19,
+    "reasons": [
+      {
+        "code": "root_position_not_measured",
+        "subject": null,
+        "message": "Root position is inferred from floor contact."
+      },
+      {
+        "code": "body_proportions_assumed",
+        "subject": null,
+        "message": "Body proportions are population averages for the entered height."
+      }
+    ]
+  }
+}

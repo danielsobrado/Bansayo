@@ -1,0 +1,8 @@
+{
+  "ok": false,
+  "error": {
+    "code": "conflict",
+    "message": "Recording cannot start while a session is being replayed.",
+    "details": null
+  }
+}

@@ -1,0 +1,1010 @@
+{
+  "type": "hello",
+  "protocol_version": 1,
+  "engine_version": "0.1.0",
+  "session_epoch_utc": "2026-11-16T10:17:01Z",
+  "conventions": {
+    "handedness": "right",
+    "up": "+y",
+    "forward": "+z",
+    "length_unit": "m",
+    "angle_unit": "rad",
+    "quaternion_order": "xyzw",
+    "time_unit": "us"
+  },
+  "skeleton": {
+    "model_id": "kinexa.body.v1",
+    "rev": 1,
+    "height_m": 1.75,
+    "proportions": "assumed",
+    "segments": [
+      {
+        "id": "pelvis",
+        "parent": null,
+        "offset_m": [
+          0.0,
+          0.9275,
+          0.0
+        ],
+        "tail_m": [
+          0.0,
+          0.105,
+          0.0
+        ],
+        "contact_points_m": []
+      },
+      {
+        "id": "spine",
+        "parent": "pelvis",
+        "offset_m": [
+          0.0,
+          0.105,
+          0.0
+        ],
+        "tail_m": [
+          0.0,
+          0.1925,
+          0.0
+        ],
+        "contact_points_m": []
+      },
+      {
+        "id": "chest",
+        "parent": "spine",
+        "offset_m": [
+          0.0,
+          0.1925,
+          0.0
+        ],
+        "tail_m": [
+          0.0,
+          0.2065,
+          0.0
+        ],
+        "contact_points_m": []
+      },
+      {
+        "id": "neck",
+        "parent": "chest",
+        "offset_m": [
+          0.0,
+          0.2065,
+          0.0
+        ],
+        "tail_m": [
+          0.0,
+          0.091,
+          0.0
+        ],
+        "contact_points_m": []
+      },
+      {
+        "id": "head",
+        "parent": "neck",
+        "offset_m": [
+          0.0,
+          0.091,
+          0.0
+        ],
+        "tail_m": [
+          0.0,
+          0.2275,
+          0.0
+        ],
+        "contact_points_m": []
+      },
+      {
+        "id": "left_clavicle",
+        "parent": "chest",
+        "offset_m": [
+          0.035,
+          0.175,
+          0.0
+        ],
+        "tail_m": [
+          0.191625,
+          0.0315,
+          0.0
+        ],
+        "contact_points_m": []
+      },
+      {
+        "id": "left_upper_arm",
+        "parent": "left_clavicle",
+        "offset_m": [
+          0.191625,
+          0.0315,
+          0.0
+        ],
+        "tail_m": [
+          0.3255,
+          0.0,
+          0.0
+        ],
+        "contact_points_m": []
+      },
+      {
+        "id": "left_forearm",
+        "parent": "left_upper_arm",
+        "offset_m": [
+          0.3255,
+          0.0,
+          0.0
+        ],
+        "tail_m": [
+          0.2555,
+          0.0,
+          0.0
+        ],
+        "contact_points_m": []
+      },
+      {
+        "id": "left_hand",
+        "parent": "left_forearm",
+        "offset_m": [
+          0.2555,
+          0.0,
+          0.0
+        ],
+        "tail_m": [
+          0.189,
+          0.0,
+          0.0
+        ],
+        "contact_points_m": []
+      },
+      {
+        "id": "right_clavicle",
+        "parent": "chest",
+        "offset_m": [
+          -0.035,
+          0.175,
+          0.0
+        ],
+        "tail_m": [
+          -0.191625,
+          0.0315,
+          0.0
+        ],
+        "contact_points_m": []
+      },
+      {
+        "id": "right_upper_arm",
+        "parent": "right_clavicle",
+        "offset_m": [
+          -0.191625,
+          0.0315,
+          0.0
+        ],
+        "tail_m": [
+          -0.3255,
+          0.0,
+          0.0
+        ],
+        "contact_points_m": []
+      },
+      {
+        "id": "right_forearm",
+        "parent": "right_upper_arm",
+        "offset_m": [
+          -0.3255,
+          0.0,
+          0.0
+        ],
+        "tail_m": [
+          -0.2555,
+          0.0,
+          0.0
+        ],
+        "contact_points_m": []
+      },
+      {
+        "id": "right_hand",
+        "parent": "right_forearm",
+        "offset_m": [
+          -0.2555,
+          0.0,
+          0.0
+        ],
+        "tail_m": [
+          -0.189,
+          0.0,
+          0.0
+        ],
+        "contact_points_m": []
+      },
+      {
+        "id": "left_thigh",
+        "parent": "pelvis",
+        "offset_m": [
+          0.167125,
+          0.0,
+          0.0
+        ],
+        "tail_m": [
+          0.0,
+          -0.42875,
+          0.0
+        ],
+        "contact_points_m": []
+      },
+      {
+        "id": "left_shin",
+        "parent": "left_thigh",
+        "offset_m": [
+          0.0,
+          -0.42875,
+          0.0
+        ],
+        "tail_m": [
+          0.0,
+          -0.4305,
+          0.0
+        ],
+        "contact_points_m": []
+      },
+      {
+        "id": "left_foot",
+        "parent": "left_shin",
+        "offset_m": [
+          0.0,
+          -0.4305,
+          0.0
+        ],
+        "tail_m": [
+          0.0,
+          -0.06825,
+          0.1925
+        ],
+        "contact_points_m": [
+          [
+            0.0,
+            -0.06825,
+            -0.0735
+          ],
+          [
+            0.0,
+            -0.06825,
+            0.1925
+          ]
+        ]
+      },
+      {
+        "id": "right_thigh",
+        "parent": "pelvis",
+        "offset_m": [
+          -0.167125,
+          0.0,
+          0.0
+        ],
+        "tail_m": [
+          0.0,
+          -0.42875,
+          0.0
+        ],
+        "contact_points_m": []
+      },
+      {
+        "id": "right_shin",
+        "parent": "right_thigh",
+        "offset_m": [
+          0.0,
+          -0.42875,
+          0.0
+        ],
+        "tail_m": [
+          0.0,
+          -0.4305,
+          0.0
+        ],
+        "contact_points_m": []
+      },
+      {
+        "id": "right_foot",
+        "parent": "right_shin",
+        "offset_m": [
+          0.0,
+          -0.4305,
+          0.0
+        ],
+        "tail_m": [
+          0.0,
+          -0.06825,
+          0.1925
+        ],
+        "contact_points_m": [
+          [
+            0.0,
+            -0.06825,
+            -0.0735
+          ],
+          [
+            0.0,
+            -0.06825,
+            0.1925
+          ]
+        ]
+      }
+    ],
+    "joints": [
+      {
+        "id": "left_knee_flexion",
+        "label": "Left knee flexion",
+        "segments": [
+          "left_thigh",
+          "left_shin"
+        ],
+        "method": "axis_angle",
+        "unit": "rad",
+        "validated": false
+      },
+      {
+        "id": "right_knee_flexion",
+        "label": "Right knee flexion",
+        "segments": [
+          "right_thigh",
+          "right_shin"
+        ],
+        "method": "axis_angle",
+        "unit": "rad",
+        "validated": false
+      },
+      {
+        "id": "left_elbow_flexion",
+        "label": "Left elbow flexion",
+        "segments": [
+          "left_upper_arm",
+          "left_forearm"
+        ],
+        "method": "axis_angle",
+        "unit": "rad",
+        "validated": false
+      },
+      {
+        "id": "right_elbow_flexion",
+        "label": "Right elbow flexion",
+        "segments": [
+          "right_upper_arm",
+          "right_forearm"
+        ],
+        "method": "axis_angle",
+        "unit": "rad",
+        "validated": false
+      },
+      {
+        "id": "left_hip_flexion",
+        "label": "Left hip flexion",
+        "segments": [
+          "pelvis",
+          "left_thigh"
+        ],
+        "method": "planar_angle",
+        "unit": "rad",
+        "validated": false
+      },
+      {
+        "id": "right_hip_flexion",
+        "label": "Right hip flexion",
+        "segments": [
+          "pelvis",
+          "right_thigh"
+        ],
+        "method": "planar_angle",
+        "unit": "rad",
+        "validated": false
+      },
+      {
+        "id": "left_shoulder_elevation",
+        "label": "Left shoulder elevation",
+        "segments": [
+          "chest",
+          "left_upper_arm"
+        ],
+        "method": "axis_angle",
+        "unit": "rad",
+        "validated": false
+      },
+      {
+        "id": "right_shoulder_elevation",
+        "label": "Right shoulder elevation",
+        "segments": [
+          "chest",
+          "right_upper_arm"
+        ],
+        "method": "axis_angle",
+        "unit": "rad",
+        "validated": false
+      },
+      {
+        "id": "trunk_forward_lean",
+        "label": "Trunk forward lean",
+        "segments": [
+          "pelvis",
+          "chest"
+        ],
+        "method": "planar_angle",
+        "unit": "rad",
+        "validated": false
+      }
+    ]
+  },
+  "state": {
+    "rev": 412,
+    "engine": {
+      "version": "0.1.0",
+      "protocol_version": 1,
+      "mode": "live",
+      "state": "degraded",
+      "uptime_s": 303.8
+    },
+    "devices": [
+      {
+        "descriptor": {
+          "id": "SIM-T01",
+          "source_id": "sim",
+          "kind": "imu_tracker",
+          "origin": "simulated",
+          "model": "Simulated IMU",
+          "firmware": null,
+          "transport": "simulated",
+          "capabilities": [
+            "orientation",
+            "battery",
+            "signal_strength",
+            "quality"
+          ],
+          "nominal_rate_hz": 100.0,
+          "camera": null
+        },
+        "state": "tracking",
+        "reasons": [
+          {
+            "code": "heading_alignment_assumed",
+            "subject": "SIM-T01",
+            "message": "Heading alignment has not been calibrated; identity is assumed."
+          }
+        ],
+        "assignment": "pelvis",
+        "stream": {
+          "measured_rate_hz": 99.8,
+          "last_seen_t_us": 303829000,
+          "received": 30311,
+          "dropped": 0,
+          "time_quality": "estimated"
+        },
+        "battery": {
+          "level": 0.82,
+          "charging": false
+        },
+        "signal": {
+          "rssi_dbm": -54
+        },
+        "quality": 0.97,
+        "calibration": [
+          {
+            "kind": "mounting",
+            "state": "valid",
+            "profile_id": "mounting-SIM-T01-pelvis"
+          },
+          {
+            "kind": "heading_alignment",
+            "state": "assumed",
+            "profile_id": null
+          }
+        ]
+      },
+      {
+        "descriptor": {
+          "id": "SIM-T02",
+          "source_id": "sim",
+          "kind": "imu_tracker",
+          "origin": "simulated",
+          "model": "Simulated IMU",
+          "firmware": null,
+          "transport": "simulated",
+          "capabilities": [
+            "orientation",
+            "battery",
+            "signal_strength",
+            "quality"
+          ],
+          "nominal_rate_hz": 100.0,
+          "camera": null
+        },
+        "state": "tracking",
+        "reasons": [
+          {
+            "code": "heading_alignment_assumed",
+            "subject": "SIM-T02",
+            "message": "Heading alignment has not been calibrated; identity is assumed."
+          }
+        ],
+        "assignment": "chest",
+        "stream": {
+          "measured_rate_hz": 99.8,
+          "last_seen_t_us": 303829000,
+          "received": 29104,
+          "dropped": 1,
+          "time_quality": "estimated"
+        },
+        "battery": {
+          "level": 0.82,
+          "charging": false
+        },
+        "signal": {
+          "rssi_dbm": -54
+        },
+        "quality": 0.97,
+        "calibration": [
+          {
+            "kind": "mounting",
+            "state": "valid",
+            "profile_id": "mounting-SIM-T02-chest"
+          },
+          {
+            "kind": "heading_alignment",
+            "state": "assumed",
+            "profile_id": null
+          }
+        ]
+      },
+      {
+        "descriptor": {
+          "id": "SIM-T03",
+          "source_id": "sim",
+          "kind": "imu_tracker",
+          "origin": "simulated",
+          "model": "Simulated IMU",
+          "firmware": null,
+          "transport": "simulated",
+          "capabilities": [
+            "orientation",
+            "battery",
+            "signal_strength",
+            "quality"
+          ],
+          "nominal_rate_hz": 100.0,
+          "camera": null
+        },
+        "state": "degraded",
+        "reasons": [
+          {
+            "code": "device_degraded",
+            "subject": "SIM-T03",
+            "message": "Tracker SIM-T03 reports low quality."
+          },
+          {
+            "code": "heading_alignment_assumed",
+            "subject": "SIM-T03",
+            "message": "Heading alignment has not been calibrated; identity is assumed."
+          },
+          {
+            "code": "mounting_calibration_stale",
+            "subject": "SIM-T03",
+            "message": "Mounting calibration is out of date; capture the reference pose again."
+          }
+        ],
+        "assignment": "left_thigh",
+        "stream": {
+          "measured_rate_hz": 99.8,
+          "last_seen_t_us": 303829000,
+          "received": 27897,
+          "dropped": 2,
+          "time_quality": "estimated"
+        },
+        "battery": {
+          "level": 0.82,
+          "charging": false
+        },
+        "signal": {
+          "rssi_dbm": -54
+        },
+        "quality": 0.3,
+        "calibration": [
+          {
+            "kind": "mounting",
+            "state": "stale",
+            "profile_id": "mounting-SIM-T03-left_thigh"
+          },
+          {
+            "kind": "heading_alignment",
+            "state": "assumed",
+            "profile_id": null
+          }
+        ]
+      },
+      {
+        "descriptor": {
+          "id": "SIM-T04",
+          "source_id": "sim",
+          "kind": "imu_tracker",
+          "origin": "simulated",
+          "model": "Simulated IMU",
+          "firmware": null,
+          "transport": "simulated",
+          "capabilities": [
+            "orientation",
+            "battery",
+            "signal_strength",
+            "quality"
+          ],
+          "nominal_rate_hz": 100.0,
+          "camera": null
+        },
+        "state": "disconnected",
+        "reasons": [
+          {
+            "code": "device_disconnected",
+            "subject": "SIM-T04",
+            "message": "Tracker SIM-T04 is disconnected."
+          },
+          {
+            "code": "heading_alignment_assumed",
+            "subject": "SIM-T04",
+            "message": "Heading alignment has not been calibrated; identity is assumed."
+          }
+        ],
+        "assignment": "left_shin",
+        "stream": {
+          "measured_rate_hz": 0.0,
+          "last_seen_t_us": 281400000,
+          "received": 26690,
+          "dropped": 12,
+          "time_quality": "estimated"
+        },
+        "battery": null,
+        "signal": null,
+        "quality": null,
+        "calibration": [
+          {
+            "kind": "mounting",
+            "state": "missing",
+            "profile_id": null
+          },
+          {
+            "kind": "heading_alignment",
+            "state": "assumed",
+            "profile_id": null
+          }
+        ]
+      },
+      {
+        "descriptor": {
+          "id": "SIM-CAM1",
+          "source_id": "sim",
+          "kind": "camera",
+          "origin": "simulated",
+          "model": "Simulated camera",
+          "firmware": null,
+          "transport": "simulated",
+          "capabilities": [
+            "image",
+            "landmarks_2d"
+          ],
+          "nominal_rate_hz": 30.0,
+          "camera": {
+            "resolution_px": [
+              1280,
+              720
+            ],
+            "landmark_schema": {
+              "id": "kinexa.body.v1.joints",
+              "names": [
+                "pelvis",
+                "spine",
+                "chest",
+                "neck",
+                "head",
+                "left_clavicle",
+                "left_upper_arm",
+                "left_forearm",
+                "left_hand",
+                "right_clavicle",
+                "right_upper_arm",
+                "right_forearm",
+                "right_hand",
+                "left_thigh",
+                "left_shin",
+                "left_foot",
+                "right_thigh",
+                "right_shin",
+                "right_foot"
+              ],
+              "edges": [
+                [
+                  0,
+                  1
+                ],
+                [
+                  1,
+                  2
+                ],
+                [
+                  2,
+                  3
+                ],
+                [
+                  3,
+                  4
+                ],
+                [
+                  2,
+                  5
+                ],
+                [
+                  5,
+                  6
+                ],
+                [
+                  6,
+                  7
+                ],
+                [
+                  7,
+                  8
+                ],
+                [
+                  2,
+                  9
+                ],
+                [
+                  9,
+                  10
+                ],
+                [
+                  10,
+                  11
+                ],
+                [
+                  11,
+                  12
+                ],
+                [
+                  0,
+                  13
+                ],
+                [
+                  13,
+                  14
+                ],
+                [
+                  14,
+                  15
+                ],
+                [
+                  0,
+                  16
+                ],
+                [
+                  16,
+                  17
+                ],
+                [
+                  17,
+                  18
+                ]
+              ]
+            }
+          }
+        },
+        "state": "tracking",
+        "reasons": [],
+        "assignment": null,
+        "stream": {
+          "measured_rate_hz": 30.0,
+          "last_seen_t_us": 303800000,
+          "received": 9114,
+          "dropped": 0,
+          "time_quality": "estimated"
+        },
+        "battery": null,
+        "signal": null,
+        "quality": null,
+        "calibration": [
+          {
+            "kind": "camera_intrinsics",
+            "state": "valid",
+            "profile_id": "camera-intrinsics-SIM-CAM1"
+          },
+          {
+            "kind": "camera_extrinsics",
+            "state": "valid",
+            "profile_id": "camera-extrinsics-SIM-CAM1"
+          }
+        ]
+      }
+    ],
+    "calibration": [
+      {
+        "id": "mounting-SIM-T01-pelvis",
+        "kind": "mounting",
+        "state": "valid",
+        "device_id": "SIM-T01",
+        "segment_id": "pelvis",
+        "method": "reference_pose",
+        "created_utc": "2026-11-16T10:22:05Z"
+      },
+      {
+        "id": "mounting-SIM-T02-chest",
+        "kind": "mounting",
+        "state": "valid",
+        "device_id": "SIM-T02",
+        "segment_id": "chest",
+        "method": "reference_pose",
+        "created_utc": "2026-11-16T10:22:05Z"
+      },
+      {
+        "id": "mounting-SIM-T03-left_thigh",
+        "kind": "mounting",
+        "state": "stale",
+        "device_id": "SIM-T03",
+        "segment_id": "left_thigh",
+        "method": "reference_pose",
+        "created_utc": "2026-11-16T10:22:05Z"
+      },
+      {
+        "id": "heading-alignment-default",
+        "kind": "heading_alignment",
+        "state": "assumed",
+        "device_id": null,
+        "segment_id": null,
+        "method": "default",
+        "created_utc": null
+      },
+      {
+        "id": "body-proportions-default",
+        "kind": "body_proportions",
+        "state": "assumed",
+        "device_id": null,
+        "segment_id": null,
+        "method": "default",
+        "created_utc": null
+      },
+      {
+        "id": "camera-intrinsics-SIM-CAM1",
+        "kind": "camera_intrinsics",
+        "state": "valid",
+        "device_id": "SIM-CAM1",
+        "segment_id": null,
+        "method": "declared_by_simulator",
+        "created_utc": "2026-11-16T10:17:01Z"
+      },
+      {
+        "id": "camera-extrinsics-SIM-CAM1",
+        "kind": "camera_extrinsics",
+        "state": "valid",
+        "device_id": "SIM-CAM1",
+        "segment_id": null,
+        "method": "declared_by_simulator",
+        "created_utc": "2026-11-16T10:17:01Z"
+      }
+    ],
+    "features": [
+      {
+        "id": "segment_orientation",
+        "state": "degraded",
+        "reasons": [
+          {
+            "code": "mounting_calibration_stale",
+            "subject": "SIM-T03",
+            "message": "Mounting calibration of SIM-T03 is out of date."
+          },
+          {
+            "code": "device_disconnected",
+            "subject": "SIM-T04",
+            "message": "Tracker SIM-T04 is disconnected."
+          }
+        ]
+      },
+      {
+        "id": "skeleton_pose",
+        "state": "available",
+        "reasons": []
+      },
+      {
+        "id": "joint_angles",
+        "state": "degraded",
+        "reasons": [
+          {
+            "code": "segment_not_observed",
+            "subject": "left_shin",
+            "message": "Left shin is not observed."
+          }
+        ]
+      },
+      {
+        "id": "root_position",
+        "state": "degraded",
+        "reasons": [
+          {
+            "code": "root_position_not_measured",
+            "subject": null,
+            "message": "Root position is inferred from floor contact."
+          }
+        ]
+      },
+      {
+        "id": "landmarks_2d",
+        "state": "available",
+        "reasons": []
+      },
+      {
+        "id": "landmarks_3d_triangulated",
+        "state": "unavailable",
+        "reasons": [
+          {
+            "code": "not_implemented",
+            "subject": "landmarks_3d_triangulated",
+            "message": "Triangulation is not implemented in this build."
+          }
+        ]
+      },
+      {
+        "id": "camera_imu_fusion",
+        "state": "unavailable",
+        "reasons": [
+          {
+            "code": "not_implemented",
+            "subject": "camera_imu_fusion",
+            "message": "Camera and IMU fusion is not implemented in this build."
+          }
+        ]
+      },
+      {
+        "id": "ground_contact",
+        "state": "unavailable",
+        "reasons": [
+          {
+            "code": "not_implemented",
+            "subject": "ground_contact",
+            "message": "Ground contact sensing is not implemented in this build."
+          }
+        ]
+      },
+      {
+        "id": "recording",
+        "state": "available",
+        "reasons": []
+      },
+      {
+        "id": "playback",
+        "state": "available",
+        "reasons": []
+      }
+    ],
+    "recording": null,
+    "playback": null,
+    "simulation": {
+      "source_id": "sim",
+      "motion": "standing",
+      "available_motions": [
+        {
+          "id": "reference_pose",
+          "label": "Reference pose"
+        },
+        {
+          "id": "standing",
+          "label": "Standing"
+        },
+        {
+          "id": "squat",
+          "label": "Squat"
+        },
+        {
+          "id": "knee_flexion",
+          "label": "Knee flexion"
+        },
+        {
+          "id": "arm_raise",
+          "label": "Arm raise"
+        },
+        {
+          "id": "front_kick",
+          "label": "Front kick"
+        }
+      ],
+      "speed": 1.0,
+      "paused": false
+    }
+  }
+}

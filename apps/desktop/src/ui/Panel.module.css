@@ -1,0 +1,15 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface-1);
+}
+
+.title {
+  padding: var(--space-8) var(--panel-padding) var(--space-4);
+  color: var(--ink-3);
+  font-size: var(--text-label);
+  font-weight: 500;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}

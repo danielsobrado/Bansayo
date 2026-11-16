@@ -1,0 +1,86 @@
+/* Design tokens, docs/07 §1. Components use these only. */
+:root {
+  /* Surfaces */
+  --surface-0: oklch(16% 0.012 250);
+  --surface-1: oklch(20% 0.014 250);
+  --surface-2: oklch(24% 0.016 250);
+  --surface-3: oklch(30% 0.018 250);
+  --line: oklch(33% 0.015 250);
+
+  /* Text */
+  --ink-1: oklch(96% 0.005 250);
+  --ink-2: oklch(80% 0.010 250);
+  --ink-3: oklch(66% 0.012 250);
+  --accent: oklch(78% 0.13 205);
+
+  /* State. --state-disconnected raised from 58% to 62% lightness for AA on --surface-1. */
+  --state-tracking: oklch(78% 0.16 150);
+  --state-degraded: oklch(80% 0.15 80);
+  --state-acquiring: oklch(74% 0.13 250);
+  --state-disconnected: oklch(62% 0.010 250);
+  --state-unavailable: oklch(66% 0.19 25);
+
+  /* Provenance. --prov-unavailable raised from 50% to 60% lightness for AA on --surface-1. */
+  --prov-measured: oklch(96% 0.005 250);
+  --prov-derived: oklch(78% 0.13 205);
+  --prov-inferred: oklch(72% 0.14 300);
+  --prov-unavailable: oklch(60% 0.010 250);
+
+  /* Type */
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --text-label: 11px;
+  --text-small: 12px;
+  --text-base: 13px;
+  --text-emphasis: 15px;
+  --text-title: 18px;
+  --text-readout: 24px;
+  --text-readout-lg: 32px;
+  --tracking-label: 0.04em;
+
+  /* Spacing, 4 px grid */
+  --space-2: 2px;
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --panel-padding: var(--space-12);
+
+  /* Radii */
+  --radius-tag: 2px;
+  --radius-control: 4px;
+  --radius-panel: 0;
+  --radius-float: 6px;
+
+  /* Lines and depth */
+  --hairline: 1px;
+  --focus-ring: 2px;
+  --shadow-float: 0 8px 24px oklch(8% 0.01 250 / 0.6);
+  --scrim: oklch(10% 0.01 250 / 0.55);
+  --dim-opacity: 0.4;
+
+  /* Layout */
+  --statusbar-height: 32px;
+  --transport-height: 40px;
+  --rail-width: 168px;
+  --rail-width-compact: 48px;
+  --side-panel-width: 240px;
+  --inspector-width: 300px;
+  --control-height: 24px;
+  --row-height: 24px;
+  --sparkline-height: 48px;
+  --indent-step: 12px;
+
+  /* Motion */
+  --duration-state: 120ms;
+  --duration-pulse: 1600ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-state: 0ms;
+  }
+}

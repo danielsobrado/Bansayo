@@ -1,0 +1,50 @@
+{
+  "device_id": "SIM-CAM1",
+  "source_id": "sim",
+  "origin": "simulated",
+  "seq": 30311,
+  "t_us": 303829000,
+  "device_time_us": 303741210,
+  "time_quality": "estimated",
+  "calibration_ref": null,
+  "confidence": 0.97,
+  "data": {
+    "kind": "landmarks_3d",
+    "landmarks": {
+      "kind": "triangulated",
+      "t_us": 303800000,
+      "frame": {
+        "type": "world"
+      },
+      "origin": "simulated",
+      "schema_id": "kinexa.body.v1.joints",
+      "calibration_refs": [
+        "camera-extrinsics-SIM-CAM1",
+        "camera-extrinsics-SIM-CAM2"
+      ],
+      "points": [
+        {
+          "m": [
+            0.0,
+            0.9275,
+            0.0
+          ],
+          "views": 2,
+          "reprojection_error_px": 1.4,
+          "confidence": 0.9
+        },
+        {
+          "m": [
+            0.0,
+            1.0325,
+            0.0
+          ],
+          "views": 2,
+          "reprojection_error_px": 1.4,
+          "confidence": 0.9
+        },
+        null
+      ]
+    }
+  }
+}

@@ -1,0 +1,40 @@
+.pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.glyph {
+  color: var(--ink-3);
+}
+
+.detail {
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.pill[data-state="tracking"] .glyph {
+  color: var(--state-tracking);
+}
+.pill[data-state="degraded"] .glyph {
+  color: var(--state-degraded);
+}
+.pill[data-state="acquiring"] .glyph {
+  color: var(--state-acquiring);
+  animation: pulse var(--duration-pulse) ease-in-out infinite;
+}
+.pill[data-state="disconnected"] .glyph {
+  color: var(--state-disconnected);
+}
+.pill[data-state="unavailable"] .glyph {
+  color: var(--state-unavailable);
+}
+
+@keyframes pulse {
+  50% {
+    opacity: var(--dim-opacity);
+  }
+}
