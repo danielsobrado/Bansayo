@@ -5,8 +5,8 @@ Status is **Accepted** unless noted.
 
 ## ADR-001 — Modular monolith in two crates
 
-**Decision.** The engine is one process. Code is split into `kinexa-contracts` (data that crosses
-a boundary) and `kinexa-engine` (library and binary). Module boundaries inside the engine are
+**Decision.** The engine is one process. Code is split into `bansayo-contracts` (data that crosses
+a boundary) and `bansayo-engine` (library and binary). Module boundaries inside the engine are
 enforced by review and by keeping pure modules free of Tokio and I/O.
 
 **Why.** One process removes a whole class of failure and latency. Two crates give the one
@@ -15,7 +15,7 @@ compiler-enforced boundary that matters now: contracts cannot depend on runtime 
 **Rejected.** Microservices, a message broker, one crate per module.
 
 **Revisit when** something other than the engine needs the domain logic without the runtime (a
-Godot native extension, an offline analysis tool). Then the pure modules move to `kinexa-core`.
+Godot native extension, an offline analysis tool). Then the pure modules move to `bansayo-core`.
 
 ## ADR-002 — One coordinate, quaternion and time convention
 
@@ -47,7 +47,7 @@ the same messages, negotiated at connection.
 
 ## ADR-004 — Rust is the source of truth for contracts; TypeScript is generated
 
-**Decision.** Contract types are defined once in `kinexa-contracts`. `ts-rs` emits TypeScript into
+**Decision.** Contract types are defined once in `bansayo-contracts`. `ts-rs` emits TypeScript into
 `contracts/ts/`. Tests emit golden JSON into `contracts/examples/` and fail when checked-in output
 is stale. The Godot client, which cannot consume generated types, is checked against the golden
 examples.
@@ -74,7 +74,7 @@ SQLite as an index over the same files.
 
 ## ADR-006 — The desktop shell hosts the engine library and uses only the network contract
 
-**Decision.** The Tauri shell links `kinexa-engine` and runs it in-process, or attaches to an
+**Decision.** The Tauri shell links `bansayo-engine` and runs it in-process, or attaches to an
 engine already listening. The web UI talks to the engine over HTTP and WebSocket in both the
 browser and the desktop build. The shell's Cargo package is outside the workspace.
 
@@ -178,3 +178,75 @@ mistaken for tracking.
 
 **Revisit when** stage 5 constraints can produce a better inferred pose. The label stays
 `inferred` either way.
+
+## ADR-014 — Triangulation is written independently; no FreeMoCap code or importer
+
+**Decision.** Multi-camera triangulation is native Rust written from standard multi-view geometry
+(`pipeline/triangulate.rs`). No code from FreeMoCap is used or ported, and a FreeMoCap recording
+importer or comparison mode is deliberately not built.
+
+**Why.** FreeMoCap is AGPL-3.0 and this project is MIT. Copying or translating its code would
+bring AGPL obligations into the project. The method itself (linear triangulation, reprojection
+check) is textbook and small enough to write and test directly.
+
+**Rejected.** Porting FreeMoCap's triangulation; calling it as a Python subprocess; an importer
+that links its code.
+
+**Revisit when** licensing is reviewed and settled for the whole project. Until then the same
+rule as ADR-009 applies: copyleft code stays out. At most, FreeMoCap may later serve as an offline
+comparison reference: its exported results compared against ours outside the product, with no code
+linked or copied.
+
+## ADR-015 — Camera models are calibration profiles
+
+**Decision.** A camera's intrinsics and extrinsics are `camera_intrinsics` and `camera_extrinsics`
+profiles in the existing calibration store, with typed `data` (`CameraIntrinsicsData`,
+`CameraExtrinsicsData`). Simulated cameras declare theirs from configuration, in memory
+(`declared_by_simulator`). Their data is also published in `CalibrationProfileSummary.data`. There
+is no calibration solver.
+
+**Why.** It reuses the store's states, invalidation, persistence and recording instead of adding a
+second place that holds calibration, and clients draw cameras from state they already receive.
+Solvers keep reading profiles and never compute calibration (see [05](05-calibration-and-fusion.md)).
+
+**Rejected.** Camera parameters in the YAML read directly by the solver; a separate camera-rig
+file; a solver written without real boards or detections to test it against.
+
+**Revisit when** real cameras exist and a calibration procedure is built; it writes the same
+profiles.
+
+## ADR-016 — Triangulation is a solver stage; its results are derived, not recorded
+
+**Decision.** Triangulation runs inside `pipeline::solve`, before root placement, so live mode and
+replay share one code path. Triangulated landmarks are computed from the recorded 2D landmarks and
+the camera profiles and are not themselves recorded. When trackers and a triangulated pelvis both
+exist, the skeleton root uses the measured position (provenance `measured`) instead of the
+floor-contact guess. Camera-only setups still publish no skeleton pose.
+
+**Why.** It follows ADR-005: recording inputs keeps sessions re-solvable, so a change to the
+triangulation re-processes old recordings. A single code path means replay cannot differ from live
+by construction.
+
+**Rejected.** A separate triangulation task with its own output channel and recording; recording
+the 3D landmarks; filtering or blending the camera root with the IMU estimate before real cameras
+exist to tune it against.
+
+**Revisit when** real cameras need temporal filtering or fusion stage 4's correction (ADR-011).
+
+## ADR-017 — Camera views are combined only within a configured skew
+
+**Decision.** A landmark is triangulated only from views that are fresh (within
+`engine.stale_after_ms`) and whose frame time is within `triangulation.max_skew_ms` (default 20 ms)
+of the newest camera frame. Views outside that window are left out, not interpolated. The skew,
+the reprojection limit, the minimum view count and the minimum ray angle are configuration under
+`triangulation:`.
+
+**Why.** At a few metres from a moving subject, unsynchronised views place a landmark between
+where the body was at two moments. Excluding them is visible and honest; interpolating hides it.
+The default is a starting value, not a measured one.
+
+**Rejected.** Combining the latest view of every camera regardless of age; interpolating 2D
+landmarks to a common time.
+
+**Revisit when** real cameras give measured skew and noise: set the defaults from data, and add a
+`time_sync` profile if offsets between camera clocks are systematic.

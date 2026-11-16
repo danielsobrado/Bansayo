@@ -5,7 +5,7 @@ use std::fmt;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
-use kinexa_contracts::{DeviceId, SegmentId, SourceId};
+use bansayo_contracts::{DeviceId, SegmentId, SourceId};
 
 use super::schema::*;
 use crate::skeleton::Skeleton;
@@ -127,6 +127,7 @@ pub(super) fn validate(config: Config) -> Result<Validated, Vec<Problem>> {
     }
     check_engine(&mut c, &config.engine);
     check_quality(&mut c, &config.quality);
+    check_triangulation(&mut c, &config.triangulation);
     let bind = check_api(&mut c, &config.api);
     let skeleton = Skeleton::builtin(
         &config.skeleton.model,
@@ -179,7 +180,7 @@ fn check_data_dir(dir: &PathBuf) -> Result<(), String> {
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     for index in 0..64 {
         let probe = dir.join(format!(
-            ".kinexa-write-probe-{}-{index}",
+            ".bansayo-write-probe-{}-{index}",
             std::process::id()
         ));
         match std::fs::OpenOptions::new()
@@ -211,6 +212,27 @@ fn check_quality(c: &mut Check, q: &QualityConfig) {
         1.0,
         60_000.0,
     );
+}
+
+fn check_triangulation(c: &mut Check, t: &TriangulationConfig) {
+    c.positive("triangulation.max_skew_ms", t.max_skew_ms as f64, 1000.0);
+    c.positive(
+        "triangulation.max_reprojection_error_px",
+        t.max_reprojection_error_px,
+        1000.0,
+    );
+    c.range("triangulation.min_views", t.min_views.into(), 2.0, 64.0);
+    c.positive("triangulation.min_ray_angle_deg", t.min_ray_angle_deg, 90.0);
+}
+
+/// The same bounds, for configurations restored from recordings.
+pub fn triangulation_valid(t: &TriangulationConfig) -> bool {
+    let mut c = Check {
+        problems: vec![],
+        warnings: vec![],
+    };
+    check_triangulation(&mut c, t);
+    c.problems.is_empty()
 }
 
 fn check_api(c: &mut Check, api: &ApiConfig) -> Option<SocketAddr> {
@@ -427,7 +449,7 @@ fn check_assignments(
         if seg.is_none() {
             c.err(
                 &path,
-                format!("{segment:?} is not a segment of kinexa.body.v1"),
+                format!("{segment:?} is not a segment of bansayo.body.v1"),
             );
         }
         match devices.get(device) {
@@ -474,6 +496,7 @@ mod tests {
 schema_version: 2
 engine: {{ publish_rate_hz: 0, data_dir: {dir:?} }}
 api: {{ bind: "nowhere" }}
+triangulation: {{ min_views: 1, max_reprojection_error_px: 0 }}
 assignments: {{ SIM-T01: left_tigh, SIM-T02: pelvis, SIM-T03: pelvis }}
 sources:
   - id: sim
@@ -498,6 +521,11 @@ sources:
             "{p:#?}"
         );
         assert!(has("api.bind", "not an address"), "{p:#?}");
+        assert!(has("triangulation.min_views", "between 2 and 64"), "{p:#?}");
+        assert!(
+            has("triangulation.max_reprojection_error_px", "greater than 0"),
+            "{p:#?}"
+        );
         assert!(
             has("assignments.SIM-T01", "\"left_tigh\" is not a segment"),
             "{p:#?}"

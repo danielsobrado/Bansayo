@@ -2,7 +2,7 @@
 
 mod support;
 
-use kinexa_contracts::*;
+use bansayo_contracts::*;
 use serde_json::{Value, json};
 
 use support::{dev, examples, generated};

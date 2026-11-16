@@ -3,7 +3,7 @@
 This is the approved contract between the engine and every client. Changing anything here needs
 the architect's approval and a notice to both implementation agents.
 
-Type shapes use TypeScript notation. After Stage 0 of the plan, `crates/kinexa-contracts` is the
+Type shapes use TypeScript notation. After Stage 0 of the plan, `crates/bansayo-contracts` is the
 implementation source of truth, `contracts/ts/` is generated from it, and `contracts/examples/`
 holds golden messages that the Rust tests round-trip. If the crate and this document disagree,
 that is a defect to raise, not a choice to make locally.
@@ -208,8 +208,45 @@ type PoseLandmarks3D =
       points: ({ p: Vec3; confidence: number } | null)[] }
   | { kind: "triangulated";        // metric, world frame
       t_us: TimeUs; frame: FrameRef; origin: Origin; schema_id: string;
-      calibration_refs: string[];
-      points: ({ m: Vec3; views: number; reprojection_error_px: number; confidence: number } | null)[] };
+      calibration_refs: ProfileId[];   // intrinsics and extrinsics profiles of the cameras used
+      points: (TriangulatedLandmark3D | null)[] };   // index-aligned with the schema; null = not reconstructed
+
+// One triangulated landmark, metres in the world frame.
+interface TriangulatedLandmark3D {
+  m: Vec3;
+  views: number;                   // cameras used; equals used_views.length
+  reprojection_error_px: number;   // RMS over the used views
+  confidence: number;              // relative indicator, not an accuracy
+  used_views: DeviceId[];          // cameras whose observation contributed to m
+  rejected_views: DeviceId[];      // cameras that observed it but were rejected as outliers
+}
+```
+
+`t_us` of a triangulated set is the frame time of the newest camera frame in it. A landmark that
+cannot be validated (too few views, failed reprojection check, behind a camera, nearly parallel
+rays) is `null`, never a low-confidence guess. How the set is built is in
+[05 §7](05-calibration-and-fusion.md).
+
+### Camera calibration data
+
+The `data` of a `camera_intrinsics` or `camera_extrinsics` calibration profile
+([05](05-calibration-and-fusion.md)). Profile `data` is untyped on the wire
+(`Record<string, unknown>`); these are the typed forms.
+
+```ts
+// Pinhole model with Brown-Conrady distortion.
+interface CameraIntrinsicsData {
+  image_size_px: [number, number];   // size the intrinsics were calibrated at
+  fx_px: number; fy_px: number; cx_px: number; cy_px: number;
+  distortion: [number, number, number, number, number];   // [k1, k2, p1, p2, k3], OpenCV order; zeros = ideal
+}
+
+// T_world_from_camera. Camera frame: +X right, +Y down, +Z along the optical axis.
+// p_world = q_world_from_camera * p_camera + t_world_from_camera_m
+interface CameraExtrinsicsData {
+  q_world_from_camera: Quat;
+  t_world_from_camera_m: Vec3;       // camera optical centre in world, metres
+}
 ```
 
 ### Skeleton and pose
@@ -233,7 +270,7 @@ interface JointDef {
 }
 
 interface SkeletonDefinition {
-  model_id: string;                // "kinexa.body.v1"
+  model_id: string;                // "bansayo.body.v1"
   rev: number;                     // increments whenever the definition or its scaling changes
   height_m: number;
   proportions: CalibrationState;   // "assumed" until body-proportion calibration exists
@@ -293,6 +330,8 @@ interface CalibrationProfileSummary {
   segment_id: SegmentId | null;
   method: string;                  // e.g. "reference_pose", "declared_by_simulator", "default"
   created_utc: string | null;      // RFC 3339
+  data?: Record<string, unknown>;  // camera kinds only: CameraIntrinsicsData / CameraExtrinsicsData,
+                                   // so clients can draw cameras without a second request
 }
 
 interface RecordingSession {
@@ -339,9 +378,10 @@ interface SystemState {
 
 ## 4. WebSocket stream
 
-`GET /api/v1/stream?topics=frame,state,landmarks_2d&max_rate_hz=60`
+`GET /api/v1/stream?topics=frame,state,landmarks_2d,landmarks_3d&max_rate_hz=60`
 
-- `topics` — comma-separated subset of `frame`, `state`, `landmarks_2d`. Default: `frame,state`.
+- `topics` — comma-separated subset of `frame`, `state`, `landmarks_2d`, `landmarks_3d`. Default:
+  `frame,state`. Any other topic is `invalid_request`.
 - `max_rate_hz` — upper bound for `frame` delivery to this client. Default: the publish rate.
 - Server push only. Clients send nothing but WebSocket control frames. All control goes over HTTP.
 - Each text frame is one JSON object with a `type` field.
@@ -366,6 +406,7 @@ type ServerMessage =
       joints: JointMeasurement[];                           // index-aligned with skeleton.joints
       quality: TrackingQuality }
   | { type: "landmarks_2d"; landmarks: PoseLandmarks2D }
+  | { type: "landmarks_3d"; landmarks: PoseLandmarks3D }    // engine-triangulated: kind "triangulated"
   | { type: "notice"; level: "info" | "warning" | "error"; code: string; message: string };
 ```
 
@@ -377,6 +418,9 @@ type ServerMessage =
 - Entering or leaving replay is announced by a `state` message before the first frame of the new
   mode. `frame.seq` continues to increase across the change.
 - A slow client is never buffered for: it receives the most recent frame at its own pace.
+- `landmarks_3d` is sent once per camera frame set that is solved (once per distinct `t_us`), not
+  at the publish rate, and only when at least one view set could be combined. Like
+  `landmarks_2d` it is delivered from a bounded queue: a lagging client loses the oldest.
 
 ### Example messages
 
@@ -422,9 +466,28 @@ Abbreviated; complete golden files are generated into `contracts/examples/`.
                     "image_size_px": [1280, 720] },
     "frame": { "type": "image", "id": "SIM-CAM1" },
     "origin": "simulated",
-    "schema_id": "kinexa.body.v1.joints",
+    "schema_id": "bansayo.body.v1.joints",
     "detector": "simulated-projection",
     "points": [{ "x_px": 640.2, "y_px": 402.7, "confidence": 0.98 }, null]
+  }
+}
+```
+
+```json
+{
+  "type": "landmarks_3d",
+  "landmarks": {
+    "kind": "triangulated",
+    "t_us": 303800000,
+    "frame": { "type": "world" },
+    "origin": "simulated",
+    "schema_id": "bansayo.body.v1.joints",
+    "calibration_refs": ["camera-extrinsics-SIM-CAM1", "camera-extrinsics-SIM-CAM2"],
+    "points": [
+      { "m": [0.0, 0.9275, 0.0], "views": 2, "reprojection_error_px": 1.4, "confidence": 0.9,
+        "used_views": ["SIM-CAM1", "SIM-CAM2"], "rejected_views": [] },
+      null
+    ]
   }
 }
 ```
@@ -539,7 +602,7 @@ logging:
   format: pretty               # pretty | json
 
 skeleton:
-  model: kinexa.body.v1
+  model: bansayo.body.v1
   height_m: 1.75
 
 # Initial device → segment assignments. Changes made at runtime are stored in
@@ -554,6 +617,12 @@ quality:
   degraded_rate_fraction: 0.7  # measured rate below this fraction of nominal → degraded
   degraded_quality: 0.5        # device-reported quality below this → degraded
   disconnect_after_ms: 1000    # no data for this long → disconnected
+
+triangulation:                 # multi-camera 3D landmarks; needs two or more calibrated cameras
+  max_skew_ms: 20              # views further than this from the newest camera frame are not combined
+  max_reprojection_error_px: 15.0   # worse views are rejected; a point that cannot meet it is omitted
+  min_views: 2                 # fewest cameras per landmark (2 to 64)
+  min_ray_angle_deg: 3.0       # nearly parallel rays give no depth; such points are omitted
 
 sources:
   - id: sim
@@ -582,7 +651,9 @@ sources:
 ```
 
 Tracker and camera lists may be empty. Nothing in the engine or the clients depends on their
-length.
+length. The `triangulation` block is optional; the values shown are the defaults. A simulated camera
+declares its intrinsics and extrinsics from `resolution_px`, `fov_y_deg`, `position_m` and
+`look_at_m`; `config/sim-multi-camera.yaml` is a complete four-camera example.
 
 ### Validation rules
 
@@ -592,21 +663,23 @@ length.
 | Unknown fields are rejected | `sources[0].trackers[1].rate: unknown field, did you mean rate_hz?` |
 | Identifiers match their pattern and are unique across all sources | `sources[0].cameras[0].id: "SIM-T01" is already used by a tracker` |
 | Rates, sizes and durations are positive and within sane bounds | `engine.publish_rate_hz: must be between 1 and 1000` |
-| Assigned segments exist in the selected skeleton | `assignments.SIM-T03: "left_tigh" is not a segment of kinexa.body.v1` |
+| `triangulation` values are positive and `min_views` is 2 to 64 | `triangulation.min_views: must be between 2 and 64` |
+| Simulated camera `fov_y_deg`, `noise_px`, and a non-vertical viewing direction (`look_at_m` differs from `position_m` horizontally) | `sources[0].cameras[0].look_at_m: must be finite and have a nonvertical viewing direction from position_m` |
+| Assigned segments exist in the selected skeleton | `assignments.SIM-T03: "left_tigh" is not a segment of bansayo.body.v1` |
 | No two orientation devices share a segment | `assignments: SIM-T03 and SIM-T09 are both assigned to left_thigh` |
 | Assignment keys refer to configured devices | Warning only: a device may appear later |
 | `api.bind` parses; non-loopback binds warn | `api.bind: 0.0.0.0:7700 exposes the engine to the network` |
 | Scenario devices exist; times are non-negative and ordered | `sources[0].scenario[2].device: "SIM-T99" is not defined in this source` |
 | `data_dir` exists or can be created, and is writable | `engine.data_dir: ./data is not writable: permission denied` |
 
-Overrides: `KINEXA_CONFIG` selects the file when `--config` is absent, `KINEXA_LOG` overrides the
+Overrides: `BANSAYO_CONFIG` selects the file when `--config` is absent, `BANSAYO_LOG` overrides the
 log level. There are no secrets in configuration.
 
 ### What is not in YAML
 
 | Data | Where |
 |---|---|
-| Calibration profiles | `<data_dir>/calibration/*.json` |
+| Calibration profiles | `<data_dir>/calibration/*.json`. The camera profiles a simulated camera declares are created in memory at start and not written there |
 | Runtime assignment changes | `<data_dir>/state/assignments.yaml` |
 | Session metadata | `<data_dir>/sessions/<id>/session.json` |
 | Recorded streams | `<data_dir>/sessions/<id>/recording.mcap` |
@@ -672,7 +745,7 @@ Common header, 20 bytes:
 | `SYNC` | Both | The four timestamps |
 | `AUX` | Tracker → engine | Tagged extra sensors: distance, pressure, contact |
 
-The adapter converts the IMU's native axes into Kinexa's sensor conventions before emitting an
+The adapter converts the IMU's native axes into Bansayo's sensor conventions before emitting an
 observation. Firmware does not need to know the world convention.
 
 Before this is built, real trackers arrive through SlimeVR Server (ADR-008), which already

@@ -1,4 +1,4 @@
-use kinexa_contracts::*;
+use bansayo_contracts::*;
 use tokio::sync::{mpsc, oneshot};
 #[derive(Debug, thiserror::Error)]
 #[error("{message}")]

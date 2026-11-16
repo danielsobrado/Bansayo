@@ -1,16 +1,21 @@
 import { useEffect, useRef } from "react";
 import type { DeviceStatus } from "@contracts";
-import {
-  frameStore,
-  landmarksStore,
-  STALE_FRAME_MS,
-} from "../../engine/stores";
+import { freshLandmarks } from "../../engine/stores";
 import { tokenCss } from "../../viewport/palette";
 import { OriginBadge } from "../../ui/OriginBadge";
 
 /** Landmarks stay in the external store. This canvas reads them without React frame updates. */
-export function CameraPreview({ device }: { device: DeviceStatus }) {
+export function CameraPreview({
+  device,
+  highlight = null,
+}: {
+  device: DeviceStatus;
+  /** Landmark index to ring, e.g. the one selected in the reconstruction inspector. */
+  highlight?: number | null;
+}) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const highlightRef = useRef(highlight);
+  highlightRef.current = highlight;
   useEffect(() => {
     const canvas = ref.current;
     const ctx = canvas?.getContext("2d");
@@ -21,6 +26,7 @@ export function CameraPreview({ device }: { device: DeviceStatus }) {
     const ink = tokenCss("--prov-derived");
     const faint = tokenCss("--line");
     const unavailable = tokenCss("--ink-3");
+    const accent = tokenCss("--accent");
     const schema = device.descriptor.camera?.landmark_schema;
     let id = 0;
     function draw() {
@@ -32,11 +38,10 @@ export function CameraPreview({ device }: { device: DeviceStatus }) {
       ctx.strokeStyle = faint;
       ctx.lineWidth = 1;
       ctx.strokeRect(w * 0.05, h * 0.05, w * 0.9, h * 0.9);
-      const landmarks = landmarksStore.get().get(device.descriptor.id);
-      const fresh =
-        frameStore.frame &&
-        performance.now() - frameStore.receivedAt <= STALE_FRAME_MS;
-      if (!landmarks || !fresh) {
+      const landmarks = freshLandmarks(performance.now()).get(
+        device.descriptor.id,
+      );
+      if (!landmarks) {
         ctx.fillStyle = unavailable;
         ctx.font = `${Math.max(16, w / 55)}px sans-serif`;
         ctx.textAlign = "center";
@@ -63,6 +68,14 @@ export function CameraPreview({ device }: { device: DeviceStatus }) {
         ctx.fill();
       }
       ctx.globalAlpha = 1;
+      const selected = landmarks.points[highlightRef.current ?? -1];
+      if (selected) {
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = Math.max(2, w / 400);
+        ctx.beginPath();
+        ctx.arc(selected.x_px, selected.y_px, Math.max(8, w / 90), 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
     draw();
     return () => cancelAnimationFrame(id);

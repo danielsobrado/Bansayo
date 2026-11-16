@@ -1,5 +1,5 @@
-use kinexa_contracts::*;
-use kinexa_engine::{
+use bansayo_contracts::*;
+use bansayo_engine::{
     calibration::Store, config, recording::Context, registry::Registry, skeleton::Skeleton,
     sources::simulated::SimulatedSource,
 };
@@ -7,11 +7,11 @@ use std::collections::BTreeMap;
 fn context() -> Context {
     let dir = tempfile::tempdir().unwrap();
     let config=config::parse(&format!("schema_version: 1\nengine: {{data_dir: {:?}}}\nassignments: {{T1: pelvis}}\nsources:\n  - {{id: sim,kind: simulated,trackers: [{{id: T1,rate_hz: 100}}]}}\n",dir.path().display().to_string())).unwrap();
-    let skeleton = Skeleton::builtin("kinexa.body.v1", 1.75).unwrap();
+    let skeleton = Skeleton::builtin("bansayo.body.v1", 1.75).unwrap();
     let source = SimulatedSource {
         spec: config.simulated[0].clone(),
         skeleton: skeleton.clone(),
-        assignments: config.assignments.clone(),
+        assignments: tokio::sync::watch::channel(config.assignments.clone()).1,
     };
     let registry = Registry::new(
         source.descriptors(),

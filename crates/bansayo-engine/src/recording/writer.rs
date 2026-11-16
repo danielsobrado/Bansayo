@@ -1,6 +1,6 @@
 use super::{Context, Item, SessionFile};
 use crate::{clock::utc_now_rfc3339, registry::persistence::atomic_write};
-use kinexa_contracts::*;
+use bansayo_contracts::*;
 use std::{
     borrow::Cow,
     collections::BTreeMap,
@@ -73,7 +73,7 @@ impl Recorder {
         let (result_tx, result) = tokio::sync::oneshot::channel();
         let started = context.started_t_us;
         std::thread::Builder::new()
-            .name("kinexa-recorder".into())
+            .name("bansayo-recorder".into())
             .spawn(move || {
                 let opened = open(&path, &session, &context);
                 match opened {
@@ -104,7 +104,7 @@ impl Recorder {
                                         write_json(
                                             &mut writer,
                                             &mut channels,
-                                            "/kinexa/context",
+                                            "/bansayo/context",
                                             accepted_us,
                                             accepted_us,
                                             &*context,
@@ -194,7 +194,7 @@ fn open(
         data: Cow::Owned(serde_json::to_vec(context)?),
     })?;
     writer.write_metadata(&mcap::records::Metadata {
-        name: "kinexa.session".into(),
+        name: "bansayo.session".into(),
         metadata: BTreeMap::from([
             ("id".into(), session.id.to_string()),
             ("name".into(), session.name.clone()),
@@ -206,7 +206,7 @@ fn open(
     write_json(
         &mut writer,
         &mut channels,
-        "/kinexa/context",
+        "/bansayo/context",
         context.started_t_us,
         context.started_t_us,
         context,
@@ -223,7 +223,7 @@ fn write_event(
         SourceEvent::Observation { observation } => write_json(
             writer,
             channels,
-            &format!("/kinexa/obs/{}", observation.device_id),
+            &format!("/bansayo/obs/{}", observation.device_id),
             accepted,
             observation.t_us,
             &observation,
@@ -231,7 +231,7 @@ fn write_event(
         other => write_json(
             writer,
             channels,
-            "/kinexa/devices",
+            "/bansayo/devices",
             accepted,
             accepted,
             &other,

@@ -13,6 +13,10 @@ dist/
 # Runtime data
 /data/
 
+# Pretrained model weights: user-supplied, never committed (see models/README.md)
+/models/*
+!/models/README.md
+
 # OS
 .DS_Store
 Thumbs.db

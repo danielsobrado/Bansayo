@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Kinexa",
+  "productName": "Bansayo",
   "version": "0.1.0",
-  "identifier": "org.kinexa.desktop",
+  "identifier": "org.bansayo.desktop",
   "build": {
     "beforeDevCommand": "npm run dev -- --host 127.0.0.1",
     "beforeBuildCommand": "npm run build",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Kinexa · Motion studio",
+        "title": "Bansayo · Motion studio",
         "width": 1440,
         "height": 900,
         "minWidth": 800,

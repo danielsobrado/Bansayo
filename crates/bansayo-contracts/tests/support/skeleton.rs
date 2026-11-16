@@ -1,16 +1,16 @@
-//! The `kinexa.body.v1` reference skeleton at a given height, and its rest T-pose.
+//! The `bansayo.body.v1` reference skeleton at a given height, and its rest T-pose.
 //!
 //! The proportion table below is the single source of the numbers in the golden skeleton.
 //! Fractions of body height H, from docs/03-domain-model.md §3 (Drillis and Contini via Winter).
 
-use kinexa_contracts::{
+use bansayo_contracts::{
     AngleUnit, CalibrationState, JointDef, JointMethod, Provenance, SegmentDef, SegmentPose,
     SkeletonDefinition, Vec3,
 };
 
 use super::{dev, seg};
 
-pub const MODEL_ID: &str = "kinexa.body.v1";
+pub const MODEL_ID: &str = "bansayo.body.v1";
 pub const HEIGHT_M: f64 = 1.75;
 pub const SKELETON_REV: u32 = 1;
 

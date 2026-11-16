@@ -1,21 +1,29 @@
 import { useEffect, useRef, useState } from "react";
-import type { SkeletonDefinition } from "@contracts";
+import type { LandmarkSchema, SkeletonDefinition } from "@contracts";
+import type { CameraPose } from "../engine/cameraCalibration";
 import { MotionViewport, type ViewPreset } from "./MotionViewport";
 interface Props {
   skeleton: SkeletonDefinition | null;
+  /** Shows triangulated landmarks; `selected`/`onSelect` then index landmarks. */
+  landmarkSchema?: LandmarkSchema | null;
   selected: number;
   onSelect: (index: number) => void;
   view: ViewPreset;
   skeletonVisible: boolean;
   floorVisible: boolean;
+  cameras?: readonly CameraPose[];
+  selectedCamera?: string | null;
 }
 export function ViewportCanvas({
   skeleton,
+  landmarkSchema = null,
   selected,
   onSelect,
   view,
   skeletonVisible,
   floorVisible,
+  cameras = [],
+  selectedCamera = null,
 }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const viewport = useRef<MotionViewport | null>(null);
@@ -23,30 +31,42 @@ export function ViewportCanvas({
   selectRef.current = onSelect;
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    if (!host.current || !skeleton) return;
+    if (!host.current || !(skeleton || landmarkSchema)) return;
     try {
-      viewport.current = new MotionViewport(host.current, skeleton, (index) =>
-        selectRef.current(index),
+      viewport.current = new MotionViewport(
+        host.current,
+        skeleton,
+        (index) => selectRef.current(index),
+        landmarkSchema,
       );
       setError(null);
     } catch {
       setError(
-        "The 3D viewport could not start. Check that WebGL is available. Segment and joint readouts remain accessible.",
+        landmarkSchema
+          ? "The 3D view could not start. Check that WebGL is available. The landmark list and inspector remain accessible."
+          : "The 3D viewport could not start. Check that WebGL is available. Segment and joint readouts remain accessible.",
       );
     }
     return () => {
       viewport.current?.dispose();
       viewport.current = null;
     };
-  }, [skeleton]);
+  }, [skeleton, landmarkSchema]);
   useEffect(
     () => viewport.current?.setSelected(selected),
-    [selected, skeleton],
+    [selected, skeleton, landmarkSchema],
   );
-  useEffect(() => viewport.current?.setView(view), [view, skeleton]);
+  useEffect(
+    () => viewport.current?.setView(view),
+    [view, skeleton, landmarkSchema],
+  );
   useEffect(
     () => viewport.current?.setLayers(skeletonVisible, floorVisible),
-    [skeletonVisible, floorVisible, skeleton],
+    [skeletonVisible, floorVisible, skeleton, landmarkSchema],
+  );
+  useEffect(
+    () => viewport.current?.setCameras(cameras, selectedCamera),
+    [cameras, selectedCamera, skeleton, landmarkSchema],
   );
   return (
     <div className="viewport-canvas" ref={host}>

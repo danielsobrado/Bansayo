@@ -1,0 +1,49 @@
+{
+  "type": "landmarks_3d",
+  "landmarks": {
+    "kind": "triangulated",
+    "t_us": 303800000,
+    "frame": {
+      "type": "world"
+    },
+    "origin": "simulated",
+    "schema_id": "bansayo.body.v1.joints",
+    "calibration_refs": [
+      "camera-extrinsics-SIM-CAM1",
+      "camera-extrinsics-SIM-CAM2"
+    ],
+    "points": [
+      {
+        "m": [
+          0.0,
+          0.9275,
+          0.0
+        ],
+        "views": 2,
+        "reprojection_error_px": 1.4,
+        "confidence": 0.9,
+        "used_views": [
+          "SIM-CAM1",
+          "SIM-CAM2"
+        ],
+        "rejected_views": []
+      },
+      {
+        "m": [
+          0.0,
+          1.0325,
+          0.0
+        ],
+        "views": 2,
+        "reprojection_error_px": 1.4,
+        "confidence": 0.9,
+        "used_views": [
+          "SIM-CAM1",
+          "SIM-CAM2"
+        ],
+        "rejected_views": []
+      },
+      null
+    ]
+  }
+}

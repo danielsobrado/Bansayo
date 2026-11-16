@@ -6,8 +6,9 @@ use super::{
 use crate::{
     recording::{Recorder, reader, replay::Replay},
     registry::persistence::{persist_states, save_assignments},
+    sources::simulated::camera::DECLARED_BY_SIMULATOR,
 };
-use kinexa_contracts::*;
+use bansayo_contracts::*;
 use serde_json::{Value, json};
 impl Runtime {
     pub(super) fn control(&mut self, engine: &mut Runner, request: ControlRequest, reply: Reply) {
@@ -160,6 +161,20 @@ impl Runtime {
                 let _ = reply.send(Ok(device(engine, &id)));
             }
             ControlRequest::Delete(id) => {
+                if engine
+                    .store
+                    .profiles
+                    .get(&id)
+                    .is_some_and(|p| p.method == DECLARED_BY_SIMULATOR)
+                {
+                    return Err((
+                        error(
+                            ApiErrorCode::InvalidRequest,
+                            "Simulated camera calibration is declared by the simulator and cannot be deleted.",
+                        ),
+                        reply,
+                    ));
+                }
                 if !engine.store.profiles.contains_key(&id)
                     && !engine.store.invalid.iter().any(|p| p.id == id)
                 {
@@ -262,7 +277,8 @@ impl Runtime {
                                 request.looping.unwrap_or(false),
                             )
                         })
-                        .map_err(unavailable)
+                        // Loader messages are user-facing, e.g. "too large for in-memory playback".
+                        .map_err(|e| error(ApiErrorCode::Unavailable, e))
                 });
             }
             ControlRequest::PlaybackUpdate(request) => {
@@ -299,8 +315,8 @@ impl Runtime {
                 let preview = request.position_us.map(|_| replay.preview());
                 let data = json!(replay.state());
                 self.publish_state(engine);
-                if let Some(frame) = preview {
-                    self.publish_frame(frame);
+                if let Some(messages) = preview {
+                    self.publish(messages);
                 }
                 let _ = reply.send(Ok(data));
             }
@@ -345,6 +361,7 @@ impl Runtime {
         let data = result.and_then(|result| {
             Ok(match result {
                 Completion::Assignment(assignments, stale, id) => {
+                    engine.placements.send_replace(assignments.clone());
                     engine.registry.assignments = assignments;
                     engine.store.stale = stale;
                     self.record_context(engine);
@@ -395,9 +412,7 @@ impl Runtime {
                         control.send_modify(|c| c.suspended = true);
                     }
                     self.publish_state(engine);
-                    for message in messages {
-                        self.publish_frame(message);
-                    }
+                    self.publish(messages);
                     data
                 }
             })

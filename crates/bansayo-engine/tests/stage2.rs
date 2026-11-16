@@ -1,4 +1,4 @@
-use kinexa_engine::{config, start};
+use bansayo_engine::{config, start};
 use std::io::{Read, Write};
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -133,14 +133,14 @@ sources:
     let id = stopped.1["data"]["id"].as_str().unwrap();
     let bytes = std::fs::read(dir.path().join("sessions").join(id).join("recording.mcap")).unwrap();
     assert!(bytes.starts_with(b"\x89MCAP0\r\n"));
-    let recording = kinexa_engine::recording::reader::load(
+    let recording = bansayo_engine::recording::reader::load(
         dir.path(),
-        &kinexa_contracts::SessionId::new(id).unwrap(),
+        &bansayo_contracts::SessionId::new(id).unwrap(),
     )
     .unwrap();
     let replay_frames = |step| {
         let mut replay =
-            kinexa_engine::recording::replay::Replay::new(recording.clone(), 1.0, false).unwrap();
+            bansayo_engine::recording::replay::Replay::new(recording.clone(), 1.0, false).unwrap();
         let mut frames = Vec::new();
         while !replay.paused {
             frames.extend(replay.advance(step).unwrap());

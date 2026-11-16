@@ -14,7 +14,7 @@ use crate::{
     recording::{Context, Item, Recorder, replay::Replay},
     registry::persistence::persist_states,
 };
-use kinexa_contracts::*;
+use bansayo_contracts::*;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::{broadcast, mpsc, watch};
 use tokio_util::sync::CancellationToken;
@@ -34,6 +34,7 @@ pub(super) struct Runtime {
     pub skeleton: watch::Sender<SkeletonDefinition>,
     pub storage_unavailable: bool,
     pub reported_damage: std::collections::BTreeSet<String>,
+    pub last_landmarks_3d_us: Option<u64>,
 }
 impl Runtime {
     pub fn new(
@@ -61,6 +62,7 @@ impl Runtime {
             skeleton,
             storage_unavailable: false,
             reported_damage: Default::default(),
+            last_landmarks_3d_us: None,
         }
     }
     pub fn context(engine: &Runner) -> Context {
@@ -119,21 +121,10 @@ impl Runtime {
                 &replay.registry,
                 &replay.store,
                 now,
-                replay.recording.initial.config.engine.stale_after_ms * 1000,
+                &replay.recording.initial.config,
             );
             state.engine.state = solved.quality.state;
-            state.features = features(
-                state
-                    .devices
-                    .iter()
-                    .any(|d| d.descriptor.kind == DeviceKind::ImuTracker),
-                state
-                    .devices
-                    .iter()
-                    .any(|d| d.descriptor.kind == DeviceKind::Camera),
-                solved.quality.observed_segments,
-                solved.quality.total_segments,
-            );
+            state.features = features(&state.devices, &solved);
         }
         for feature in &mut state.features {
             if matches!(feature.id, FeatureId::Recording | FeatureId::Playback) {
@@ -169,16 +160,33 @@ impl Runtime {
         }
         self.frame.send_replace(Encoded::new(&message, self.seq));
     }
+    /// Routes solver and replay output: triangulated landmarks once per camera frame set, replayed
+    /// 2D landmarks in order, frames as latest.
+    pub(super) fn publish(&mut self, messages: Vec<ServerMessage>) {
+        for message in messages {
+            if let ServerMessage::Landmarks3d {
+                landmarks: PoseLandmarks3D::Triangulated { t_us, .. },
+            } = &message
+            {
+                if self.last_landmarks_3d_us.replace(*t_us) != Some(*t_us) {
+                    let _ = self.landmarks.send(Encoded::new(&message, 0));
+                }
+            } else if matches!(message, ServerMessage::Landmarks2d { .. }) {
+                let _ = self.landmarks.send(Encoded::new(&message, 0));
+            } else {
+                self.publish_frame(message);
+            }
+        }
+    }
     pub async fn run(
         mut self,
         mut engine: Runner,
         mut commands: mpsc::Receiver<Command>,
         cancel: CancellationToken,
     ) {
-        let mut timer = tokio::time::interval(Duration::from_secs_f64(
+        let mut timer = crate::ticker::ticker(Duration::from_secs_f64(
             1.0 / engine.config.config.engine.publish_rate_hz,
         ));
-        timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         let mut last_tick = engine.clock.now_us();
         let mut last_state = 0;
         let mut events_open = true;
@@ -190,7 +198,7 @@ impl Runtime {
                 Command(Option<Command>),
                 Tick,
             }
-            let event = tokio::select! { _=cancel.cancelled()=>break,input=engine.events.recv(),if events_open=>Event::Input(input),command=commands.recv()=>Event::Command(command),_=timer.tick()=>Event::Tick };
+            let event = tokio::select! { _=cancel.cancelled()=>break,input=engine.events.recv(),if events_open=>Event::Input(input),command=commands.recv()=>Event::Command(command),_=timer.recv()=>Event::Tick };
             match event {
                 Event::Input(Some(crate::sources::Ingest::Failure { devices, message })) => {
                     for id in devices {
@@ -300,11 +308,7 @@ impl Runtime {
                     self.finish_capture(&engine);
                     if let Some(replay) = self.replay.as_mut() {
                         match replay.advance(elapsed) {
-                            Ok(messages) => {
-                                for message in messages {
-                                    self.publish_frame(message);
-                                }
-                            }
+                            Ok(messages) => self.publish(messages),
                             Err(message) => {
                                 tracing::error!(%message,"Replay failed");
                             }
@@ -315,7 +319,7 @@ impl Runtime {
                             &engine.registry,
                             &engine.store,
                             now,
-                            engine.config.config.engine.stale_after_ms * 1000,
+                            &engine.config.config,
                         );
                         let mut joints =
                             measure(&engine.skeleton, &solved.rotations, &solved.observed);
@@ -324,6 +328,9 @@ impl Runtime {
                             &mut joints,
                             solved.pose.as_ref(),
                         );
+                        if let Some(landmarks) = solved.landmarks_3d {
+                            self.publish(vec![ServerMessage::Landmarks3d { landmarks }]);
+                        }
                         self.publish_frame(ServerMessage::Frame {
                             seq: 0,
                             t_us: now,
@@ -414,6 +421,7 @@ impl Runtime {
         }
     }
     pub(super) fn accept(&mut self, engine: &mut Runner, event: SourceEvent) {
+        let accepted_us = engine.clock.now_us();
         if let SourceEvent::Observation { observation } = &event {
             let validation = engine
                 .registry
@@ -424,7 +432,7 @@ impl Runtime {
                     crate::sources::validation::observation(
                         observation,
                         &entry.descriptor,
-                        engine.clock.now_us(),
+                        accepted_us,
                     )
                 });
             if let Err(message) = validation {
@@ -434,7 +442,13 @@ impl Runtime {
                 tracing::debug!(device=%observation.device_id,%message,"Rejected malformed observation");
                 return;
             }
-
+        }
+        // Duplicate, reordered and late packets stop here: capture, clients and the recording see
+        // exactly what the solver sees, so every recording replays.
+        if !engine.registry.event(event.clone()) {
+            return;
+        }
+        if let SourceEvent::Observation { observation } = &event {
             if let Some(c) = self.capture.as_mut()
                 && let Some((_, samples)) = c.targets.get_mut(&observation.device_id)
                 && let ObservationData::Orientation { q, .. } = observation.data
@@ -453,12 +467,8 @@ impl Runtime {
             }
         }
         if let Some(recorder) = self.recorder.as_mut() {
-            recorder.push(Item::Event {
-                accepted_us: engine.clock.now_us(),
-                event: event.clone(),
-            });
+            recorder.push(Item::Event { accepted_us, event });
         }
-        engine.registry.event(event);
     }
     fn finish_capture(&mut self, engine: &Runner) {
         if self

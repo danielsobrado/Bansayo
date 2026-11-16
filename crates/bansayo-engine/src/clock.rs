@@ -3,7 +3,7 @@
 use std::collections::VecDeque;
 use std::time::{Instant, SystemTime};
 
-use kinexa_contracts::TimeUs;
+use bansayo_contracts::TimeUs;
 
 /// Monotonic microseconds since engine start, anchored once to UTC.
 #[derive(Debug, Clone)]

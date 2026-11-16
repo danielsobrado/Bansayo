@@ -14,5 +14,5 @@ func _initialize() -> void:
 	var buffer := PoseBuffer.new()
 	buffer.push({"t_us": 0, "pose": null}, 100000)
 	assert(buffer.sample(100000).is_empty())
-	print("Kinexa Godot contract smoke passed")
+	print("Bansayo Godot contract smoke passed")
 	quit(0)

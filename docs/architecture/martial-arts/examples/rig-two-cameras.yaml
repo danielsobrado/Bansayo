@@ -1,0 +1,81 @@
+# ILLUSTRATIVE — not loadable by the current engine build.
+# Capability profile: multi_view, once camera_intrinsics, camera_extrinsics and floor_plane are valid
+# (calibration wizard, 09 §8). Adding the second camera is the only difference from rig-one-camera.yaml:
+# no technique, workout or scoring file changes.
+schema_version: 2
+
+engine:
+  publish_rate_hz: 120       # 2 × camera rate
+  stale_after_ms: 250
+  data_dir: ./data
+
+api:
+  bind: 127.0.0.1:7700
+
+skeleton:
+  model: bansayo.body.v1
+  height_m: 1.75
+
+content:
+  dirs: [./content]
+
+sources:
+  - id: cam-front
+    kind: camera
+    enabled: true
+    device: "USB Camera (046d:085c)"
+    transport: usb
+    resolution_px: [1280, 720]
+    rate_hz: 60
+    pixel_format: mjpeg
+    exposure_s: 0.002
+    latency_ms: 40
+    processing_profile: body-halpe26
+    fiducials: true          # needed to see the calibration board
+    record_video: false
+  - id: cam-side
+    kind: camera
+    enabled: true
+    device: "USB Camera (046d:08e5)"
+    transport: usb
+    resolution_px: [1280, 720]
+    rate_hz: 60
+    pixel_format: mjpeg
+    exposure_s: 0.002
+    latency_ms: 40
+    processing_profile: body-halpe26
+    fiducials: true
+    record_video: false
+
+processing_profiles:
+  body-halpe26:
+    detector: { model_path: models/yolox-m-humanart.onnx, every_frames: 10, score_min: 0.5 }
+    pose:
+      model_id: rtmpose-m-halpe26
+      model_path: models/rtmpose-m-halpe26.onnx
+      landmark_schema: halpe26
+      keypoint_score_min: 0.3
+    execution: [cuda, directml, cpu]
+    max_inference_hz: 120
+
+fiducials:
+  families: [tag36h11]
+
+triangulation:
+  mode: gated                # switch to `aligned` after the time_sync validation (ADR-023)
+  max_skew_ms: 20
+  max_reprojection_error_px: 15.0
+  min_views: 2
+  min_ray_angle_deg: 3.0
+
+gates:
+  max_speed_m_s: { default: 15, wrist: 30, ankle: 30, toe: 30, heel: 30 }
+  bone_length_tolerance: 0.25
+  floor_tolerance_m: 0.05
+
+fusion:
+  skeleton_fit: true
+  heading_correction: false  # no IMUs in this rig
+
+storage:
+  record_defaults: { inputs: true, motion: true, video: false }

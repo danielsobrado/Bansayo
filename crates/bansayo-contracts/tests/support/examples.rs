@@ -2,7 +2,7 @@
 
 use std::f32::consts::FRAC_1_SQRT_2;
 
-use kinexa_contracts::*;
+use bansayo_contracts::*;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
@@ -117,7 +117,7 @@ fn frame() -> ServerMessage {
             total_segments: 19,
             reasons: vec![
                 reason(
-                    "root_position_not_measured",
+                    "root_position_inferred",
                     None,
                     "Root position is inferred from floor contact.",
                 ),
@@ -219,6 +219,33 @@ fn sensor(d: &str) -> FrameRef {
     FrameRef::Sensor { id: dev(d) }
 }
 
+fn triangulated_landmarks() -> PoseLandmarks3D {
+    let points = (0..2)
+        .map(|i| {
+            Some(TriangulatedLandmark3D {
+                m: [0.0, 0.9275 + 0.105 * i as f32, 0.0],
+                views: 2,
+                reprojection_error_px: 1.4,
+                confidence: 0.9,
+                used_views: vec![dev("SIM-CAM1"), dev("SIM-CAM2")],
+                rejected_views: vec![],
+            })
+        })
+        .chain([None])
+        .collect();
+    PoseLandmarks3D::Triangulated {
+        t_us: 303_800_000,
+        frame: FrameRef::World,
+        origin: Origin::Simulated,
+        schema_id: LANDMARK_SCHEMA.into(),
+        calibration_refs: vec![
+            profile("camera-extrinsics-SIM-CAM1"),
+            profile("camera-extrinsics-SIM-CAM2"),
+        ],
+        points,
+    }
+}
+
 fn observations() -> Vec<Example> {
     use ObservationData as D;
     let schema_len = state::landmark_schema().names.len();
@@ -229,17 +256,6 @@ fn observations() -> Vec<Example> {
                 confidence: 0.8,
             })
         })
-        .collect();
-    let triangulated = (0..2)
-        .map(|i| {
-            Some(TriangulatedLandmark3D {
-                m: [0.0, 0.9275 + 0.105 * i as f32, 0.0],
-                views: 2,
-                reprojection_error_px: 1.4,
-                confidence: 0.9,
-            })
-        })
-        .chain([None])
         .collect();
     let obs = |name: &str, device: &str, data| {
         ex(
@@ -314,17 +330,7 @@ fn observations() -> Vec<Example> {
             "landmarks_3d_triangulated",
             CAMERA,
             D::Landmarks3d {
-                landmarks: PoseLandmarks3D::Triangulated {
-                    t_us: 303_800_000,
-                    frame: FrameRef::World,
-                    origin: Origin::Simulated,
-                    schema_id: LANDMARK_SCHEMA.into(),
-                    calibration_refs: vec![
-                        profile("camera-extrinsics-SIM-CAM1"),
-                        profile("camera-extrinsics-SIM-CAM2"),
-                    ],
-                    points: triangulated,
-                },
+                landmarks: triangulated_landmarks(),
             },
         ),
         obs(
@@ -485,6 +491,12 @@ pub fn all() -> Vec<Example> {
             "landmarks_2d",
             ServerMessage::Landmarks2d {
                 landmarks: landmarks_2d(),
+            },
+        ),
+        ex(
+            "landmarks_3d",
+            ServerMessage::Landmarks3d {
+                landmarks: triangulated_landmarks(),
             },
         ),
         ex(

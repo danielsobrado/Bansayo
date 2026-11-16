@@ -1,12 +1,16 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import hello from "../../../../contracts/examples/hello.json";
 import frame from "../../../../contracts/examples/frame.json";
+import landmarks2d from "../../../../contracts/examples/landmarks_2d.json";
 import { EngineConnection, backoffDelay, type SocketLike } from "./connection";
 import { jointHistory } from "./jointHistory";
 import {
   clearLiveValues,
   connectionStore,
   frameStore,
+  freshLandmarks,
+  landmarks3dStore,
+  STALE_FRAME_MS,
   skeletonStore,
   systemStateStore,
 } from "./stores";
@@ -117,6 +121,59 @@ describe("connection and live data lifecycle", () => {
     expect(jointHistory.count).toBe(0);
     expect(frameStore.frame).toBeNull();
     expect(frameStore.lastSeq).toBe(frame.seq + 1);
+    connection.stop();
+  });
+  it("keeps the latest triangulated set and clears it on disconnect and mode change", () => {
+    const { connection, sockets } = setup();
+    const message = {
+      type: "landmarks_3d",
+      landmarks: {
+        kind: "triangulated",
+        t_us: 1,
+        frame: { type: "world" },
+        origin: "simulated",
+        schema_id: "s",
+        calibration_refs: [],
+        points: [null],
+      },
+    };
+    connection.handleText(JSON.stringify(hello));
+    connection.handleText(JSON.stringify(message));
+    expect(landmarks3dStore.landmarks?.schema_id).toBe("s");
+    expect(landmarks3dStore.receivedAt).toBe(20);
+    connection.handleText(
+      JSON.stringify({
+        type: "state",
+        state: {
+          ...hello.state,
+          engine: { ...hello.state.engine, mode: "replay" },
+        },
+      }),
+    );
+    expect(landmarks3dStore.landmarks).toBeNull();
+    connection.handleText(JSON.stringify(message));
+    sockets[0]!.disconnect();
+    expect(landmarks3dStore.landmarks).toBeNull();
+    connection.stop();
+  });
+  it("judges 2D landmarks by their own arrival, not the skeleton frame, and clears them on mode change", () => {
+    const { connection } = setup();
+    connection.handleText(JSON.stringify(hello));
+    connection.handleText(JSON.stringify(landmarks2d));
+    // Arrived at monotonic 20: fresh until 20 + STALE_FRAME_MS, even while frames keep coming.
+    expect(freshLandmarks(20 + STALE_FRAME_MS).has("SIM-CAM1")).toBe(true);
+    connection.handleText(JSON.stringify(frame));
+    expect(freshLandmarks(21 + STALE_FRAME_MS).has("SIM-CAM1")).toBe(false);
+    connection.handleText(
+      JSON.stringify({
+        type: "state",
+        state: {
+          ...hello.state,
+          engine: { ...hello.state.engine, mode: "replay" },
+        },
+      }),
+    );
+    expect(freshLandmarks(20).size).toBe(0);
     connection.stop();
   });
   it("caps exponential reconnect backoff", () => {

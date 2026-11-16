@@ -1,0 +1,172 @@
+# ILLUSTRATIVE metric pack. Final location: content/metrics/kick.yaml
+# A metric is a closed metric KIND applied to a catalogue observable over a window (05 §9). No formulas here.
+schema: bansayo.metrics/v1
+metrics:
+  - id: kick.total_time
+    version: 1
+    label: Total time
+    kind: duration
+    from: rep_start
+    to: rep_end
+    unit: ms
+    direction: neutral
+    gates:
+      grade_a_methods: [triangulated, marker_cluster, imu_optical_fused, imu_mounted, imu_gyro, skeleton_fit_axis]
+      grade_b_methods: [fk, skeleton_fit_plane, image_plane]
+
+  - id: kick.extension_time
+    version: 1
+    label: Extension time
+    kind: duration
+    from: "phase_start:extension"
+    to: strike
+    unit: ms
+    direction: lower_is_more
+    gates:
+      min_rate_hz: 30
+      rate_for_a_hz: 100
+      grade_a_methods: [imu_gyro, imu_optical_fused, triangulated, skeleton_fit_axis]
+      grade_b_methods: [imu_mounted, fk, skeleton_fit_plane, image_plane]
+
+  - id: kick.retraction_time
+    version: 1
+    label: Retraction time
+    kind: duration
+    from: strike
+    to: "phase_end:retraction"
+    unit: ms
+    direction: lower_is_more
+    gates:
+      min_rate_hz: 30
+      rate_for_a_hz: 100
+      grade_a_methods: [imu_gyro, imu_optical_fused, triangulated, skeleton_fit_axis]
+      grade_b_methods: [imu_mounted, fk, skeleton_fit_plane, image_plane]
+
+  - id: kick.peak_knee_height
+    version: 1
+    label: Chamber knee height
+    kind: extremum
+    obs: knee_height.active
+    agg: max
+    window: { phase: chamber }
+    unit: m
+    norm: { by: leg_length }
+    direction: higher_is_more
+    gates:
+      min_rate_hz: 25
+      calibration: [camera_intrinsics, camera_extrinsics, floor_plane]
+      grade_a_methods: [triangulated, marker_cluster]
+      grade_b_methods: [fk]
+      grade_a: { min_confidence: 0.7, max_sigma: 0.03 }
+      grade_b: { min_confidence: 0.4 }
+      image_plane: { views: [frontal, lateral, oblique], use: norm }
+
+  - id: kick.peak_ankle_height
+    version: 1
+    label: Peak foot height
+    kind: extremum
+    obs: ankle_height.active
+    agg: max
+    window: rep
+    unit: m
+    norm: { by: leg_length }
+    direction: higher_is_more
+    gates:
+      min_rate_hz: 25
+      calibration: [camera_intrinsics, camera_extrinsics, floor_plane]
+      grade_a_methods: [triangulated, marker_cluster]
+      grade_b_methods: [fk]
+      grade_a: { min_confidence: 0.7, max_sigma: 0.04 }
+      grade_b: { min_confidence: 0.4 }
+      image_plane: { views: [frontal, lateral, oblique], use: norm }
+
+  - id: kick.peak_ankle_speed
+    version: 1
+    label: Peak foot speed
+    kind: extremum
+    obs: ankle_speed.active
+    agg: max
+    window: rep
+    unit: m_s
+    direction: higher_is_more
+    gates:
+      min_rate_hz: 50
+      rate_for_a_hz: 100
+      calibration: [camera_intrinsics, camera_extrinsics]
+      grade_a_methods: [triangulated]
+      grade_b_methods: [fk]
+      grade_a: { min_confidence: 0.7 }
+
+  - id: kick.hip_rotation_range
+    version: 1
+    label: Hip rotation
+    kind: range
+    obs: pelvis_yaw
+    window: { from_phase: chamber, to_phase: extension }
+    unwrap: true
+    unit: rad
+    direction: neutral
+    gates:
+      min_rate_hz: 25
+      grade_a_methods: [triangulated, marker_cluster, imu_optical_fused, skeleton_fit_axis]
+      grade_b_methods: [imu_mounted]
+
+  - id: kick.support_pivot
+    version: 1
+    label: Support-foot pivot
+    kind: range
+    obs: foot_yaw.support
+    window: rep
+    unwrap: true
+    unit: rad
+    direction: neutral
+    gates:
+      min_rate_hz: 25
+      grade_a_methods: [triangulated, marker_cluster, imu_optical_fused, skeleton_fit_axis]
+      grade_b_methods: [imu_mounted]
+      suppress_when:
+        - { obs: heel_height.support, op: gt, value: 0.08, unit: m, hold_ms: 150 }
+
+  - id: kick.support_knee_range
+    version: 1
+    label: Support-knee movement
+    kind: range
+    obs: knee_flexion.support
+    window: rep
+    unit: rad
+    direction: lower_is_more
+    gates:
+      min_rate_hz: 25
+      grade_a_methods: [skeleton_fit_axis, imu_mounted, imu_optical_fused, marker_cluster]
+      grade_b_methods: [fk]
+      image_plane: { views: [frontal, lateral], use: value }
+
+  - id: kick.recovery_settle_time
+    version: 1
+    label: Time to settle
+    kind: settle_time
+    obs: root_speed
+    below: 0.15
+    for_ms: 300
+    from: "phase_start:recovery"
+    unit: ms
+    direction: lower_is_more
+    gates:
+      min_rate_hz: 25
+      calibration: [camera_intrinsics, camera_extrinsics]
+      grade_a_methods: [triangulated, marker_cluster]
+      grade_b_methods: []
+
+  - id: kick.guard_at_strike
+    version: 1
+    label: Guard at strike
+    kind: value_at
+    obs: guard_distance.lead
+    at: strike
+    unit: m
+    norm: { by: arm_length }
+    direction: lower_is_more
+    gates:
+      min_rate_hz: 25
+      grade_a_methods: [triangulated, xr_device]
+      grade_b_methods: [fk]

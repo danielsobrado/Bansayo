@@ -7,4 +7,5 @@ pub mod joints;
 mod runner;
 mod runtime;
 pub mod solve;
+pub mod triangulate;
 pub use runner::*;

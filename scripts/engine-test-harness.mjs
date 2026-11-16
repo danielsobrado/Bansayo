@@ -10,9 +10,9 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const scratch = await mkdtemp(join(tmpdir(), 'kinexa-gate1-'));
+const scratch = await mkdtemp(join(tmpdir(), 'bansayo-gate1-'));
 const children = new Set();
-const binary = join(root, 'target/debug', process.platform === 'win32' ? 'kinexa-engine.exe' : 'kinexa-engine');
+const binary = join(process.env.CARGO_TARGET_DIR ?? join(root, 'target'), 'debug', process.platform === 'win32' ? 'bansayo-engine.exe' : 'bansayo-engine');
 
 async function command(args) {
   const child = spawn('cargo', args, { cwd: root, stdio: 'inherit' });
@@ -31,7 +31,8 @@ async function freePort() {
 async function stop(child) {
   if (child.exitCode !== null) return;
   const exited = once(child, 'exit');
-  child.kill('SIGINT');
+  // Windows cannot signal a child; closing stdin requests the same graceful shutdown.
+  if (process.platform === 'win32') child.stdin.end(); else child.kill('SIGINT');
   const timer = setTimeout(() => child.kill('SIGKILL'), 5000);
   try {
     const [code] = await exited;
@@ -53,7 +54,7 @@ async function start(name, dataName = name) {
     .replace(/^\s+bind:.*$/m, `\n  bind: 127.0.0.1:${port}`);
   const path = join(scratch, `${name}.yaml`);
   await writeFile(path, yaml);
-  const child = spawn(binary, ['--config', path], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(binary, ['--config', path, '--shutdown-on-stdin-close'], { cwd: root, stdio: ['pipe', 'pipe', 'pipe'] });
   children.add(child);
   let logs = '';
   child.stdout.on('data', data => { logs = (logs + data).slice(-8000); });

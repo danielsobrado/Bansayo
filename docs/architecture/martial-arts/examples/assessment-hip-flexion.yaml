@@ -1,0 +1,45 @@
+# ILLUSTRATIVE content file. Final location: content/assessments/hip_flexion_active.yaml
+# Flexibility benchmark: active (unsupported) standing hip flexion, each side.
+# A run below `required_profile`, with stale calibration, or without enough grade-A trials is stored
+# as `invalid` and never enters progress (03 §9, 12 §5).
+schema: bansayo.assessment/v1
+id: general.assessment.hip_flexion_active
+version: 1
+status: draft
+names:
+  display: Active hip flexion range
+procedure:
+  - assess.hip_flexion.stand_neutral
+  - assess.hip_flexion.raise_straight_leg_forward
+  - assess.hip_flexion.no_swing_no_support
+  - assess.hip_flexion.lower_under_control
+start_conditions:
+  stance: general.stance.neutral
+  rest_before_s: 60
+  warmup_ack: true
+required_profile: multi_view
+calibration:
+  kinds: [camera_intrinsics, camera_extrinsics, floor_plane, body_proportions]
+  qa: pass
+  max_age_h: 24
+movement: general.mobility.standing_hip_flexion_raise
+sides: [left, right]
+trials:
+  count: 5
+  max_extra: 3
+  rest_s: 15
+measure:
+  metric: rom.peak_angle
+  min_grade: A
+accepted_methods: [skeleton_fit_axis, marker_cluster, imu_optical_fused]
+aggregate:
+  stat: median
+completion:
+  min_valid_trials: 5
+uncertainty:
+  report: [within_session_sd, propagated_sigma]
+safety:
+  notes:
+    - safety.stretch.warm_up_first
+    - safety.stretch.stop_at_discomfort_not_pain
+    - safety.stretch.not_a_medical_measurement

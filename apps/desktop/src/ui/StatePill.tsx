@@ -1,8 +1,9 @@
-import type { TrackingState } from "@contracts";
+import type { FeatureState, TrackingState } from "@contracts";
 import { lookup } from "../lib/format";
 import styles from "./StatePill.module.css";
 
-const GLYPH: Record<TrackingState, string> = {
+const GLYPH: Record<TrackingState | FeatureState, string> = {
+  available: "●",
   tracking: "●",
   degraded: "◐",
   acquiring: "○",
@@ -10,7 +11,8 @@ const GLYPH: Record<TrackingState, string> = {
   unavailable: "✕",
 };
 
-const WORD: Record<TrackingState, string> = {
+const WORD: Record<TrackingState | FeatureState, string> = {
+  available: "Available",
   tracking: "Tracking",
   degraded: "Degraded",
   acquiring: "Acquiring",
@@ -19,7 +21,7 @@ const WORD: Record<TrackingState, string> = {
 };
 
 interface StatePillProps {
-  /** A `TrackingState`; unknown values render as a neutral "?" with the raw word. */
+  /** A `TrackingState` or `FeatureState`; unknown values render as a neutral "?" with the raw word. */
   state: string;
   /** Text after the word, e.g. coverage. */
   detail?: string;

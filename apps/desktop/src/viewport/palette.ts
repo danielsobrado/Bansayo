@@ -11,6 +11,7 @@ export interface Palette {
   measured: Color;
   derived: Color;
   inferred: Color;
+  degraded: Color;
 }
 
 /** Reads one `--token` from the document; tokens are oklch() per styles/tokens.css. */
@@ -38,6 +39,7 @@ export function readPalette(): Palette {
     measured: tokenColor("--prov-measured"),
     derived: tokenColor("--prov-derived"),
     inferred: tokenColor("--prov-inferred"),
+    degraded: tokenColor("--state-degraded"),
   };
 }
 

@@ -12,13 +12,22 @@ use tauri::Manager;
 mod probe;
 
 const ENGINE_ADDRESS: &str = "127.0.0.1:7700";
-struct HostedEngine(Mutex<Option<kinexa_engine::EngineHandle>>);
+struct HostedEngine(Mutex<Option<bansayo_engine::EngineHandle>>);
 
-/// A listening port is not enough: only attach to a Kinexa protocol-v1 engine.
+/// A listening port is not enough: only attach to a Bansayo protocol-v1 engine.
 fn compatible_engine(address: SocketAddr) -> Result<bool, String> {
     let mut socket = match TcpStream::connect_timeout(&address, Duration::from_millis(300)) {
         Ok(socket) => socket,
-        Err(error) if error.kind() == std::io::ErrorKind::ConnectionRefused => return Ok(false),
+        // Windows retries a refused loopback connect for about two seconds, so a closed port
+        // times out here instead. If the port is in fact taken, binding reports it.
+        Err(error)
+            if matches!(
+                error.kind(),
+                std::io::ErrorKind::ConnectionRefused | std::io::ErrorKind::TimedOut
+            ) =>
+        {
+            return Ok(false);
+        }
         Err(error) => return Err(format!("Could not inspect local engine: {error}")),
     };
     socket
@@ -41,25 +50,25 @@ fn compatible_engine(address: SocketAddr) -> Result<bool, String> {
 }
 fn start_engine(
     app: &tauri::App,
-) -> Result<Option<kinexa_engine::EngineHandle>, Box<dyn std::error::Error>> {
+) -> Result<Option<bansayo_engine::EngineHandle>, Box<dyn std::error::Error>> {
     let address: SocketAddr = ENGINE_ADDRESS.parse()?;
     if compatible_engine(address)? {
         return Ok(None);
     }
-    let selected_config = std::env::var_os("KINEXA_CONFIG").map(PathBuf::from);
+    let selected_config = std::env::var_os("BANSAYO_CONFIG").map(PathBuf::from);
     let path = selected_config
         .clone()
         .unwrap_or(app.path().resource_dir()?.join("config/sim-full-body.yaml"));
     let config = if selected_config.is_some() {
-        kinexa_engine::config::load(path)?
+        bansayo_engine::config::load(path)?
     } else {
-        kinexa_engine::config::load_with_data_dir(path, app.path().app_data_dir()?)?
+        bansayo_engine::config::load_with_data_dir(path, app.path().app_data_dir()?)?
     };
     if config.bind != address {
-        return Err("The bundled desktop UI connects to 127.0.0.1:7700. Set api.bind to that address in KINEXA_CONFIG.".into());
+        return Err("The bundled desktop UI connects to 127.0.0.1:7700. Set api.bind to that address in BANSAYO_CONFIG.".into());
     }
     let engine =
-        tauri::async_runtime::block_on(kinexa_engine::start(config)).map_err(|e| e.to_string())?;
+        tauri::async_runtime::block_on(bansayo_engine::start(config)).map_err(|e| e.to_string())?;
     Ok(Some(engine))
 }
 fn main() {
@@ -72,7 +81,7 @@ fn main() {
     let app = match app {
         Ok(app) => app,
         Err(error) => {
-            eprintln!("Kinexa desktop could not initialise: {error}");
+            eprintln!("Bansayo desktop could not initialise: {error}");
             std::process::exit(1);
         }
     };
@@ -82,7 +91,7 @@ fn main() {
             && let Some(engine) = hosted.take()
             && let Err(error) = tauri::async_runtime::block_on(engine.shutdown())
         {
-            eprintln!("Could not finalise Kinexa engine: {error}");
+            eprintln!("Could not finalise Bansayo engine: {error}");
         }
     });
 }

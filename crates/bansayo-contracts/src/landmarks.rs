@@ -8,7 +8,7 @@ use crate::{DeviceId, FrameRef, Origin, ProfileId, TimeQuality, TimeUs, Vec3};
 /// Names and connectivity of a landmark set; points are index-aligned with `names`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct LandmarkSchema {
-    /// e.g. `kinexa.body.v1.joints`.
+    /// e.g. `bansayo.body.v1.joints`.
     pub id: String,
     pub names: Vec<String>,
     /// Pairs of indices into `names` drawn as bones.
@@ -64,10 +64,17 @@ pub struct ModelLandmark3D {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct TriangulatedLandmark3D {
     pub m: Vec3,
-    /// Number of camera views used.
+    /// Number of camera views used; equals `used_views.len()`.
     pub views: u32,
+    /// RMS reprojection error over the used views, pixels.
     pub reprojection_error_px: f32,
     pub confidence: f32,
+    /// Cameras whose observation contributed to `m`.
+    #[serde(default)]
+    pub used_views: Vec<DeviceId>,
+    /// Cameras that observed the landmark but were rejected as outliers.
+    #[serde(default)]
+    pub rejected_views: Vec<DeviceId>,
 }
 
 /// 3D landmarks. The two kinds have different fields and are never converted into each other.

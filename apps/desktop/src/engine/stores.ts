@@ -5,6 +5,7 @@
 import type {
   DeviceId,
   PoseLandmarks2D,
+  PoseLandmarks3D,
   ServerMessage,
   SkeletonDefinition,
   SystemState,
@@ -32,6 +33,39 @@ export const skeletonStore = createStore<SkeletonDefinition | null>(null);
 export const landmarksStore = createStore<
   ReadonlyMap<DeviceId, PoseLandmarks2D>
 >(new Map());
+/** `performance.now()` when each camera's latest landmarks arrived; freshness is per camera. */
+export const landmarksReceivedAt = new Map<DeviceId, number>();
+
+/** Cameras whose landmarks arrived within `STALE_FRAME_MS`; a silent camera drops out on its own. */
+export function freshLandmarks(now: number): Map<DeviceId, PoseLandmarks2D> {
+  return new Map(
+    [...landmarksStore.get()].filter(
+      ([id]) => now - (landmarksReceivedAt.get(id) ?? -Infinity) <= STALE_FRAME_MS,
+    ),
+  );
+}
+
+export function clearLandmarks(): void {
+  landmarksStore.set(new Map());
+  landmarksReceivedAt.clear();
+  landmarks3dStore.clear();
+}
+
+export type TriangulatedLandmarks = Extract<
+  PoseLandmarks3D,
+  { kind: "triangulated" }
+>;
+
+/** Latest triangulated set. A plain holder like `frameStore`: the render loop polls it. */
+export const landmarks3dStore = {
+  landmarks: null as TriangulatedLandmarks | null,
+  /** `performance.now()` when `landmarks` was applied; older than `STALE_FRAME_MS` means waiting. */
+  receivedAt: 0,
+  clear(): void {
+    this.landmarks = null;
+    this.receivedAt = 0;
+  },
+};
 
 /**
  * Latest frame. A plain mutable holder, not React state: the render loop polls it every animation
@@ -70,6 +104,6 @@ export const frameStore = {
 /** Clears every live value. Called on disconnect and before a new `hello`. */
 export function clearLiveValues(): void {
   systemStateStore.set(null);
-  landmarksStore.set(new Map());
+  clearLandmarks();
   frameStore.clear();
 }

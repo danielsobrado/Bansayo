@@ -1,5 +1,5 @@
 use super::{Context, SessionFile};
-use kinexa_contracts::*;
+use bansayo_contracts::*;
 use std::path::Path;
 pub const MAX_REPLAY_BYTES: u64 = 128 * 1024 * 1024;
 #[derive(Clone)]
@@ -18,11 +18,7 @@ pub struct Recording {
     pub initial: Context,
     pub events: Vec<Recorded>,
 }
-pub fn load(dir: &Path, id: &SessionId) -> Result<Recording, String> {
-    let path = dir.join("sessions").join(id.as_str());
-    if !path.exists() {
-        return Err("Session was not found.".into());
-    }
+fn metadata(path: &Path, id: &SessionId) -> Result<RecordingSession, String> {
     let metadata: SessionFile = serde_json::from_slice(
         &std::fs::read(path.join("session.json")).map_err(|_| "Session metadata is damaged.")?,
     )
@@ -33,6 +29,14 @@ pub fn load(dir: &Path, id: &SessionId) -> Result<Recording, String> {
     {
         return Err("Session uses an unsupported format or is damaged.".into());
     }
+    Ok(metadata.session)
+}
+pub fn load(dir: &Path, id: &SessionId) -> Result<Recording, String> {
+    let path = dir.join("sessions").join(id.as_str());
+    if !path.exists() {
+        return Err("Session was not found.".into());
+    }
+    let session = metadata(&path, id)?;
     let file = path.join("recording.mcap");
     let size = std::fs::metadata(&file)
         .map_err(|_| "Recording file is missing.")?
@@ -54,7 +58,7 @@ pub fn load(dir: &Path, id: &SessionId) -> Result<Recording, String> {
     for message in stream {
         let message = message.map_err(|_| "Recording contains a damaged message.")?;
         let data = match message.channel.topic.as_str() {
-            "/kinexa/context" => {
+            "/bansayo/context" => {
                 let context: Context = serde_json::from_slice(&message.data)
                     .map_err(|_| "Recording context is invalid.")?;
                 let (restored, _, _) = context.restore()?;
@@ -65,10 +69,10 @@ pub fn load(dir: &Path, id: &SessionId) -> Result<Recording, String> {
                 }
                 RecordedData::Context(Box::new(context))
             }
-            "/kinexa/devices" => RecordedData::Event(
+            "/bansayo/devices" => RecordedData::Event(
                 serde_json::from_slice(&message.data).map_err(|_| "Device event is invalid.")?,
             ),
-            topic if topic.starts_with("/kinexa/obs/") => {
+            topic if topic.starts_with("/bansayo/obs/") => {
                 RecordedData::Event(Box::new(SourceEvent::Observation {
                     observation: serde_json::from_slice(&message.data)
                         .map_err(|_| "Recorded observation is invalid.")?,
@@ -120,7 +124,7 @@ pub fn load(dir: &Path, id: &SessionId) -> Result<Recording, String> {
     }
     events.sort_by_key(|e| e.accepted_us);
     Ok(Recording {
-        session: metadata.session,
+        session,
         initial: initial.ok_or("Recording context is missing.")?,
         events,
     })
@@ -141,11 +145,24 @@ pub fn sessions(dir: &Path) -> Result<(Vec<RecordingSession>, Vec<String>), Stri
         else {
             continue;
         };
-        match load(dir, &id) {
-            Ok(recording) => sessions.push(recording.session),
+        match finalised(&entry.path(), &id) {
+            Ok(session) => sessions.push(session),
             Err(_) => damaged.push(id.to_string()),
         }
     }
     sessions.sort_by(|a, b| b.created_utc.cmp(&a.created_utc).then(b.id.cmp(&a.id)));
     Ok((sessions, damaged))
+}
+/// Listing reads metadata only; full MCAP validation happens at playback, so a valid recording
+/// too large to replay is still listed. The writer rewrites `session.json` with the final size only
+/// after the MCAP is finalised and synced, so a matching size means the recording was completed.
+fn finalised(path: &Path, id: &SessionId) -> Result<RecordingSession, String> {
+    let session = metadata(path, id)?;
+    let size = std::fs::metadata(path.join("recording.mcap"))
+        .map_err(|_| "Recording file is missing.")?
+        .len();
+    if session.size_bytes == 0 || size != session.size_bytes {
+        return Err("Recording was not finalised.".into());
+    }
+    Ok(session)
 }

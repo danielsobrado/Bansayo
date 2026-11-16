@@ -17,7 +17,7 @@
       "id": "SIM-CAM1"
     },
     "origin": "simulated",
-    "schema_id": "kinexa.body.v1.joints",
+    "schema_id": "bansayo.body.v1.joints",
     "detector": "simulated-projection",
     "points": [
       {

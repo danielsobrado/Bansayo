@@ -9,7 +9,7 @@ import type { SegmentDef } from "./SegmentDef";
  */
 export type SkeletonDefinition = { 
 /**
- * e.g. `kinexa.body.v1`.
+ * e.g. `bansayo.body.v1`.
  */
 model_id: string, 
 /**

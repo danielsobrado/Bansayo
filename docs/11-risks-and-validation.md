@@ -12,7 +12,7 @@
 | R6 | Camera capture on Windows: crate maturity, MJPEG decode cost, USB bandwidth with several cameras | Lower frame rates or dropped cameras | Spike `nokhwa` and `cameras` on the target machine before choosing; the adapter boundary isolates the choice | Yes |
 | R7 | ONNX Runtime with CUDA on Windows needs matching driver, CUDA and cuDNN versions; `ort` 2 is still a release candidate | Inference fails to start, or the API changes | Pin exact versions; configured fallback to another execution provider; state `unavailable` with the cause | Yes |
 | R8 | Licence terms of pretrained pose weights and their datasets | Cannot distribute a model with the application | Review before distribution; models are user-supplied files until then | No |
-| R9 | Cameras without hardware sync | Triangulation error during fast movement | `time_sync` profile; start with slow movements; state the limitation in the feature reasons | Yes |
+| R9 | Cameras without hardware sync | Triangulation error during fast movement | Views beyond `triangulation.max_skew_ms` of the newest frame are left out (default 20 ms, not measured); `time_sync` profile designed; start with slow movements; unsynchronised sets show as fewer views or missing landmarks with reasons | Yes |
 | R10 | Default body proportions are population averages | Joint positions and the floor-contact root height are approximate | Marked `inferred` and `assumed`; body-proportion calibration on the roadmap | Yes |
 | R11 | The floor-contact rule assumes a foot is on the floor | Wrong during jumps, sitting, lying | Root position is labelled `inferred`; a positional source replaces it | Yes |
 | R12 | JSON streaming cost with many clients or landmark streams | Engine CPU, client parse time | Frames are serialised once and shared; measure first; binary encoding is an additive change | No |
@@ -22,6 +22,9 @@
 | R16 | Development here is on macOS; the target is Windows 11 | Platform-specific build or runtime issues go unseen | Nothing platform-specific is in the PoC; build and run on Windows is a validation task | Yes |
 | R17 | Simulated data proves plumbing, not accuracy | Over-reading the demo | Everything simulated is labelled; no accuracy figure is produced | — |
 | R18 | Sessions are read fully into memory for playback | Large sessions refused | Size limit with a clear error; indexed reads when camera data arrives | No |
+| R19 | Camera intrinsics and extrinsics are declared by the simulator; no calibration solver exists | Real cameras need profiles from a procedure that is not built; small calibration errors displace every triangulated landmark | Profiles carry `method` and `origin`; the reprojection error is published per landmark; a calibration procedure is roadmap item 4 | Yes |
+| R20 | Triangulation was exercised only with simulated pixel noise | Real detector noise (jitter, left/right swaps, occlusion guesses) may exceed what the linear solve and the reprojection check absorb | Outlier views are dropped and reported per landmark; thresholds are configuration; no nonlinear refinement or filtering until real data shows the need | Yes |
+| R21 | The measured root position is used as-is | Camera noise goes straight into the skeleton root, with no smoothing | Provenance is `measured` and the source is the published landmark; blending with the IMU estimate waits for fusion stage 4 | Yes |
 
 ## 2. Decisions that need hardware before they are final
 
@@ -36,6 +39,7 @@
 | VR interpolation delay | Measured latency in the headset |
 | How fused poses reach SteamVR | Evaluation of an OpenVR driver against routing through SlimeVR |
 | Binary wire encoding | A measured bottleneck |
+| Triangulation defaults: skew, reprojection limit, minimum views, minimum ray angle | Measured clock offsets, noise and calibration error of the real camera rig |
 
 ## 3. What the PoC will not have verified
 
@@ -56,6 +60,9 @@ Stated here so that the final report cannot drift from it.
 | Windows 11 build and smoke test of engine, desktop app and VR client | Immediately after the PoC |
 | Hardware-in-the-loop test with SlimeVR trackers | With the SolarXR adapter |
 | Camera capture and inference rate on the target GPU | With the camera milestone |
+| Real camera calibration: intrinsics and extrinsics for a physical rig, and reprojection error on it | With the camera milestone and a calibration procedure |
+| Triangulation with real detector noise: landmark error against a reference, outlier-view behaviour, effect on the measured root | With the camera milestone |
+| Camera synchronisation on real cameras: measured skew between frames, and whether the default 20 ms limit or a `time_sync` profile is needed | With the camera milestone |
 | Latency measurement, sensor to screen and sensor to headset | With real devices |
 | Long-running stability and memory | Before first release |
 | Joint-angle accuracy against a reference (goniometer or optical system) | Before any measurement claim; until then `validated` stays `false` |
@@ -71,5 +78,6 @@ Stated here so that the final report cannot drift from it.
 | No session database | Directory listing suffices | Session analysis |
 | Time offset estimate is one-way | Good enough without two-way capable devices | Custom firmware |
 | Solver stages are hard-wired functions | Only one implementation of each exists | Second implementation of any stage |
+| Triangulation is a linear solve with no refinement or temporal filtering | Nothing real to tune against; the reprojection check bounds the damage | Real cameras show noise it cannot absorb |
 | Debug skeleton instead of an avatar in VR | Proves the stream and coordinates | VR milestone |
 | Root `README` is the only user guide | The product is a PoC | First release |

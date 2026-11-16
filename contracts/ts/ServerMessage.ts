@@ -4,6 +4,7 @@ import type { JointMeasurement } from "./JointMeasurement";
 import type { NoticeLevel } from "./NoticeLevel";
 import type { Origin } from "./Origin";
 import type { PoseLandmarks2D } from "./PoseLandmarks2D";
+import type { PoseLandmarks3D } from "./PoseLandmarks3D";
 import type { SkeletonDefinition } from "./SkeletonDefinition";
 import type { SkeletonPose } from "./SkeletonPose";
 import type { SystemState } from "./SystemState";
@@ -24,4 +25,4 @@ origins: Array<Origin>, pose: SkeletonPose | null,
 /**
  * Index-aligned with `SkeletonDefinition.joints`.
  */
-joints: Array<JointMeasurement>, quality: TrackingQuality, } | { "type": "landmarks_2d", landmarks: PoseLandmarks2D, } | { "type": "notice", level: NoticeLevel, code: string, message: string, };
+joints: Array<JointMeasurement>, quality: TrackingQuality, } | { "type": "landmarks_2d", landmarks: PoseLandmarks2D, } | { "type": "landmarks_3d", landmarks: PoseLandmarks3D, } | { "type": "notice", level: NoticeLevel, code: string, message: string, };

@@ -1,6 +1,6 @@
-# Kinexa documentation
+# Bansayo documentation
 
-Kinexa is an open-source, local-first platform for capturing, reconstructing, analysing and
+Bansayo is an open-source, local-first platform for capturing, reconstructing, analysing and
 visualising human motion from wearable IMUs, cameras, or both.
 
 **Status: the local PoC is implemented and undergoing final validation.** The Rust engine,
@@ -33,7 +33,7 @@ from remaining validation. Each design document also distinguishes PoC scope fro
 - **Designed** — specified here, deliberately not implemented in the PoC.
 - **Extension point** — a named place where a later capability plugs in; no code is created for it yet.
 - Type shapes are written in TypeScript notation because it describes JSON precisely. The Rust
-  crate `kinexa-contracts` is the implementation source of truth once it exists; TypeScript types
+  crate `bansayo-contracts` is the implementation source of truth once it exists; TypeScript types
   are generated from it and never written by hand.
 
 ## One rule above all others

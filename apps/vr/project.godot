@@ -1,8 +1,8 @@
-; Kinexa training room — same wire coordinates as the engine.
+; Bansayo training room — same wire coordinates as the engine.
 config_version=5
 
 [application]
-config/name="Kinexa Training Room"
+config/name="Bansayo Training Room"
 run/main_scene="res://training_room.tscn"
 config/features=PackedStringArray("4.4", "GL Compatibility")
 
@@ -20,5 +20,5 @@ environment/defaults/default_clear_color=Color(0.035, 0.045, 0.06, 1)
 openxr/enabled=true
 shaders/enabled=true
 
-[kinexa]
+[bansayo]
 engine_url="http://127.0.0.1:7700"

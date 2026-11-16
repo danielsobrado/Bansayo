@@ -1,6 +1,6 @@
 //! Deterministic body observations. The solver never receives body ground truth.
 pub mod body;
-mod camera;
+pub mod camera;
 pub mod motions;
 mod trackers;
 use crate::{
@@ -8,7 +8,7 @@ use crate::{
     skeleton::Skeleton,
     sources::{Source, SourceContext},
 };
-use kinexa_contracts::*;
+use bansayo_contracts::*;
 use motions::Motion;
 use std::{collections::BTreeMap, sync::atomic::Ordering, time::Duration};
 
@@ -47,7 +47,8 @@ impl FaultSetting {
 pub struct SimulatedSource {
     pub spec: SimulatedSpec,
     pub skeleton: Skeleton,
-    pub assignments: BTreeMap<DeviceId, SegmentId>,
+    /// The live assignment: reassigning a simulated tracker moves its virtual strap with it.
+    pub assignments: tokio::sync::watch::Receiver<BTreeMap<DeviceId, SegmentId>>,
 }
 impl SimulatedSource {
     pub fn descriptors(&self) -> Vec<DeviceDescriptor> {
@@ -84,17 +85,26 @@ impl SimulatedSource {
             .collect()
     }
 }
+/// Next emission time. Counted from the previous deadline so wake-up jitter does not lower
+/// the rate; after a stall, or for the first sample, counted from now so nothing bursts.
+fn next_due(previous: u64, now: u64, rate_hz: f64) -> u64 {
+    let period = (1e6 / rate_hz) as u64;
+    if previous + period > now {
+        previous + period
+    } else {
+        now + period
+    }
+}
 impl Source for SimulatedSource {
     async fn run(self, context: SourceContext) -> Result<(), crate::sources::SourceError> {
-        let mut timer = tokio::time::interval(Duration::from_millis(1));
-        timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        let mut timer = crate::ticker::ticker(Duration::from_millis(1));
         let mut devices: BTreeMap<DeviceId, (u64, u64)> = BTreeMap::new();
         let mut last_us = context.clock.now_us();
         let mut sim_s = 0.0;
         let mut generation = 0;
         let mut links: BTreeMap<DeviceId, bool> = BTreeMap::new();
         loop {
-            tokio::select! { _=context.cancel.cancelled()=>break, _=timer.tick()=>{} }
+            tokio::select! { _=context.cancel.cancelled()=>break, _=timer.recv()=>{} }
             let now = context.clock.now_us();
             let control = *context.control.borrow();
             if control.generation != generation {
@@ -163,9 +173,10 @@ impl Source for SimulatedSource {
                     continue;
                 }
                 *seq += 1;
-                *next = now + (1e6 / tracker.rate_hz) as u64;
+                *next = next_due(*next, now, tracker.rate_hz);
                 let index = self
                     .assignments
+                    .borrow()
                     .get(&tracker.id)
                     .and_then(|s| self.skeleton.index_of(s))
                     .unwrap_or(0);
@@ -208,7 +219,7 @@ impl Source for SimulatedSource {
                     continue;
                 }
                 *seq += 1;
-                *next = now + (1e6 / camera.rate_hz) as u64;
+                *next = next_due(*next, now, camera.rate_hz);
                 let landmarks =
                     camera::project(camera, self.spec.seed, *seq, now, &truth.positions);
                 let event = SourceEvent::Observation {

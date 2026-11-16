@@ -1,4 +1,4 @@
-//! Data contracts shared by the Kinexa engine and its clients.
+//! Data contracts shared by the Bansayo engine and its clients.
 //!
 //! Every type that crosses a process boundary or is persisted lives here: identifiers, frames,
 //! observations, landmarks, skeleton, pose, calibration, state, stream messages and HTTP bodies.

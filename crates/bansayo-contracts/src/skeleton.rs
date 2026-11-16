@@ -52,7 +52,7 @@ pub struct JointDef {
 /// world axes.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct SkeletonDefinition {
-    /// e.g. `kinexa.body.v1`.
+    /// e.g. `bansayo.body.v1`.
     pub model_id: String,
     /// Increments whenever the definition or its scaling changes.
     pub rev: u32,

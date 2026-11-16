@@ -28,6 +28,8 @@ pub struct Config {
     pub quality: QualityConfig,
     #[serde(default)]
     pub sources: Vec<SourceConfig>,
+    #[serde(default)]
+    pub triangulation: TriangulationConfig,
     /// Reserved for camera processing; rejected until the camera milestone.
     #[serde(default)]
     pub processing_profiles: Option<Value>,
@@ -125,7 +127,7 @@ pub struct SkeletonConfig {
 impl Default for SkeletonConfig {
     fn default() -> Self {
         Self {
-            model: "kinexa.body.v1".into(),
+            model: "bansayo.body.v1".into(),
             height_m: 1.75,
         }
     }
@@ -148,6 +150,31 @@ impl Default for QualityConfig {
             degraded_rate_fraction: 0.7,
             degraded_quality: 0.5,
             disconnect_after_ms: 1000,
+        }
+    }
+}
+
+/// Multi-camera triangulation of 2D landmarks into world points.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct TriangulationConfig {
+    /// Camera views older than the newest usable view by more than this are not combined.
+    pub max_skew_ms: u64,
+    /// Views reprojecting worse than this are rejected; a point that cannot meet it is omitted.
+    pub max_reprojection_error_px: f64,
+    /// Fewest camera views a landmark needs.
+    pub min_views: u32,
+    /// Below this largest pairwise ray angle, depth is too poorly conditioned to publish.
+    pub min_ray_angle_deg: f64,
+}
+
+impl Default for TriangulationConfig {
+    fn default() -> Self {
+        Self {
+            max_skew_ms: 20,
+            max_reprojection_error_px: 15.0,
+            min_views: 2,
+            min_ray_angle_deg: 3.0,
         }
     }
 }
@@ -235,6 +262,6 @@ pub struct SimCameraConfig {
 pub struct ScenarioStep {
     pub at_s: f64,
     pub device: String,
-    pub action: kinexa_contracts::FaultAction,
+    pub action: bansayo_contracts::FaultAction,
     pub quality: Option<f32>,
 }

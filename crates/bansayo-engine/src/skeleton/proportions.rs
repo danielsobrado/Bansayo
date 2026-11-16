@@ -1,14 +1,14 @@
-//! Default proportions of `kinexa.body.v1`, as fractions of body height H.
+//! Default proportions of `bansayo.body.v1`, as fractions of body height H.
 //!
 //! Anthropometric ratios of Drillis and Contini as tabulated by Winter (Biomechanics and Motor
 //! Control of Human Movement); the subdivision of the spine is a modelling choice. Right-side
 //! segments mirror X. This is the only place these numbers live in the engine.
 
-use kinexa_contracts::JointMethod;
+use bansayo_contracts::JointMethod;
 
-pub const MODEL_ID: &str = "kinexa.body.v1";
+pub const MODEL_ID: &str = "bansayo.body.v1";
 /// Landmark schema of simulated cameras: one landmark per segment origin, in skeleton order.
-pub const LANDMARK_SCHEMA_ID: &str = "kinexa.body.v1.joints";
+pub const LANDMARK_SCHEMA_ID: &str = "bansayo.body.v1.joints";
 
 /// Root (pelvis) height at rest.
 pub const PELVIS_HEIGHT: f64 = 0.530;

@@ -1,7 +1,7 @@
 //! Pipeline-owned latest observation and stream statistics; bounded by configured devices.
 pub mod persistence;
 use crate::{calibration::Store, config::QualityConfig, sources::DropCounters};
-use kinexa_contracts::*;
+use bansayo_contracts::*;
 use std::collections::BTreeMap;
 #[derive(Clone)]
 pub struct Entry {
@@ -51,7 +51,9 @@ impl Registry {
             drops,
         }
     }
-    pub fn event(&mut self, event: SourceEvent) {
+    /// Returns whether the event changed pipeline state. Only accepted events may be recorded:
+    /// replay re-applies them and rejects a recording holding anything the live registry refused.
+    pub fn event(&mut self, event: SourceEvent) -> bool {
         match event {
             SourceEvent::Observation { observation } => self.accept(observation),
             SourceEvent::DeviceLink {
@@ -59,17 +61,24 @@ impl Registry {
                 connected,
                 ..
             } => {
-                if let Some(e) = self.entries.get_mut(&device_id) {
-                    e.connected = connected;
-                    if connected {
-                        e.first_us = None;
-                        e.recent.clear();
-                        e.latest = None;
-                    }
+                let Some(e) = self.entries.get_mut(&device_id) else {
+                    return false;
+                };
+                e.connected = connected;
+                if connected {
+                    e.first_us = None;
+                    e.recent.clear();
+                    e.latest = None;
                 }
+                true
             }
             SourceEvent::DeviceAnnounced { descriptor } => {
-                self.entries.entry(descriptor.id.clone()).or_insert(Entry {
+                let std::collections::btree_map::Entry::Vacant(slot) =
+                    self.entries.entry(descriptor.id.clone())
+                else {
+                    return false;
+                };
+                slot.insert(Entry {
                     descriptor,
                     latest: None,
                     received: 0,
@@ -80,30 +89,34 @@ impl Registry {
                     recent: Default::default(),
                     failure: None,
                 });
+                true
             }
         }
     }
-    pub fn accept(&mut self, o: SensorObservation) {
-        if let Some(entry) = self.entries.get_mut(&o.device_id) {
-            if let Some(last) = &entry.latest {
-                if o.seq <= last.seq || o.t_us < last.t_us {
-                    return;
-                }
-                entry.dropped += o.seq.saturating_sub(last.seq + 1);
+    /// Rejects unknown devices, duplicates and observations older than the latest accepted one.
+    pub fn accept(&mut self, o: SensorObservation) -> bool {
+        let Some(entry) = self.entries.get_mut(&o.device_id) else {
+            return false;
+        };
+        if let Some(last) = &entry.latest {
+            if o.seq <= last.seq || o.t_us < last.t_us {
+                return false;
             }
-            entry.connected = true;
-            entry.failure = None;
-            if entry.recent.len() == 256 {
-                entry.recent.pop_front();
-            }
-            entry.recent.push_back(o.t_us);
-            if let Some(q) = o.confidence {
-                entry.reported_quality = q;
-            }
-            entry.first_us.get_or_insert(o.t_us);
-            entry.received += 1;
-            entry.latest = Some(o);
+            entry.dropped += o.seq.saturating_sub(last.seq + 1);
         }
+        entry.connected = true;
+        entry.failure = None;
+        if entry.recent.len() == 256 {
+            entry.recent.pop_front();
+        }
+        entry.recent.push_back(o.t_us);
+        if let Some(q) = o.confidence {
+            entry.reported_quality = q;
+        }
+        entry.first_us.get_or_insert(o.t_us);
+        entry.received += 1;
+        entry.latest = Some(o);
+        true
     }
     pub fn status(&self, now: u64, quality: &QualityConfig, store: &Store) -> Vec<DeviceStatus> {
         self.entries
@@ -174,6 +187,15 @@ impl Registry {
                         Some(e.descriptor.id.to_string()),
                         "Heading alignment has not been calibrated; identity is assumed.",
                     ));
+                }
+                if e.descriptor.kind == DeviceKind::Camera {
+                    calibration.extend(
+                        [
+                            CalibrationKind::CameraIntrinsics,
+                            CalibrationKind::CameraExtrinsics,
+                        ]
+                        .map(|kind| store.camera_ref(kind, &e.descriptor.id)),
+                    );
                 }
                 DeviceStatus {
                     descriptor: e.descriptor.clone(),

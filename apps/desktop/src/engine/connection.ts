@@ -6,9 +6,12 @@ import { announce } from "../lib/announcer";
 import { STREAM_URL, SUPPORTED_PROTOCOL_VERSION } from "./config";
 import { isCompleteHello, parseServerMessage } from "./messages";
 import {
+  clearLandmarks,
   clearLiveValues,
   connectionStore,
   frameStore,
+  landmarks3dStore,
+  landmarksReceivedAt,
   landmarksStore,
   skeletonStore,
   systemStateStore,
@@ -99,8 +102,11 @@ export class EngineConnection {
         frameStore.apply(m, this.deps.monotonic());
         break;
       case "state":
-        if (systemStateStore.get()?.engine.mode !== m.state.engine.mode)
+        // Live and replay are different timelines: nothing from one may show in the other.
+        if (systemStateStore.get()?.engine.mode !== m.state.engine.mode) {
           frameStore.invalidate();
+          clearLandmarks();
+        }
         systemStateStore.set(m.state);
         break;
       case "skeleton":
@@ -111,9 +117,20 @@ export class EngineConnection {
       case "landmarks_2d": {
         const next = new Map(landmarksStore.get());
         next.set(m.landmarks.frame_meta.device_id, m.landmarks);
+        landmarksReceivedAt.set(
+          m.landmarks.frame_meta.device_id,
+          this.deps.monotonic(),
+        );
         landmarksStore.set(next);
         break;
       }
+      case "landmarks_3d":
+        // Latest set only: replay seeks may move time backwards and simply replace it.
+        if (m.landmarks.kind === "triangulated") {
+          landmarks3dStore.landmarks = m.landmarks;
+          landmarks3dStore.receivedAt = this.deps.monotonic();
+        }
+        break;
       case "notice":
         announce(m.message);
         break;

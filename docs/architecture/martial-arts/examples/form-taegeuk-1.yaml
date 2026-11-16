@@ -1,0 +1,64 @@
+# ILLUSTRATIVE content file. Final location: content/forms/taekwondo/taegeuk_1.yaml
+#
+# DRAFT — the step list below was written from memory of the common Kukkiwon version and has NOT been
+# checked against a Kukkiwon source or by a qualified instructor. It demonstrates the schema. It must be
+# reviewed step by step before `status` may become `reviewed`. Other federations and schools differ.
+#
+# Facing convention (13 §8): facing at the first step is 0°. Positive = to the athlete's left.
+#   +90 = left side line, -90 = right side line, 180 = facing back.
+# travel_deg: direction of the step in the start frame; null = no step.
+# Counts 14 and 16 are a kick followed by a punch: two steps sharing one `count`.
+schema: bansayo.form/v1
+id: taekwondo.kukkiwon.taegeuk_1
+version: 1
+status: draft
+names:
+  display: Taegeuk 1
+  native: Taegeuk Il Jang
+discipline: taekwondo
+style: kukkiwon
+footprint_m: [4.0, 4.0]
+start:
+  stance: taekwondo.junbi_seogi
+  facing_deg: 0
+tolerances:
+  facing_deg: 25
+  travel_deg: 35
+
+sections:
+  - id: line_1
+    label: First line
+    sequence:
+      - step: { id: s01, count: 1, technique: taekwondo.arae_makgi, side: left, stance: taekwondo.ap_seogi, lead: left, facing_deg: 90, turn: left, travel_deg: 90, tempo: normal }
+      - step: { id: s02, count: 2, technique: taekwondo.momtong_jireugi, side: right, stance: taekwondo.ap_seogi, lead: right, facing_deg: 90, turn: none, travel_deg: 90, tempo: normal }
+      - step: { id: s03, count: 3, technique: taekwondo.arae_makgi, side: right, stance: taekwondo.ap_seogi, lead: right, facing_deg: -90, turn: right, travel_deg: -90, tempo: normal, mirror_of: s01 }
+      - step: { id: s04, count: 4, technique: taekwondo.momtong_jireugi, side: left, stance: taekwondo.ap_seogi, lead: left, facing_deg: -90, turn: none, travel_deg: -90, tempo: normal, mirror_of: s02 }
+      - step: { id: s05, count: 5, technique: taekwondo.arae_makgi, side: left, stance: taekwondo.ap_kubi, lead: left, facing_deg: 0, turn: left, travel_deg: 0, tempo: normal }
+      - step: { id: s06, count: 6, technique: taekwondo.momtong_jireugi, side: right, stance: taekwondo.ap_kubi, lead: left, facing_deg: 0, turn: none, travel_deg: null, tempo: normal }
+
+  - id: line_2
+    label: Second line
+    sequence:
+      - step: { id: s07, count: 7, technique: taekwondo.momtong_an_makgi, side: left, stance: taekwondo.ap_seogi, lead: right, facing_deg: -90, turn: right, travel_deg: -90, tempo: normal }
+      - step: { id: s08, count: 8, technique: taekwondo.momtong_jireugi, side: right, stance: taekwondo.ap_seogi, lead: left, facing_deg: -90, turn: none, travel_deg: -90, tempo: normal }
+      - step: { id: s09, count: 9, technique: taekwondo.momtong_an_makgi, side: right, stance: taekwondo.ap_seogi, lead: left, facing_deg: 90, turn: left, travel_deg: 90, tempo: normal, mirror_of: s07 }
+      - step: { id: s10, count: 10, technique: taekwondo.momtong_jireugi, side: left, stance: taekwondo.ap_seogi, lead: right, facing_deg: 90, turn: none, travel_deg: 90, tempo: normal, mirror_of: s08 }
+      - step: { id: s11, count: 11, technique: taekwondo.arae_makgi, side: right, stance: taekwondo.ap_kubi, lead: right, facing_deg: 0, turn: right, travel_deg: 0, tempo: normal }
+      - step: { id: s12, count: 12, technique: taekwondo.momtong_jireugi, side: left, stance: taekwondo.ap_kubi, lead: right, facing_deg: 0, turn: none, travel_deg: null, tempo: normal }
+
+  - id: line_3
+    label: Third line and return
+    sequence:
+      - step: { id: s13, count: 13, technique: taekwondo.olgul_makgi, side: left, stance: taekwondo.ap_seogi, lead: left, facing_deg: 90, turn: left, travel_deg: 90, tempo: normal }
+      - step: { id: s14a, count: 14, technique: taekwondo.ap_chagi, side: right, facing_deg: 90, turn: none, travel_deg: null, tempo: normal }
+      - step: { id: s14b, count: 14, technique: taekwondo.momtong_jireugi, side: right, stance: taekwondo.ap_seogi, lead: right, facing_deg: 90, turn: none, travel_deg: 90, tempo: normal }
+      - step: { id: s15, count: 15, technique: taekwondo.olgul_makgi, side: right, stance: taekwondo.ap_seogi, lead: right, facing_deg: -90, turn: right, travel_deg: -90, tempo: normal, mirror_of: s13 }
+      - step: { id: s16a, count: 16, technique: taekwondo.ap_chagi, side: left, facing_deg: -90, turn: none, travel_deg: null, tempo: normal, mirror_of: s14a }
+      - step: { id: s16b, count: 16, technique: taekwondo.momtong_jireugi, side: left, stance: taekwondo.ap_seogi, lead: left, facing_deg: -90, turn: none, travel_deg: -90, tempo: normal, mirror_of: s14b }
+      - step: { id: s17, count: 17, technique: taekwondo.arae_makgi, side: left, stance: taekwondo.ap_kubi, lead: left, facing_deg: 180, turn: right, travel_deg: 180, tempo: normal }
+      - step: { id: s18, count: 18, technique: taekwondo.momtong_jireugi, side: right, stance: taekwondo.ap_kubi, lead: right, facing_deg: 180, turn: none, travel_deg: 180, tempo: normal, kihap: true }
+
+safety:
+  notes:
+    - safety.form.clear_footprint
+    - safety.form.cable_when_tethered

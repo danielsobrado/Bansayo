@@ -42,7 +42,7 @@ Only a small part of this is implemented first. The table in the next section is
 
 | Claim | How the PoC demonstrates it |
 |---|---|
-| The engine independently generates and streams canonical pose data | `kinexa-engine` runs standalone from a YAML file and serves WebSocket + HTTP |
+| The engine independently generates and streams canonical pose data | `bansayo-engine` runs standalone from a YAML file and serves WebSocket + HTTP |
 | A frontend visualises it in real time | The desktop UI renders the skeleton with three.js from the live stream |
 | Camera and sensor inputs are represented independently | Simulated trackers and a simulated camera are separate devices with separate capabilities, rates and streams |
 | Variable input configurations work | Three example configs: twelve trackers with two cameras, six trackers, camera only. Same binary, same UI |
@@ -55,9 +55,9 @@ Only a small part of this is implemented first. The table in the next section is
 | Area | PoC | Designed, not implemented |
 |---|---|---|
 | Sources | Simulated body driving N virtual IMU trackers and M virtual cameras; replay of recorded sessions | SlimeVR (SolarXR) adapter, ESP32 UDP adapter, real camera capture, distance/pressure/UWB |
-| Camera processing | Simulated 2D landmarks, clearly labelled | ONNX pose inference, intrinsic/extrinsic calibration, triangulation |
+| Camera processing | Simulated 2D landmarks, clearly labelled; simulator-declared camera models; multi-camera triangulation of the simulated landmarks | ONNX pose inference, camera calibration (solver), time synchronisation of real cameras |
 | IMU processing | Mounting calibration by reference pose, segment orientation, staleness handling | Heading alignment procedure, bias calibration, drift correction |
-| Skeleton | 19-segment body model, forward kinematics, floor-contact root height | Measured body proportions, positional root from cameras/XR |
+| Skeleton | 19-segment body model, forward kinematics, floor-contact root height, or a measured root from a triangulated pelvis (simulated cameras) | Measured body proportions, positional root from XR |
 | Measurements | Knee, hip, elbow flexion, shoulder elevation, trunk lean | Exercise detection, repetition counting, movement phases |
 | Quality | Per-segment provenance and confidence, device state machine, feature availability with reasons | Validated accuracy figures |
 | Recording | Record inputs to MCAP, list sessions, play, pause, seek, speed | Frame stepping, session comparison, export formats |
@@ -89,8 +89,10 @@ because real six-axis trackers are unusable without it.
 3. **Physical SlimeVR tracker input** — SolarXR client against a running SlimeVR Server.
 4. **Calibration workflows** — full calibration workspace, camera intrinsics and extrinsics,
    floor plane.
-5. **Two-camera triangulation** — time synchronisation, metric 3D landmarks.
-6. **Camera + IMU fusion** — camera-based root position and drift correction.
+5. **Triangulation on real cameras** — the geometry exists and runs on simulated cameras; what
+   remains is real calibration, time synchronisation and validation.
+6. **Camera + IMU fusion** — heading and drift correction from cameras, and estimation beyond the
+   measured root position.
 7. **Exercise metrics and session analysis** — training workspace, repetition detection, session
    comparison, SQLite session index.
 8. **Expanded VR** — avatar retargeting, mirror, headset alignment, guidance.

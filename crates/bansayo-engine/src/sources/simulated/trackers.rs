@@ -1,5 +1,5 @@
 use crate::math::{Rot, rot_to_wire, yaw_deg};
-use kinexa_contracts::{DeviceId, Quat};
+use bansayo_contracts::{DeviceId, Quat};
 /// Stable SplitMix-style samples keyed by identity/sequence; no scheduler-dependent RNG state.
 pub(super) fn sample(id: &DeviceId, seed: u64, seq: u64, axis: u64) -> f64 {
     let mut h = seed ^ seq.wrapping_mul(0x9e3779b97f4a7c15) ^ axis;

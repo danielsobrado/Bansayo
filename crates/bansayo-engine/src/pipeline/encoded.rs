@@ -1,5 +1,5 @@
 //! Shared, immutable JSON packets. Serialization happens once at the outgoing boundary.
-use kinexa_contracts::ServerMessage;
+use bansayo_contracts::ServerMessage;
 use std::sync::Arc;
 #[derive(Clone)]
 pub struct Encoded {

@@ -238,14 +238,31 @@ not hidden, so cards align.
 └───────────────────────────────────────────────┴─────────────────────────────────────────┘
 ```
 
-- One preview per camera in a grid: one fills the width, two sit side by side, three or four form
-  a 2×2, more scroll.
+- The preview shows one camera at a time, chosen from a tab row of camera ids. Beside it is the
+  **3D reconstruction view** (below). The sketch above shows the single-camera layout.
 - Landmarks are drawn from the camera's `LandmarkSchema` (names and edges come from the engine).
   Confidence drives point opacity; undetected points are not drawn.
 - A simulated camera has no image. Its preview says so and shows landmarks on a neutral field. It
   never shows a fake video frame.
 - The detail panel shows source, resolution, measured frame rate, landmark count, detector, time
   quality, calibration states and synchronisation status.
+- **3D reconstruction view.** Shown when at least two cameras report usable intrinsics and
+  extrinsics (read from the calibration profiles in `SystemState`, which carry the camera data for
+  this purpose) and the cameras declare a landmark schema. It draws a wire frustum per calibrated
+  camera, labelled with its id and highlighting the selected one, and the triangulated landmarks
+  from the `landmarks_3d` stream as markers joined by the schema's edges, over the floor grid. Marker
+  opacity and size follow confidence; a wire octahedron marks a reprojection error above 5 px. A
+  set older than half a second is not drawn, and the view says it is waiting. With fewer than two
+  calibrated cameras it shows an empty state saying how many report usable calibration. The
+  feature state and its reasons from the engine appear under the view.
+- **Landmark inspector.** Selecting a landmark, in the 3D view or in the landmark list, answers why
+  a joint is misplaced or missing: its status (`accepted`, `high error`, `not reconstructed`), world
+  position, number of views used, reprojection RMS and confidence, and a row per camera with its
+  role (`used`, `rejected`, `not used`) and its own 2D observation (pixels and confidence, "not
+  detected", or "no 2D data"). The selected landmark is also highlighted in the camera preview.
+  Status is shown as a glyph and a word, never colour alone.
+- Studio can show the same frustums through its Cameras layer toggle, off by default.
+- Everything here is simulated in the PoC: no video is captured and no detector runs.
 - Designed: live video in the preview, source selection, and the entry to intrinsic and extrinsic
   calibration.
 
@@ -422,10 +439,11 @@ src/
 ├── engine/        EngineConnection (socket, backoff, protocol check)
 │                  http (typed ApiResponse client), actions (one function per API route)
 │                  stores: connection, system state, skeleton, latest frame, latest landmarks
+│                  (2D and triangulated 3D), cameraCalibration (camera poses from profiles)
 │                  hooks: useSystemState(selector), useConnection(), useSampledFrame(hz)
 ├── shell/         AppShell, NavRail, StatusBar, TransportBar, LiveRegion
 ├── workspaces/    overview/  studio/  devices/  cameras/  sessions/
-├── viewport/      MotionViewport, SkeletonRig, picking, ViewportCanvas (React wrapper)
+├── viewport/      MotionViewport, SkeletonRig, LandmarkRig, picking, ViewportCanvas (React wrapper)
 │                  layers/ Floor, Trackers, CameraFrustums, Trails, AngleArcs
 ├── calibration/   ReferencePoseFlow
 ├── ui/            Panel, StatePill, ProvenanceTag, OriginBadge, Readout, Sparkline, BodyMap,

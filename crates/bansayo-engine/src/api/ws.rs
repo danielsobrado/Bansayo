@@ -9,8 +9,8 @@ use axum::{
     },
     response::{IntoResponse, Response},
 };
+use bansayo_contracts::*;
 use futures_util::{SinkExt, StreamExt};
-use kinexa_contracts::*;
 use serde::Deserialize;
 use std::{sync::Arc, time::Duration};
 #[derive(Default, Deserialize)]
@@ -32,13 +32,15 @@ pub async fn upgrade(
         .split(',')
         .map(str::to_owned)
         .collect::<Vec<_>>();
-    if topics
-        .iter()
-        .any(|t| !matches!(t.as_str(), "frame" | "state" | "landmarks_2d"))
-    {
+    if topics.iter().any(|t| {
+        !matches!(
+            t.as_str(),
+            "frame" | "state" | "landmarks_2d" | "landmarks_3d"
+        )
+    }) {
         return failure(
             ApiErrorCode::InvalidRequest,
-            "Stream topics must be frame, state or landmarks_2d.",
+            "Stream topics must be frame, state, landmarks_2d or landmarks_3d.",
         );
     }
     let rate = query.max_rate_hz.unwrap_or(api.publish_rate);
@@ -100,12 +102,14 @@ async fn stream(socket: WebSocket, mut api: Api, topics: Vec<String>, rate: f64)
     }
     let wants_frame = topics.iter().any(|t| t == "frame");
     let wants_state = topics.iter().any(|t| t == "state");
-    let wants_landmarks = topics.iter().any(|t| t == "landmarks_2d");
+    let wants_2d = topics.iter().any(|t| t == "landmarks_2d");
+    let wants_3d = topics.iter().any(|t| t == "landmarks_3d");
     let mut landmarks = api.streams.landmarks.subscribe();
     let mut notices = api.streams.notices.subscribe();
+    // shortcut: one ticker thread per socket, fine for a few local clients; share one ticker
+    // per rate if many-client load ever matters.
     let mut timer =
-        tokio::time::interval(Duration::from_secs_f64(1.0 / rate.min(api.publish_rate)));
-    timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        crate::ticker::ticker(Duration::from_secs_f64(1.0 / rate.min(api.publish_rate)));
     let mut last_seq = None;
     let mut last_skeleton_rev = api.streams.skeleton.borrow().rev;
     let mut last_state_rev = api.streams.state.borrow().rev;
@@ -125,8 +129,8 @@ async fn stream(socket: WebSocket, mut api: Api, topics: Vec<String>, rate: f64)
             notice=notices.recv()=>Event::Notice(notice),
             input=incoming.next()=>Event::Input(input),
             changed=api.streams.state.changed(),if wants_state=>Event::State(changed),
-            _=timer.tick(),if wants_frame=>Event::Frame,
-            point=landmarks.recv(),if wants_landmarks=>Event::Landmark(point),
+            _=timer.recv(),if wants_frame=>Event::Frame,
+            point=landmarks.recv(),if wants_2d || wants_3d=>Event::Landmark(point),
         };
         match event {
             Event::Notice(Ok(message)) => {
@@ -182,7 +186,13 @@ async fn stream(socket: WebSocket, mut api: Api, topics: Vec<String>, rate: f64)
                 }
             }
             Event::Landmark(Ok(landmarks)) => {
-                if !send_encoded(&mut sink, &landmarks).await {
+                // Both kinds share one channel; an internally tagged message serialises `type` first.
+                let wanted = if landmarks.bytes.starts_with(br#"{"type":"landmarks_3d""#) {
+                    wants_3d
+                } else {
+                    wants_2d
+                };
+                if wanted && !send_encoded(&mut sink, &landmarks).await {
                     break;
                 }
             }

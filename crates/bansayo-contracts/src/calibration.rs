@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use ts_rs::TS;
 
-use crate::{DeviceId, Origin, ProfileId, Quat, SegmentId};
+use crate::{DeviceId, Origin, ProfileId, Quat, SegmentId, Vec3};
 
 /// `schema_version` written into every persisted [`CalibrationProfile`].
 pub const CALIBRATION_PROFILE_SCHEMA_VERSION: u32 = 1;
@@ -53,7 +53,7 @@ pub struct CalibrationRef {
 }
 
 /// A calibration profile as listed in the system state.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct CalibrationProfileSummary {
     pub id: ProfileId,
     pub kind: CalibrationKind,
@@ -64,6 +64,11 @@ pub struct CalibrationProfileSummary {
     pub method: String,
     /// RFC 3339 UTC creation time; `null` for defaults.
     pub created_utc: Option<String>,
+    /// The profile's `data` for camera kinds (`CameraIntrinsicsData`, `CameraExtrinsicsData`),
+    /// so clients can draw cameras without a second request. Omitted for other kinds.
+    #[serde(default, skip_serializing_if = "Map::is_empty")]
+    #[ts(type = "Record<string, unknown>", optional)]
+    pub data: Map<String, Value>,
 }
 
 /// What a profile is keyed by: a device, a segment, or both.
@@ -116,4 +121,28 @@ pub struct MountingQuality {
     pub capture_window_ms: u32,
     /// Angular spread of the readings over the window, radians.
     pub angular_spread_rad: f32,
+}
+
+/// `data` of a `camera_intrinsics` profile: pinhole model with Brown-Conrady distortion.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct CameraIntrinsicsData {
+    /// Image width and height the intrinsics were calibrated at, pixels.
+    pub image_size_px: [u32; 2],
+    pub fx_px: f64,
+    pub fy_px: f64,
+    pub cx_px: f64,
+    pub cy_px: f64,
+    /// `[k1, k2, p1, p2, k3]` (OpenCV order); all zero for an ideal pinhole.
+    pub distortion: [f64; 5],
+}
+
+/// `data` of a `camera_extrinsics` profile: `T_world_from_camera`.
+///
+/// The camera frame is `FrameRef::Camera`: +X right, +Y down, +Z along the optical axis.
+/// `p_world = q_world_from_camera * p_camera + t_world_from_camera_m`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct CameraExtrinsicsData {
+    pub q_world_from_camera: Quat,
+    /// Camera optical centre in world, metres.
+    pub t_world_from_camera_m: Vec3,
 }

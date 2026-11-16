@@ -1,0 +1,53 @@
+# ILLUSTRATIVE — not loadable by the current engine build (source kind `camera` is not implemented).
+# Capability profile: basic. Image-plane observables only: counting, timing, image-plane angles.
+# No heights in metres, no speeds in m/s, no headings.
+schema_version: 2
+
+engine:
+  publish_rate_hz: 60
+  stale_after_ms: 250
+  data_dir: ./data
+
+api:
+  bind: 127.0.0.1:7700
+
+skeleton:
+  model: bansayo.body.v1
+  height_m: 1.75            # overridden by the active athlete's profile
+
+content:
+  dirs: [./content]
+
+sources:
+  - id: cam-front
+    kind: camera
+    enabled: true
+    device: "USB Camera (046d:085c)"
+    transport: usb
+    resolution_px: [1280, 720]
+    rate_hz: 60
+    pixel_format: mjpeg
+    exposure_s: 0.002
+    gain: null
+    latency_ms: 40
+    processing_profile: body-halpe26
+    fiducials: false
+    record_video: false
+
+processing_profiles:
+  body-halpe26:
+    detector: { model_path: models/yolox-m-humanart.onnx, every_frames: 10, score_min: 0.5 }
+    pose:
+      model_id: rtmpose-m-halpe26
+      model_path: models/rtmpose-m-halpe26.onnx
+      landmark_schema: halpe26
+      keypoint_score_min: 0.3
+    execution: [cuda, directml, cpu]
+    max_inference_hz: 60
+
+analysis:
+  filters: { position_hz: 12, angle_hz: 12 }
+  planar_camera: cam-front
+
+storage:
+  record_defaults: { inputs: true, motion: true, video: false }

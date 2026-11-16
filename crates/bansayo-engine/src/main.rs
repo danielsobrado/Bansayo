@@ -1,15 +1,19 @@
+use bansayo_engine::{config, run};
 use clap::Parser;
-use kinexa_engine::{config, run};
 use std::path::PathBuf;
 use tracing_subscriber::EnvFilter;
 #[derive(Parser)]
-#[command(version, about = "Kinexa local motion tracking engine")]
+#[command(version, about = "Bansayo local motion tracking engine")]
 struct Args {
     #[arg(long, default_value = "config/sim-full-body.yaml")]
     config: PathBuf,
     /// Validate configuration and exit without starting tracking or the API.
     #[arg(long)]
     check: bool,
+    /// Also shut down gracefully when stdin closes, for a supervising process:
+    /// Windows cannot deliver Ctrl-C to a child.
+    #[arg(long)]
+    shutdown_on_stdin_close: bool,
 }
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -44,9 +48,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         println!("Configuration valid");
         return Ok(());
     }
+    let stdin_closed = async {
+        if !args.shutdown_on_stdin_close {
+            return std::future::pending().await;
+        }
+        let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+        // A plain thread: a blocked stdin read must not hold the runtime open after Ctrl-C.
+        std::thread::spawn(move || {
+            let _ = std::io::copy(&mut std::io::stdin(), &mut std::io::sink());
+            drop(tx);
+        });
+        let _ = rx.await;
+    };
     run(config, async {
-        if let Err(e) = tokio::signal::ctrl_c().await {
-            tracing::error!(%e,"Could not listen for Ctrl-C");
+        tokio::select! {
+            result = tokio::signal::ctrl_c() => {
+                if let Err(e) = result {
+                    tracing::error!(%e,"Could not listen for Ctrl-C");
+                }
+            }
+            () = stdin_closed => {}
         }
     })
     .await

@@ -5,7 +5,7 @@ use crate::{
     registry::Registry,
     skeleton::Skeleton,
 };
-use kinexa_contracts::*;
+use bansayo_contracts::*;
 pub struct Replay {
     pub recording: Recording,
     pub registry: Registry,
@@ -68,7 +68,9 @@ impl Replay {
             .filter(|e| e.accepted_us <= time)
         {
             match &event.data {
-                RecordedData::Event(event) => self.registry.event(*event.clone()),
+                RecordedData::Event(event) => {
+                    self.registry.event(*event.clone());
+                }
                 RecordedData::Context(context) => {
                     let (registry, store, skeleton) = context.restore()?;
                     self.registry = registry;
@@ -80,27 +82,47 @@ impl Replay {
         }
         Ok(())
     }
-    pub fn preview(&self) -> ServerMessage {
-        let time = self.recording.initial.started_t_us + self.position_us;
+    /// The frame at `time`, preceded by the triangulated landmarks when there are any.
+    fn solve_at(&self, time: u64) -> Vec<ServerMessage> {
         let solved = solve(
             &self.skeleton,
             &self.registry,
             &self.store,
             time,
-            self.recording.initial.config.engine.stale_after_ms * 1000,
+            &self.recording.initial.config,
         );
         let mut joints = measure(&self.skeleton, &solved.rotations, &solved.observed);
         crate::pipeline::joints::confidence(&self.skeleton, &mut joints, solved.pose.as_ref());
-        ServerMessage::Frame {
-            seq: 0,
-            t_us: time,
-            origins: self.recording.session.origins.clone(),
-            joints,
-            pose: solved.pose,
-            quality: solved.quality,
-        }
+        let landmarks = solved
+            .landmarks_3d
+            .map(|landmarks| ServerMessage::Landmarks3d { landmarks });
+        landmarks
+            .into_iter()
+            .chain([ServerMessage::Frame {
+                seq: 0,
+                t_us: time,
+                origins: self.recording.session.origins.clone(),
+                joints,
+                pose: solved.pose,
+                quality: solved.quality,
+            }])
+            .collect()
     }
-    /// Fixed virtual ticks are independent of wall-clock pacing. The caller publishes only latest.
+    /// The state at the current position, with each camera's latest landmarks unless stale there.
+    pub fn preview(&self) -> Vec<ServerMessage> {
+        let time = self.recording.initial.started_t_us + self.position_us;
+        let stale_us = self.recording.initial.config.engine.stale_after_ms * 1000;
+        self.registry
+            .entries
+            .values()
+            .filter_map(|e| e.latest.as_ref())
+            .filter(|o| time.saturating_sub(o.t_us) <= stale_us)
+            .filter_map(landmarks_2d)
+            .chain(self.solve_at(time))
+            .collect()
+    }
+    /// Fixed virtual ticks are independent of wall-clock pacing. The caller publishes frames as
+    /// latest only; recorded 2D landmarks come out in recorded order, before the tick that applied them.
     pub fn advance(&mut self, elapsed_us: u64) -> Result<Vec<ServerMessage>, String> {
         if self.paused {
             return Ok(vec![]);
@@ -109,35 +131,24 @@ impl Replay {
         let duration = self.recording.session.duration_us;
         let target = (self.clock_position as u64).min(duration);
         let mut frames = vec![];
-        loop {
+        // A pathological scheduling pause cannot allocate an unbounded tick batch.
+        for _ in 0..256 {
             let offset = (self.next_tick as f64 * 1e6 / self.rate()).round() as u64;
             if offset > target {
                 break;
             }
             let time = self.recording.initial.started_t_us + offset;
+            let start = self.cursor;
             self.apply_until(time)?;
-            let solved = solve(
-                &self.skeleton,
-                &self.registry,
-                &self.store,
-                time,
-                self.recording.initial.config.engine.stale_after_ms * 1000,
-            );
-            let mut joints = measure(&self.skeleton, &solved.rotations, &solved.observed);
-            crate::pipeline::joints::confidence(&self.skeleton, &mut joints, solved.pose.as_ref());
-            frames.push(ServerMessage::Frame {
-                seq: 0,
-                t_us: time,
-                origins: self.recording.session.origins.clone(),
-                joints,
-                pose: solved.pose,
-                quality: solved.quality,
-            });
-            self.next_tick += 1;
-            // A pathological scheduling pause cannot allocate an unbounded tick batch.
-            if frames.len() >= 256 {
-                break;
+            for recorded in &self.recording.events[start..self.cursor] {
+                if let RecordedData::Event(event) = &recorded.data
+                    && let SourceEvent::Observation { observation } = event.as_ref()
+                {
+                    frames.extend(landmarks_2d(observation));
+                }
             }
+            frames.extend(self.solve_at(time));
+            self.next_tick += 1;
         }
         self.position_us = target;
         if self.clock_position >= duration as f64
@@ -150,5 +161,13 @@ impl Replay {
             }
         }
         Ok(frames)
+    }
+}
+fn landmarks_2d(observation: &SensorObservation) -> Option<ServerMessage> {
+    match &observation.data {
+        ObservationData::Landmarks2d { landmarks } => Some(ServerMessage::Landmarks2d {
+            landmarks: landmarks.clone(),
+        }),
+        _ => None,
     }
 }

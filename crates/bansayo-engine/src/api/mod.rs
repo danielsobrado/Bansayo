@@ -13,7 +13,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post, put},
 };
-use kinexa_contracts::*;
+use bansayo_contracts::*;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 #[derive(Clone)]

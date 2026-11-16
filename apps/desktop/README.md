@@ -1,4 +1,4 @@
-# Kinexa desktop
+# Bansayo desktop
 
 Vite, React, TypeScript and imperative three.js, hosted by a Tauri 2 shell or a browser.
 The UI consumes the generated protocol-v1 contracts in `../../contracts/ts`.
@@ -6,7 +6,7 @@ The UI consumes the generated protocol-v1 contracts in `../../contracts/ts`.
 From the repository root:
 
 ```sh
-cargo run -p kinexa-engine -- --config config/sim-full-body.yaml
+cargo run -p bansayo-engine -- --config config/sim-full-body.yaml
 ```
 
 In a second terminal:
@@ -26,7 +26,10 @@ allow the frontend origin in the engine configuration. Fonts are bundled locally
 3. In Studio select a motion, a segment or a joint. The viewport uses the engine’s metre/Y-up,
    Hamilton-xyzw coordinates directly. Derived and inferred segments have distinct styles.
 4. Devices supports assignment changes with a calibration warning, and labelled simulated faults.
-5. Cameras displays projected 2D landmarks without pretending there is video or metric 3D data.
+5. Cameras displays projected 2D landmarks without pretending there is video. With two or more
+   calibrated simulated cameras (try `config/sim-multi-camera.yaml`) it also shows a 3D view of the
+   camera frustums and the engine-triangulated landmarks, with a landmark inspector listing which
+   cameras were used or rejected. The UI does not triangulate; it draws the `landmarks_3d` stream.
 6. Record a session, stop it, then open Sessions and replay it. Replay has play/pause, speed,
    scrubbing and exit controls. Choose looping in Sessions before starting replay.
 
@@ -47,8 +50,8 @@ npm run tauri -- build                      # target-platform distributables
 
 The shell attaches to a compatible local protocol-v1 engine on port 7700, or hosts the engine
 library using the bundled full-body configuration. It validates the app data directory before
-starting. Hosted data lives in the platform app data directory for `org.kinexa.desktop`.
-`KINEXA_CONFIG=/absolute/path/to/config.yaml` selects a configuration and preserves its data
+starting. Hosted data lives in the platform app data directory for `org.bansayo.desktop`.
+`BANSAYO_CONFIG=/absolute/path/to/config.yaml` selects a configuration and preserves its data
 path; the native UI currently requires its `api.bind` to remain `127.0.0.1:7700`.
 Quitting the shell gracefully stops only an engine that the shell itself started. An attached
 standalone engine remains running. The webview exposes no filesystem or shell commands.
@@ -66,7 +69,7 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 
 The browser E2E journey starts an isolated engine on 17700, a frontend on 15173 and a temporary
 data directory, then removes its data. It uses an existing Chrome installation; set
-`KINEXA_BROWSER_EXECUTABLE` to an existing Chromium executable instead if needed. It never
+`BANSAYO_BROWSER_EXECUTABLE` to an existing Chromium executable instead if needed. It never
 downloads a browser. It checks reference capture, live joint motion, a disconnected shin making
 the dependent knee unavailable, recovery, recording/replay, all workspaces at 1440/1024/800 px,
 page errors, and saves Studio screenshots under `test-results`.

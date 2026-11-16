@@ -3,7 +3,7 @@ pub mod simulated;
 pub mod supervision;
 pub mod validation;
 use crate::clock::SessionClock;
-use kinexa_contracts::{DeviceId, SourceEvent};
+use bansayo_contracts::{DeviceId, SourceEvent};
 use simulated::Control;
 use std::collections::BTreeMap;
 use std::sync::{Arc, atomic::AtomicU64};

@@ -16,4 +16,9 @@ method: string,
 /**
  * RFC 3339 UTC creation time; `null` for defaults.
  */
-created_utc: string | null, };
+created_utc: string | null, 
+/**
+ * The profile's `data` for camera kinds (`CameraIntrinsicsData`, `CameraExtrinsicsData`),
+ * so clients can draw cameras without a second request. Omitted for other kinds.
+ */
+data?: Record<string, unknown>, };

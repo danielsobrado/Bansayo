@@ -426,7 +426,7 @@
     "total_segments": 19,
     "reasons": [
       {
-        "code": "root_position_not_measured",
+        "code": "root_position_inferred",
         "subject": null,
         "message": "Root position is inferred from floor contact."
       },

@@ -20,9 +20,9 @@ var _retry_at_us := 0
 var _last_seq := -1
 
 func _ready() -> void:
-	engine_url = OS.get_environment("KINEXA_ENGINE_URL")
+	engine_url = OS.get_environment("BANSAYO_ENGINE_URL")
 	if engine_url.is_empty():
-		engine_url = str(ProjectSettings.get_setting("kinexa/engine_url", "http://127.0.0.1:7700"))
+		engine_url = str(ProjectSettings.get_setting("bansayo/engine_url", "http://127.0.0.1:7700"))
 	_connect()
 
 func _connect() -> void:

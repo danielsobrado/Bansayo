@@ -36,7 +36,7 @@ func set_gap(gap: bool) -> void:
 		_refresh()
 
 func _refresh() -> void:
-	var lines: Array[String] = ["KINEXA · TRAINING ROOM", _connection_message]
+	var lines: Array[String] = ["BANSAYO · TRAINING ROOM", _connection_message]
 	if _connected and not _frame.is_empty():
 		var origins: Array = _frame.get("origins", [])
 		var origin_text := ", ".join(PackedStringArray(origins)).to_upper()

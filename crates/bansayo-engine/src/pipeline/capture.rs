@@ -4,7 +4,7 @@ use crate::{
     math::{Rot, rot_to_wire},
     pipeline::{Runner, command::ControlError},
 };
-use kinexa_contracts::*;
+use bansayo_contracts::*;
 use std::collections::BTreeMap;
 use tokio::sync::oneshot;
 pub(super) struct Capture {

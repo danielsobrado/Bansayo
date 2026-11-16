@@ -74,14 +74,14 @@ Agents work concurrently only after Gate 0, when the generated types and golden 
 
 **Provides to Agent 2:** generated types in `contracts/ts/`, golden messages in
 `contracts/examples/`, the HTTP and WebSocket API, and the library entry points:
-`kinexa_engine::config::load(path)`; `kinexa_engine::start(config)`, which returns a handle
-exposing the bound address and a graceful `shutdown`; and `kinexa_engine::run(config, shutdown)`,
+`bansayo_engine::config::load(path)`; `bansayo_engine::start(config)`, which returns a handle
+exposing the bound address and a graceful `shutdown`; and `bansayo_engine::run(config, shutdown)`,
 which is `start` plus waiting for the shutdown signal.
 
 ### Stage 0 — contracts
 
 - Workspace scaffold with the two crates.
-- `kinexa-contracts`: every type in [04 §3–5](04-contracts.md), with serde and ts-rs derives.
+- `bansayo-contracts`: every type in [04 §3–5](04-contracts.md), with serde and ts-rs derives.
 - Identifier newtypes that validate their pattern on construction and deserialisation.
 - A test that writes `contracts/ts/` and `contracts/examples/` and fails if checked-in output
   differs. One example per message type, a full `SystemState`, and one of each API body.
@@ -91,7 +91,7 @@ which is `start` plus waiting for the shutdown signal.
 
 - Configuration loading and validation ([04 §6](04-contracts.md)); `--config`, `--check`.
 - Session clock and the device clock offset estimator.
-- Skeleton definition `kinexa.body.v1`, proportion scaling, forward kinematics.
+- Skeleton definition `bansayo.body.v1`, proportion scaling, forward kinematics.
 - The `Source` trait and the simulated source: a deterministic body with the six motions
   (`reference_pose`, `standing`, `squat`, `knee_flexion`, `arm_raise`, `front_kick`), virtual
   trackers with seeded mounting rotations emitting orientation observations, virtual cameras
@@ -113,9 +113,10 @@ which is `start` plus waiting for the shutdown signal.
 
 ### Stage 3 — hardening
 
-- The four example configurations: `kinexa.example.yaml` (annotated), `sim-full-body.yaml`
+- The example configurations: `bansayo.example.yaml` (annotated), `sim-full-body.yaml`
   (twelve trackers, two cameras), `sim-six-trackers.yaml` (pelvis, chest, thighs, shins; no
-  camera), `sim-camera-only.yaml` (one camera, no trackers).
+  camera), `sim-camera-only.yaml` (one camera, no trackers), and later `sim-multi-camera.yaml`
+  (twelve trackers, four cameras, for triangulation).
 - Source supervision with capped backoff.
 - `README.md`: prerequisites, build, run, the API in brief, what is simulated.
 
@@ -151,8 +152,33 @@ configuration validation, feature rules, contract round-trips).
 
 ### Excluded
 
-Real device adapters, camera capture, inference, triangulation, heading alignment, SQLite, frame
-stepping, export, anything under `apps/`.
+Real device adapters, camera capture, inference, heading alignment, SQLite, frame stepping,
+export, anything under `apps/`. (Multi-camera triangulation was excluded from this brief and
+added afterwards as the milestone below.)
+
+### Milestone — multi-camera triangulation (added after Stage 3)
+
+**Scope:** camera intrinsics and extrinsics as calibration profiles, declared by the simulator;
+a triangulation stage in `pipeline::solve` (undistortion, confidence-weighted linear DLT,
+reprojection check, outlier-view rejection, skew gating); the `landmarks_3d` stream topic; a
+measured root position from the triangulated pelvis; `config/sim-multi-camera.yaml`. Design and
+measured results: [05](05-calibration-and-fusion.md) §7, ADR-014 to ADR-017.
+
+| # | Criterion | Check |
+|---|---|---|
+| T.1 | With 2, 3 and 4 noiseless simulated cameras, a standing and two mid-motion poses reconstruct every landmark within 1 mm, RMS reprojection under 0.01 px | Test |
+| T.2 | With 4 cameras and 1.5 px noise every landmark is present and the mean error stays under a bound derived from the geometry | Test |
+| T.3 | One outlier view among four is rejected and reported; between two cameras the landmark is `null` | Test |
+| T.4 | Views outside `max_skew_ms`, stale views and near-parallel rays are not combined into a point | Test |
+| T.5 | Distorted views triangulate within 1 mm | Test |
+| T.6 | Simulator-declared camera profiles reproject truth to the simulator's own pixels | Test |
+| T.7 | With trackers and two or more cameras the root is `measured`; camera-only input still gives `pose: null` (A1.11) with a 3D set | Test |
+| T.8 | `landmarks_3d_triangulated` reports `insufficient_cameras`, `camera_calibration_missing`, `insufficient_synchronized_views` or `landmarks_partially_reconstructed` as appropriate | Test |
+| T.9 | The `landmarks_3d` topic reaches only clients that ask for it, once per camera frame set, in live mode and replay; recordings carry the camera profiles | Integration test |
+
+**Later, not implemented:** real cameras with capture and a pose detector (ADR-009), a camera
+calibration procedure and solver, nonlinear refinement and temporal filtering, and importing or
+comparing FreeMoCap recordings (at most an offline comparison reference, ADR-014).
 
 ## 5. Agent 2 brief — desktop UI and VR client
 
@@ -245,7 +271,7 @@ No agent works around a contract problem locally.
 
 The script the final review runs:
 
-1. `cargo run -p kinexa-engine -- --config config/sim-full-body.yaml`
+1. `cargo run -p bansayo-engine -- --config config/sim-full-body.yaml`
 2. `npm run dev` in `apps/desktop`; open the UI. Overview reports missing mounting calibration.
 3. Run the reference-pose flow. Segments become derived.
 4. In Studio select `squat`; inspect left knee flexion and its trace.

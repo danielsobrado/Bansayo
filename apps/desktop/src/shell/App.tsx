@@ -75,9 +75,9 @@ export function App() {
     <div className="app-shell">
       <nav className="navigation" aria-label="Workspaces">
         <div className="brand">
-          <span className="brand-mark">K</span>
+          <span className="brand-mark">B</span>
           <span className="brand-name">
-            kinexa<span>motion platform</span>
+            bansayo<span>motion platform</span>
           </span>
         </div>
         <span className="rail-label">Workspace</span>

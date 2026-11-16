@@ -220,6 +220,50 @@ dependencies = [
 ]
 
 [[package]]
+name = "bansayo-contracts"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "ts-rs",
+]
+
+[[package]]
+name = "bansayo-desktop"
+version = "0.1.0"
+dependencies = [
+ "bansayo-engine",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tokio",
+]
+
+[[package]]
+name = "bansayo-engine"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "bansayo-contracts",
+ "bytes",
+ "clap",
+ "futures-util",
+ "humantime",
+ "mcap",
+ "nalgebra",
+ "rand",
+ "rand_chacha",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "base64"
 version = "0.21.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2046,50 +2090,6 @@ checksum = "0fbe853b403ae61a04233030ae8a79d94975281ed9770a1f9e246732b534b28d"
 dependencies = [
  "bitflags 2.13.2",
  "serde",
-]
-
-[[package]]
-name = "kinexa-contracts"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "ts-rs",
-]
-
-[[package]]
-name = "kinexa-desktop"
-version = "0.1.0"
-dependencies = [
- "kinexa-engine",
- "serde_json",
- "tauri",
- "tauri-build",
- "tokio",
-]
-
-[[package]]
-name = "kinexa-engine"
-version = "0.1.0"
-dependencies = [
- "axum",
- "bytes",
- "clap",
- "futures-util",
- "humantime",
- "kinexa-contracts",
- "mcap",
- "nalgebra",
- "rand",
- "rand_chacha",
- "serde",
- "serde-saphyr",
- "serde_json",
- "thiserror 2.0.21",
- "tokio",
- "tokio-util",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]

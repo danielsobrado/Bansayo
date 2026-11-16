@@ -1,4 +1,4 @@
-# Kinexa training room
+# Bansayo training room
 
 Godot 4 (standard build), GDScript. The room consumes the same protocol-v1 WebSocket stream as
 Studio. No tracking rules or coordinate conversion live here.
@@ -6,7 +6,7 @@ Studio. No tracking rules or coordinate conversion live here.
 Start the engine from the repository root, then run:
 
 ```sh
-cargo run -p kinexa-engine -- --config config/sim-full-body.yaml
+cargo run -p bansayo-engine -- --config config/sim-full-body.yaml
 godot --path apps/vr -- --desktop
 ```
 
@@ -15,7 +15,7 @@ left mouse button to orbit and use the wheel to zoom. Without `--desktop`, the c
 OpenXR and falls back to the desktop rig. The engine's head bone never drives the user's camera.
 The supplied skeleton is a separate figure; XR world alignment is labelled assumed identity.
 
-Set `KINEXA_ENGINE_URL=http://127.0.0.1:7700` to override the `kinexa/engine_url` project setting.
+Set `BANSAYO_ENGINE_URL=http://127.0.0.1:7700` to override the `bansayo/engine_url` project setting.
 Reconnect uses capped backoff. A 50 ms presentation buffer interpolates positions and Hamilton
 xyzw rotations, preserving provenance transitions. This is a buffer setting, not measured latency.
 The buffer is bounded to 16 frames. No pose extrapolation occurs; data clears after a 500 ms gap.

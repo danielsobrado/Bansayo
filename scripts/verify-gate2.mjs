@@ -10,7 +10,7 @@ const ok = response => { assert.equal(response.status, 200, JSON.stringify(respo
 const device = (state, id) => state.devices.find(d => d.descriptor.id === id);
 
 try {
-  await command(['build', '-p', 'kinexa-engine']);
+  await command(['build', '-p', 'bansayo-engine']);
   let engine = await start('sim-full-body');
   let live = await stream(engine.base, 'topics=frame,state,landmarks_2d&max_rate_hz=60');
   const skeleton = live.messages[0].skeleton;

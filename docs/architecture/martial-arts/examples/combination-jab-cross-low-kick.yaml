@@ -1,0 +1,19 @@
+# ILLUSTRATIVE content file. Final location: content/combinations/muay_thai/jab_cross_low_kick.yaml
+# Three-movement combination. `lead` / `rear` resolve from the session stance (orthodox: lead = left).
+# window_ms is measured from the previous step's strike instant to this step's strike instant (06 §4).
+schema: bansayo.combination/v1
+id: muay_thai.combo.jab_cross_low_kick
+version: 1
+status: draft
+names:
+  display: Jab – Cross – Rear low kick
+discipline: muay_thai
+stance: any
+sides: as_written
+sequence:
+  - step: { id: jab, technique: muay_thai.jab, side: lead }
+  - step: { id: cross, technique: muay_thai.cross, side: rear, window_ms: [80, 900] }
+  - step: { id: low_kick, technique: muay_thai.te_kha, side: rear, window_ms: [150, 1200] }
+scoring: scoring.combination.basic
+safety:
+  min_clear_radius_m: 2.0

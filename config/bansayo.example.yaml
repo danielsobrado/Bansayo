@@ -1,6 +1,6 @@
-# Kinexa simulated reference configuration. All paths are relative to the process working directory.
-# For the twelve-tracker demonstration use sim-full-body.yaml; for minimal inputs use
-# sim-six-trackers.yaml or sim-camera-only.yaml.
+# Bansayo simulated reference configuration. All paths are relative to the process working directory.
+# For the twelve-tracker demonstration use sim-full-body.yaml, for four-camera triangulation
+# sim-multi-camera.yaml; for minimal inputs use sim-six-trackers.yaml or sim-camera-only.yaml.
 schema_version: 1
 engine:
   publish_rate_hz: 60            # Solve/publication rate, independent of source output rates.
@@ -17,7 +17,7 @@ logging:
   level: info                   # trace | debug | info | warn | error; RUST_LOG overrides this.
   format: pretty                # pretty | json
 skeleton:
-  model: kinexa.body.v1
+  model: bansayo.body.v1
   height_m: 1.75                # Default proportions are assumed, never labelled calibrated.
 assignments:
   SIM-T01: pelvis
@@ -27,6 +27,11 @@ quality:
   degraded_rate_fraction: 0.7
   degraded_quality: 0.5
   disconnect_after_ms: 1000
+triangulation:                  # Multi-camera 3D landmarks; needs two or more calibrated cameras.
+  max_skew_ms: 20               # Views further from the newest camera frame are not combined.
+  max_reprojection_error_px: 15.0  # Worse views are rejected; a point that cannot meet it is omitted.
+  min_views: 2                  # Fewest cameras per landmark (at least 2).
+  min_ray_angle_deg: 3.0        # Nearly parallel rays give no depth; such points are omitted.
 sources:
   - id: sim
     kind: simulated

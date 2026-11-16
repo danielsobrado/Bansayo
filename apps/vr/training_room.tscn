@@ -2,5 +2,5 @@
 
 [ext_resource type="Script" path="res://scripts/training_room.gd" id="1"]
 
-[node name="KinexaTrainingRoom" type="Node3D"]
+[node name="BansayoTrainingRoom" type="Node3D"]
 script = ExtResource("1")

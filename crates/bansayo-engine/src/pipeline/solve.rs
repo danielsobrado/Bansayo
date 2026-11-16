@@ -1,18 +1,28 @@
-//! Pure orientation, fill, forward-kinematics and floor-contact stages.
+//! Pure orientation, fill, forward-kinematics, triangulation and root-placement stages.
 use crate::{
     calibration::Store,
-    math::{Rot, rot_from_wire, rot_to_wire, v3_to_wire},
+    config::Config,
+    math::{Rot, rot_from_wire, rot_to_wire, v3_from_wire, v3_to_wire},
+    pipeline::triangulate::triangulate,
     registry::{Registry, reason},
-    skeleton::{Skeleton, floor_contact_root, forward_kinematics},
+    skeleton::{Skeleton, floor_contact_root, forward_kinematics, proportions::LANDMARK_SCHEMA_ID},
 };
-use kinexa_contracts::*;
+use bansayo_contracts::*;
 pub struct Solved {
     pub pose: Option<SkeletonPose>,
     pub rotations: Vec<Rot>,
     pub observed: Vec<bool>,
     pub quality: TrackingQuality,
+    pub landmarks_3d: Option<PoseLandmarks3D>,
 }
-pub fn solve(sk: &Skeleton, registry: &Registry, store: &Store, now: u64, stale_us: u64) -> Solved {
+pub fn solve(
+    sk: &Skeleton,
+    registry: &Registry,
+    store: &Store,
+    now: u64,
+    config: &Config,
+) -> Solved {
+    let stale_us = config.engine.stale_after_ms * 1000;
     let mut rotations = vec![Rot::identity(); sk.len()];
     let mut observed = vec![false; sk.len()];
     let mut sources = vec![vec![]; sk.len()];
@@ -91,7 +101,22 @@ pub fn solve(sk: &Skeleton, registry: &Registry, store: &Store, now: u64, stale_
             "Heading alignment is assumed to be identity.",
         ));
     }
-    let root = floor_contact_root(sk, &rotations);
+    let landmarks_3d = triangulate(registry, store, now, stale_us, &config.triangulation);
+    // The body landmark schema is index-aligned with the skeleton's segments.
+    // shortcut: the camera root is used as-is, without smoothing or blending with the IMU estimate;
+    // upgrade with fusion stage 4's complementary correction once real cameras are connected.
+    let measured_root = match &landmarks_3d {
+        Some(PoseLandmarks3D::Triangulated {
+            schema_id, points, ..
+        }) if schema_id == LANDMARK_SCHEMA_ID => sk
+            .segments
+            .iter()
+            .position(|s| s.parent.is_none())
+            .and_then(|i| points.get(i)?.as_ref())
+            .map(|p| v3_from_wire(p.m)),
+        _ => None,
+    };
+    let root = measured_root.unwrap_or_else(|| floor_contact_root(sk, &rotations));
     let positions = forward_kinematics(sk, &rotations, root);
     let fresh_orientation = registry.entries.values().any(|e| {
         e.latest.as_ref().is_some_and(|o| {
@@ -102,7 +127,11 @@ pub fn solve(sk: &Skeleton, registry: &Registry, store: &Store, now: u64, stale_
     let pose = fresh_orientation.then(|| SkeletonPose {
         skeleton_rev: sk.definition.rev,
         root_position_m: v3_to_wire(&root),
-        root_position_provenance: Provenance::Inferred,
+        root_position_provenance: if measured_root.is_some() {
+            Provenance::Measured
+        } else {
+            Provenance::Inferred
+        },
         segments: rotations
             .iter()
             .enumerate()
@@ -129,5 +158,6 @@ pub fn solve(sk: &Skeleton, registry: &Registry, store: &Store, now: u64, stale_
             total_segments: sk.len() as u32,
             reasons,
         },
+        landmarks_3d,
     }
 }

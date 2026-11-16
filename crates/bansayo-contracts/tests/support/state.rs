@@ -1,13 +1,13 @@
 //! A realistic `SystemState`: simulated trackers in mixed states, one camera, mixed calibration.
 
-use kinexa_contracts::*;
+use bansayo_contracts::*;
 
 use super::skeleton::{self, ASSIGNED};
 use super::{dev, profile, reason, seg, session_id, src};
 
 pub const ENGINE_VERSION: &str = "0.1.0";
 pub const CAMERA: &str = "SIM-CAM1";
-pub const LANDMARK_SCHEMA: &str = "kinexa.body.v1.joints";
+pub const LANDMARK_SCHEMA: &str = "bansayo.body.v1.joints";
 
 /// Landmarks at every segment origin, edges along the parent links.
 pub fn landmark_schema() -> LandmarkSchema {
@@ -201,6 +201,7 @@ fn summary(
         segment_id: segment.map(seg),
         method: method.into(),
         created_utc: created_utc.map(Into::into),
+        data: Default::default(),
     }
 }
 
@@ -324,16 +325,20 @@ pub fn features() -> Vec<FeatureStatus> {
             F::RootPosition,
             S::Degraded,
             vec![reason(
-                "root_position_not_measured",
+                "root_position_inferred",
                 None,
                 "Root position is inferred from floor contact.",
             )],
         ),
         feature(F::Landmarks2d, S::Available, vec![]),
-        not_implemented(
+        feature(
             F::Landmarks3dTriangulated,
-            "landmarks_3d_triangulated",
-            "Triangulation",
+            S::Unavailable,
+            vec![reason(
+                "insufficient_cameras",
+                None,
+                "Triangulation needs at least two cameras.",
+            )],
         ),
         not_implemented(
             F::CameraImuFusion,

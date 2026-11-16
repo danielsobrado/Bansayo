@@ -1,6 +1,6 @@
+use bansayo_contracts::{ApiResponse, CalibrationProfileSummary, ServerMessage};
+use bansayo_engine::{config, start};
 use futures_util::StreamExt;
-use kinexa_contracts::{ApiResponse, CalibrationProfileSummary, ServerMessage};
-use kinexa_engine::{config, start};
 use std::io::{Read, Write};
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -96,7 +96,7 @@ sources:
             assert!(
                 p.segments
                     .iter()
-                    .all(|s| s.provenance == kinexa_contracts::Provenance::Inferred)
+                    .all(|s| s.provenance == bansayo_contracts::Provenance::Inferred)
             );
             assert!(
                 quality
@@ -144,7 +144,7 @@ sources:
                 assert!(
                     p.segments
                         .iter()
-                        .any(|s| s.provenance == kinexa_contracts::Provenance::Derived)
+                        .any(|s| s.provenance == bansayo_contracts::Provenance::Derived)
                 );
                 break;
             }
@@ -264,7 +264,7 @@ fn bundled_config_data_dir_override_happens_before_validation() {
     let config_path = dir.path().join("bundled.yaml");
     std::fs::write(
         &config_path,
-        "schema_version: 1\nengine: {data_dir: /dev/null/kinexa-readonly}\n",
+        "schema_version: 1\nengine: {data_dir: /dev/null/bansayo-readonly}\n",
     )
     .unwrap();
     let runtime = dir.path().join("runtime");

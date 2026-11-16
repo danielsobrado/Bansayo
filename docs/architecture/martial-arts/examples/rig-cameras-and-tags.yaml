@@ -1,0 +1,141 @@
+# ILLUSTRATIVE — not loadable by the current engine build.
+# Capability profile: marker_assisted while at least one assigned cluster with valid marker_mounting is tracked.
+# 1080p cameras: 60 mm tags decode to about 2.6 m at a 70° lens (09 §4.1).
+schema_version: 2
+
+engine:
+  publish_rate_hz: 120
+  stale_after_ms: 250
+  data_dir: ./data
+
+api:
+  bind: 127.0.0.1:7700
+
+skeleton:
+  model: bansayo.body.v1
+  height_m: 1.75
+
+content:
+  dirs: [./content]
+
+sources:
+  - id: cam-front
+    kind: camera
+    enabled: true
+    device: "USB Camera (046d:085c)"
+    transport: usb
+    resolution_px: [1920, 1080]
+    rate_hz: 60
+    pixel_format: mjpeg
+    exposure_s: 0.002
+    latency_ms: 40
+    processing_profile: body-halpe26
+    fiducials: true
+    record_video: false
+  - id: cam-left
+    kind: camera
+    enabled: true
+    device: "USB Camera (046d:08e5)"
+    transport: usb
+    resolution_px: [1920, 1080]
+    rate_hz: 60
+    pixel_format: mjpeg
+    exposure_s: 0.002
+    latency_ms: 40
+    processing_profile: body-halpe26
+    fiducials: true
+    record_video: false
+  - id: cam-right
+    kind: camera
+    enabled: true
+    device: "USB Camera (0c45:6366)"
+    transport: usb
+    resolution_px: [1920, 1080]
+    rate_hz: 60
+    pixel_format: mjpeg
+    exposure_s: 0.002
+    latency_ms: 40
+    processing_profile: body-halpe26
+    fiducials: true
+    record_video: false
+
+processing_profiles:
+  body-halpe26:
+    detector: { model_path: models/yolox-m-humanart.onnx, every_frames: 10, score_min: 0.5 }
+    pose:
+      model_id: rtmpose-m-halpe26
+      model_path: models/rtmpose-m-halpe26.onnx
+      landmark_schema: halpe26
+      keypoint_score_min: 0.3
+    execution: [cuda, directml, cpu]
+    max_inference_hz: 180
+
+fiducials:
+  families: [tag36h11]
+  tag36h11: { max_hamming: 1, min_decision_margin: 30 }
+  min_contrast: 40
+  quad_decimate: 1.0
+
+# Printed tag clusters. Identifiers 100–586 are the body range; 0–99 are boards and anchors.
+trackables:
+  - id: PLATE-PELVIS
+    kind: marker_cluster
+    enabled: true
+    model: plate2-80
+    family: tag36h11
+    tags: [100, 101]
+    edge_mm_measured: 80.1
+  - id: CUFF-L-THIGH
+    kind: marker_cluster
+    enabled: true
+    model: cuff3-60
+    family: tag36h11
+    tags: [110, 111, 112]
+    edge_mm_measured: 60.2
+  - id: CUFF-R-THIGH
+    kind: marker_cluster
+    enabled: true
+    model: cuff3-60
+    family: tag36h11
+    tags: [113, 114, 115]
+    edge_mm_measured: 60.2
+  - id: CUFF-L-SHIN
+    kind: marker_cluster
+    enabled: true
+    model: cuff3-60
+    family: tag36h11
+    tags: [116, 117, 118]
+    edge_mm_measured: 60.0
+  - id: CUFF-R-SHIN
+    kind: marker_cluster
+    enabled: true
+    model: cuff3-60
+    family: tag36h11
+    tags: [119, 120, 121]
+    edge_mm_measured: 60.0
+
+# Assigning AprilTag clusters to body segments. Runtime changes go through PUT /devices/{id}/assignment.
+assignments:
+  PLATE-PELVIS: pelvis
+  CUFF-L-THIGH: left_thigh
+  CUFF-R-THIGH: right_thigh
+  CUFF-L-SHIN: left_shin
+  CUFF-R-SHIN: right_shin
+
+triangulation:
+  mode: gated
+  max_skew_ms: 20
+  max_reprojection_error_px: 15.0
+  min_views: 2
+  min_ray_angle_deg: 3.0
+
+fusion:
+  skeleton_fit: true
+  heading_correction: false
+
+markers:
+  geometry_max_rms_mm: 1.5
+  mounting_disagreement_rad: 0.26
+
+storage:
+  record_defaults: { inputs: true, motion: true, video: false }

@@ -91,6 +91,10 @@ test("calibration, live motion, faults, recording, replay and responsive workspa
     ]) {
       await page.goto(`/#/${workspace}`);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      if (workspace === "cameras")
+        await expect(
+          page.getByRole("region", { name: "3D reconstruction" }),
+        ).toBeVisible();
       expect(
         await page.evaluate(
           () => document.documentElement.scrollWidth <= innerWidth,

@@ -53,8 +53,8 @@ Each procedure is separate, with its own input, output and failure explanations.
 | Heading alignment | `heading_alignment` | Reference pose, then bends forward | `q_world_from_sensor_reference` (yaw) per tracker | Designed, §4. Assumed identity in the PoC |
 | Body proportions | `body_proportions` | Enters height; later, measured segment lengths or a camera-based fit | Scaled skeleton | PoC: height only, state `assumed` |
 | Joint axes | part of `body_proportions` | Flexes knees and elbows | Functional joint axes | Extension point |
-| Camera intrinsics | `camera_intrinsics` | Shows a calibration board to each camera | Focal lengths, principal point, distortion | Designed |
-| Camera extrinsics | `camera_extrinsics` | Shows a board or markers visible to several cameras | `T_world_from_camera` | Designed |
+| Camera intrinsics | `camera_intrinsics` | Shows a calibration board to each camera | Focal lengths, principal point, distortion | Profile and consumer are **PoC**, §7; the simulator declares it from configuration. The procedure and solver are designed, not built |
+| Camera extrinsics | `camera_extrinsics` | Shows a board or markers visible to several cameras | `T_world_from_camera` | Profile and consumer are **PoC**, §7; declared by the simulator. The procedure and solver are designed, not built |
 | Floor plane | `floor_plane` | Places a marker on the floor, or stands still | Transform that makes the floor `y = 0` | Designed |
 | Camera / IMU alignment | `heading_alignment` (camera-referenced) | Moves in view of calibrated cameras | Heading from optical observation instead of the bend | Extension point |
 | Headset / world alignment | `xr_alignment` | Stands in the reference pose wearing the headset | `T_xr_stage_from_world` | Designed |
@@ -142,7 +142,126 @@ current profiles to state changes.
 - An `assumed` state is shown wherever its output is shown, not hidden in a settings page.
 - A failed procedure states what went wrong and what to do differently.
 
-## 7. Sensor-fusion roadmap
+## 7. Camera models and triangulation (PoC)
+
+Everything in this section runs on simulated cameras: they emit projected 2D landmarks, there is
+no camera capture and no pose detector. The triangulation is native Rust written from standard
+multi-view geometry (`pipeline/triangulate.rs`), not derived from other motion-capture software
+(ADR-014).
+
+### Camera models are calibration profiles
+
+A camera's model is two profiles in the ordinary store, one per kind, subject `device_id` = the
+camera:
+
+| Kind | `data` type | Content |
+|---|---|---|
+| `camera_intrinsics` | `CameraIntrinsicsData` | `image_size_px`, `fx_px`, `fy_px`, `cx_px`, `cy_px`, and `distortion` as `[k1, k2, p1, p2, k3]` (Brown-Conrady, OpenCV order; all zero for an ideal pinhole) |
+| `camera_extrinsics` | `CameraExtrinsicsData` | `q_world_from_camera` and `t_world_from_camera_m`: `p_world = q · p_camera + t`. The camera frame is +X right, +Y down, +Z along the optical axis; `t` is the optical centre in world, metres |
+
+`camera_extrinsics` depends on `camera_intrinsics` of the same device. Profile ids follow
+`camera-intrinsics-<device>` and `camera-extrinsics-<device>`. For camera kinds the profile `data`
+is also carried in `CalibrationProfileSummary.data` in `SystemState`, so clients can draw the
+cameras without another request.
+
+A simulated camera declares its profiles from its configuration (`resolution_px`, `fov_y_deg`,
+`position_m`, `look_at_m`): an ideal pinhole with zero distortion and the principal point at the
+image centre. They have method `declared_by_simulator`, are created in memory at every start and
+are never written to `<data_dir>/calibration/`. A recording carries the camera profiles it was made
+with, so replay triangulates with the same models.
+
+**There is no calibration solver.** Nothing estimates intrinsics or extrinsics from images or
+boards; a real camera would need profiles produced elsewhere or the procedure in §2 built. A camera
+without a valid, non-stale pair of profiles, or whose landmark `image_size_px` differs from its
+intrinsics, takes no part in triangulation.
+
+### The triangulation stage
+
+Triangulation is a solver stage, run inside `pipeline::solve` at every tick, so live and replay
+share one code path. Its result is derived from the recorded 2D landmarks and the profiles and is
+not recorded.
+
+**Sync rule.** From the cameras with a calibrated model and a fresh 2D observation (age within
+`engine.stale_after_ms`), the newest camera frame time is taken. A view is combined only if its
+frame is within `triangulation.max_skew_ms` of that time (default 20 ms) and uses the same
+landmark schema. Fewer than `min_views` such views gives no 3D set. Capture times are compared as
+delivered on the session clock; nothing here corrects clock offset between real cameras.
+
+**Per landmark:**
+
+1. Undistort each detection (confidence above zero) to a normalised ray.
+2. Solve a confidence-weighted linear triangulation (DLT, by SVD) over the views.
+3. Reproject the point through the full distortion model into every view. A point behind a camera
+   counts as infinite error.
+4. While any view exceeds `triangulation.max_reprojection_error_px` and more than `min_views` views
+   remain, drop the worst view and solve again. With the default `min_views` of 2 this means three
+   or more views are needed to discard an outlier; with two views the outlier cannot be identified
+   and the point is rejected instead.
+5. The point is published only if every remaining view is within the error limit, the largest
+   pairwise angle between rays is at least `min_ray_angle_deg`, and the result is finite.
+   Otherwise the landmark is `null`.
+
+A published point carries `views`, the RMS reprojection error, a confidence (the mean detection
+confidence of the used views, reduced as the RMS error approaches the limit; a relative indicator,
+not an accuracy), and the ids of the cameras used and of those rejected as outliers. The set is
+`PoseLandmarks3D::Triangulated` in the `world` frame with the profile ids in `calibration_refs`.
+It is sent on the `landmarks_3d` stream topic once per distinct camera frame set.
+
+Limits, stated plainly: linear solve only, with no nonlinear refinement, no bundle adjustment and
+no temporal filtering; the reprojection check is the only outlier test; accuracy has been checked
+only against simulated ground truth (below), which says nothing about real cameras.
+
+### Configuration
+
+| Key under `triangulation:` | Default | Meaning |
+|---|---|---|
+| `max_skew_ms` | 20 | Views older than the newest camera frame by more than this are not combined |
+| `max_reprojection_error_px` | 15.0 | Views reprojecting worse are rejected; a point that cannot meet it is `null` |
+| `min_views` | 2 | Fewest cameras per landmark; at least 2 |
+| `min_ray_angle_deg` | 3.0 | Below this largest pairwise ray angle the depth is too poorly conditioned to publish |
+
+The block is optional, so older configurations and recordings load with these defaults. Values
+must be positive and `min_views` between 2 and 64; a recording whose context violates this is
+refused at load.
+
+### Simulated ground-truth acceptance
+
+The checks in `crates/bansayo-engine/tests/triangulation.rs` project a known simulated body
+through the simulator's own camera model (`sources::simulated::camera::project`) and triangulate it
+back. Results from the run of 17 November 2026 are in brackets; they are regression checks of the
+geometry, not accuracy figures for any real camera.
+
+| Criterion | Bound | Measured |
+|---|---|---|
+| 2, 3 and 4 noiseless cameras; standing, squat bottom and mid front kick: every landmark reconstructed | 3D error < 1 mm, RMS reprojection < 0.01 px | ≤ 0.00026 mm, ≤ 0.00003 px (the wire's `f32` precision) |
+| 4 cameras, uniform ±1.5 px noise (σ ≈ 0.87 px), 40 squat frames, 760 points; all reconstructed | Mean 3D error < 8 mm, derived in the test from σ, focal length and distance | Mean 3.66 mm, max 7.87 mm |
+| One view of one landmark displaced by 80 px among four | That camera in `rejected_views`; error < 2 mm | Rejected; 0.0001 mm |
+| The same with two cameras | Landmark `null` | `null` |
+| Brown-Conrady distortion shifting pixels by up to 6.9 px | 3D error < 1 mm; undistortion round-trips the image corners | 0.00016 mm; < 1e-6 px |
+| Two cameras 8 cm apart (about 1.4° between rays) | Every landmark `null` | `null` |
+| Views 30 ms apart, or older than `stale_after_ms` | Not combined | No set; a 10 ms view is combined |
+| One camera / uncalibrated / no fresh views / one view of a landmark | Feature reason `insufficient_cameras` / `camera_calibration_missing` / `insufficient_synchronized_views` / landmark `null` and `landmarks_partially_reconstructed` | As stated |
+| Simulator-declared extrinsics reproject truth to the simulator's pixels | < 0.001 px | Passed |
+| Trackers and two cameras | Root `measured`, within 1 mm of truth | 0.00009 mm |
+| Cameras without trackers | `pose` null, 3D set present | As stated |
+| Live engine and replay | `landmarks_3d` topic only to clients that ask for it, once per camera frame set; replay of a recording produces sets | As stated |
+
+### Measured root position
+
+The `bansayo.body.v1.joints` landmark schema is index-aligned with the skeleton's segments. When
+a triangulated pelvis (the root segment's landmark) exists, the solver uses it as the root
+position with provenance `measured`, in place of the floor-contact rule, and forward kinematics
+runs from it. It is used as-is, without smoothing or blending with any IMU estimate. A skeleton
+pose still needs a fresh tracker orientation: camera-only setups publish 3D landmarks and no
+skeleton pose.
+
+### Not built
+
+Real camera capture and a pose detector, a calibration solver, bundle adjustment, IMU heading
+correction from cameras, and any importer or comparison against recordings from other
+motion-capture software (ADR-014).
+
+## 8. Sensor-fusion roadmap
 
 Fusion is built in stages. Each stage is useful on its own, and each has a named place in the code
 where it goes. A stage is started only when the one before it is working with real hardware.
@@ -150,9 +269,9 @@ where it goes. A stage is started only when the one before it is working with re
 | Stage | Capability | Where it lives | Status |
 |---|---|---|---|
 | 1 | Independent camera and IMU pipelines | `sources`, `pipeline` | **PoC** |
-| 2 | Unified timestamps and coordinates | `clock`, `calibration`, `FrameRef` on every value | **PoC** for IMU and simulated cameras; camera sync designed |
+| 2 | Unified timestamps and coordinates | `clock`, `calibration`, `FrameRef` on every value | **PoC** for IMU and simulated cameras; camera skew gating in triangulation (§7); `time_sync` profile designed |
 | 3 | Calibrated body-segment orientations | `pipeline::solve` orientation stage | **PoC** |
-| 4 | Camera-based root position and heading correction | A positional stage after the orientation stage; a slow complementary correction on each tracker's heading alignment | Designed |
+| 4 | Camera-based root position and heading correction | A positional stage after the orientation stage; a slow complementary correction on each tracker's heading alignment | Root position from triangulation: **PoC**, simulated cameras, no smoothing (§7). Heading correction: designed |
 | 5 | Joint and skeletal constraints | A constraint stage after forward kinematics: joint limits, bone-length consistency, foot locking | Designed |
 | 6 | Contact and distance observations | Additional terms in the positional and constraint stages | Extension point |
 | 7 | Joint estimation over a time window | Replaces stages 3–6 with one estimator behind the same stage boundary | Only if evidence demands it |
@@ -163,12 +282,12 @@ The solver is an ordered list of **stages**, each a plain function from the curr
 snapshot and a draft pose to an updated draft:
 
 ```text
-observations ─► orientation ─► fill unobserved ─► forward kinematics ─► root placement ─► draft pose
-                 (stage 3)                                              (floor contact; later stage 4)
+observations ─► orientation ─► fill unobserved ─► triangulation ─► root placement ─► forward kinematics ─► draft pose
+                 (stage 3)                         (cameras, §7)    (measured root, else floor contact)
 ```
 
-In the PoC these are four functions called in sequence in `pipeline/solve.rs`. A trait and
-configurable stage list are introduced when a second implementation of the same stage exists, not
+In the PoC these are plain functions called in sequence in `pipeline/solve.rs`; triangulation is
+`pipeline/triangulate.rs`. A trait and configurable stage list are introduced when a second implementation of the same stage exists, not
 before (ADR-011).
 
 ### Why no EKF or factor graph now

@@ -9,12 +9,12 @@ function passed(name) {
 }
 
 try {
-  await command(['build', '-p', 'kinexa-engine']);
+  await command(['build', '-p', 'bansayo-engine']);
   const full = await start('sim-full-body');
   const live = await stream(full.base);
   const hello = live.messages[0];
   assert.equal(hello.conventions.quaternion_order, 'xyzw');
-  assert.equal(hello.skeleton.model_id, 'kinexa.body.v1');
+  assert.equal(hello.skeleton.model_id, 'bansayo.body.v1');
   const initial = await live.until(list => list.find(m => m.type === 'frame' && m.pose));
   assert(initial.pose.segments.every(segment => segment.provenance === 'inferred'));
   passed('fresh full-body stream starts with hello and inferred segments');

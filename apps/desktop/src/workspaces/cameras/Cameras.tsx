@@ -1,16 +1,84 @@
-import { useState } from "react";
-import type { DeviceStatus, SystemState } from "@contracts";
+import { useMemo, useState } from "react";
+import type {
+  DeviceStatus,
+  FeatureStatus,
+  LandmarkSchema,
+  SystemState,
+} from "@contracts";
 import { CameraPreview } from "./CameraPreview";
+import {
+  calibratedCameras,
+  type CameraPose,
+} from "../../engine/cameraCalibration";
+import { useSampled } from "../../engine/hooks";
+import {
+  HIGH_REPROJECTION_PX,
+  reconstructionReadout,
+  type CameraView,
+  type LandmarkStatus,
+} from "../../engine/readouts";
+import {
+  freshLandmarks,
+  landmarks3dStore,
+  STALE_FRAME_MS,
+} from "../../engine/stores";
+import { formatConfidence, humanizeId } from "../../lib/format";
 import { EmptyState } from "../../ui/EmptyState";
+import { OriginBadge } from "../../ui/OriginBadge";
 import { StatePill } from "../../ui/StatePill";
 import { Reasons } from "../../ui/Reasons";
+import { ViewportCanvas } from "../../viewport/ViewportCanvas";
+
+type Readout = ReturnType<typeof reconstructionReadout>;
+
+/** Glyph and word, so status is never colour alone. */
+const STATUS: Record<LandmarkStatus, [string, string]> = {
+  accepted: ["●", "accepted"],
+  high_error: ["◇", "high error"],
+  not_reconstructed: ["○", "not reconstructed"],
+};
+const ROLE: Record<CameraView["role"], string> = {
+  used: "used",
+  rejected: "rejected",
+  not_used: "not used",
+};
 
 export function Cameras({ state }: { state: SystemState | null }) {
   const cameras =
     state?.devices.filter((d) => d.descriptor.kind === "camera") ?? [];
   const [selected, setSelected] = useState<string | null>(null);
+  const [landmark, setLandmark] = useState<number | null>(null);
   const camera =
     cameras.find((d) => d.descriptor.id === selected) ?? cameras[0];
+  const calibration = state?.calibration;
+  const poses = useMemo(
+    () => calibratedCameras(calibration ?? []),
+    [calibration],
+  );
+  const rawSchema =
+    camera?.descriptor.camera?.landmark_schema ??
+    cameras.find((c) => c.descriptor.camera?.landmark_schema)?.descriptor
+      .camera?.landmark_schema ??
+    null;
+  // State is a new object every second; key the schema by content so the 3D view is not rebuilt.
+  const schemaKey = JSON.stringify(rawSchema);
+  const schema = useMemo(() => rawSchema, [schemaKey]);
+  const cameraIds = cameras.map((c) => c.descriptor.id);
+  const sampled = useSampled(
+    4,
+    () => {
+      const now = performance.now();
+      const set = landmarks3dStore.landmarks;
+      return reconstructionReadout(
+        set && now - landmarks3dStore.receivedAt <= STALE_FRAME_MS ? set : null,
+        freshLandmarks(now),
+        schema,
+        cameraIds,
+        landmark,
+      );
+    },
+    `${landmark}/${schemaKey}`,
+  );
   return (
     <div className="workspace-page">
       <header className="workspace-heading">
@@ -20,7 +88,7 @@ export function Cameras({ state }: { state: SystemState | null }) {
             Cameras <span className="heading-count mono">{cameras.length}</span>
           </h1>
         </div>
-        <span className="subtle">Image coordinates · pixels</span>
+        <span className="subtle">2D image pixels · 3D world metres, +Y up</span>
       </header>
       {camera ? (
         <div className="cameras-layout">
@@ -30,7 +98,21 @@ export function Cameras({ state }: { state: SystemState | null }) {
               selected={camera.descriptor.id}
               onSelect={setSelected}
             />
-            <CameraPreview device={camera} />
+            <div className="camera-views">
+              <CameraPreview device={camera} highlight={landmark} />
+              <Reconstruction
+                feature={state?.features.find(
+                  (f) => f.id === "landmarks_3d_triangulated",
+                )}
+                poses={poses}
+                cameraCount={cameras.length}
+                selectedCamera={camera.descriptor.id}
+                schema={schema}
+                sampled={sampled}
+                landmark={landmark}
+                onSelect={setLandmark}
+              />
+            </div>
           </section>
           <aside className="camera-detail dock">
             <div className="panel-heading">CAMERA DETAILS</div>
@@ -67,23 +149,218 @@ export function Cameras({ state }: { state: SystemState | null }) {
               </div>
               <Reasons reasons={camera.reasons} />
               <p className="calibration-note">
-                Single-camera landmarks are 2D image measurements. They do not
-                provide metric 3D position.
+                Each camera gives 2D landmarks in image pixels. Metric 3D
+                positions come only from triangulating two or more calibrated,
+                synchronised cameras. In this PoC cameras and landmarks are
+                simulated: no video is captured and no detector runs.
               </p>
+            </div>
+            <LandmarkInspector inspection={sampled.inspection} />
+            <div className="panel-heading">
+              LANDMARKS{" "}
+              <span className="mono">
+                {sampled.live
+                  ? `${sampled.reconstructed}/${sampled.total}`
+                  : "—"}
+              </span>
+            </div>
+            <div className="landmark-list" role="group" aria-label="Landmarks">
+              {schema?.names.map((name, index) => {
+                const status = sampled.statuses?.[index];
+                return (
+                  <button
+                    key={`${name}-${index}`}
+                    className={`segment-row ${landmark === index ? "selected" : ""}`}
+                    aria-pressed={landmark === index}
+                    onClick={() => setLandmark(index)}
+                  >
+                    <span
+                      className="segment-glyph"
+                      data-status={status}
+                      aria-hidden="true"
+                    >
+                      {status ? STATUS[status][0] : "–"}
+                    </span>
+                    <span className="segment-name">{humanizeId(name)}</span>
+                    <span className="subtle">
+                      {status ? STATUS[status][1] : "waiting"}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </aside>
         </div>
       ) : (
-        <EmptyState title="No cameras configured">
+        <EmptyState
+          title={state ? "No cameras configured" : "Waiting for the engine"}
+        >
           <p>
-            Add a camera to the simulated source, or run sim-camera-only.yaml.
-            No video capture or detector is running in this PoC.
+            Add cameras to the simulated source in the configuration file, or
+            run sim-camera-only.yaml. Each camera gives 2D landmarks; metric 3D
+            needs two or more calibrated, synchronised cameras. Cameras and
+            landmarks are simulated: no video is captured and no detector runs.
           </p>
         </EmptyState>
       )}
     </div>
   );
 }
+
+function Reconstruction({
+  feature,
+  poses,
+  cameraCount,
+  selectedCamera,
+  schema,
+  sampled,
+  landmark,
+  onSelect,
+}: {
+  feature: FeatureStatus | undefined;
+  poses: CameraPose[];
+  cameraCount: number;
+  selectedCamera: string;
+  schema: LandmarkSchema | null;
+  sampled: Readout;
+  landmark: number | null;
+  onSelect: (index: number) => void;
+}) {
+  return (
+    <section className="reconstruction" aria-label="3D reconstruction">
+      <header className="reconstruction-heading">
+        <span className="eyebrow">3D reconstruction</span>
+        {feature && <StatePill state={feature.state} />}
+      </header>
+      <div className="reconstruction-view">
+        {poses.length >= 2 && schema ? (
+          <>
+            <ViewportCanvas
+              skeleton={null}
+              landmarkSchema={schema}
+              selected={landmark ?? -1}
+              onSelect={onSelect}
+              view="3D"
+              skeletonVisible={false}
+              floorVisible
+              cameras={poses}
+              selectedCamera={selectedCamera}
+            />
+            <div className="viewport-top">
+              <div>
+                {sampled.origin && <OriginBadge label={sampled.origin} />}
+              </div>
+            </div>
+            {!sampled.live && (
+              <div className="no-pose">
+                <span aria-hidden="true">◇</span>
+                <h2>Waiting for triangulated landmarks</h2>
+              </div>
+            )}
+          </>
+        ) : (
+          <EmptyState
+            title={
+              schema
+                ? "3D reconstruction needs two calibrated cameras"
+                : "Cameras report no landmark schema"
+            }
+          >
+            <p>
+              {poses.length} of {cameraCount} cameras report usable intrinsics
+              and extrinsics. Metric 3D landmarks are triangulated only from two
+              or more calibrated, synchronised cameras; one camera gives 2D
+              image measurements only.
+            </p>
+          </EmptyState>
+        )}
+      </div>
+      <div className="camera-preview-label">
+        <span className="mono">
+          {sampled.live
+            ? `${sampled.reconstructed} of ${sampled.total} reconstructed`
+            : "No live 3D set"}
+        </span>
+        <span>● opacity and size = confidence</span>
+        <span>◇ wire = reprojection error &gt; {HIGH_REPROJECTION_PX} px</span>
+      </div>
+      <div className="reconstruction-reasons">
+        <Reasons reasons={feature?.reasons ?? []} />
+      </div>
+    </section>
+  );
+}
+
+function LandmarkInspector({
+  inspection,
+}: {
+  inspection: Readout["inspection"];
+}) {
+  return (
+    <>
+      <div className="panel-heading">LANDMARK INSPECTOR</div>
+      {inspection ? (
+        <div className="page-panel-content landmark-inspector">
+          <h2>{humanizeId(inspection.name)}</h2>
+          <p data-testid="landmark-status">
+            {inspection.status === "high_error"
+              ? `◇ accepted · reprojection RMS above ${HIGH_REPROJECTION_PX} px`
+              : inspection.status
+                ? STATUS[inspection.status].join(" ")
+                : "Waiting for a live 3D set"}
+          </p>
+          {inspection.status === "not_reconstructed" && (
+            <p className="subtle">
+              Too few views or a failed reprojection check. Compare the camera
+              views below and the reasons under the 3D view.
+            </p>
+          )}
+          <dl className="detail-list">
+            <dt>Position x y z</dt>
+            <dd className="mono">
+              {inspection.point
+                ? `${inspection.point.m.map((v) => v.toFixed(3)).join(" ")} m`
+                : "—"}
+            </dd>
+            <dt>Views used</dt>
+            <dd className="mono">{inspection.point?.views ?? "—"}</dd>
+            <dt>Reprojection RMS</dt>
+            <dd className="mono">
+              {inspection.point
+                ? `${inspection.point.reprojection_error_px.toFixed(2)} px`
+                : "—"}
+            </dd>
+            <dt>Confidence</dt>
+            <dd className="mono">
+              {formatConfidence(inspection.point?.confidence)}
+            </dd>
+          </dl>
+          <h3 className="eyebrow">Camera · role · 2D observation</h3>
+          <ul className="landmark-views">
+            {inspection.cameras.map((view) => (
+              <li key={view.id} data-role={view.role}>
+                <span className="mono">{view.id}</span>
+                <span>{ROLE[view.role]}</span>
+                <span className="mono">
+                  {view.observation === undefined
+                    ? "no 2D data"
+                    : view.observation === null
+                      ? "not detected"
+                      : `${view.observation.x_px.toFixed(1)}, ${view.observation.y_px.toFixed(1)} px · ${formatConfidence(view.observation.confidence)}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p className="empty-inline">
+          Select a landmark in the 3D view or the list below.
+        </p>
+      )}
+    </>
+  );
+}
+
 export function CameraTabs({
   cameras,
   selected,

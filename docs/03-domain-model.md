@@ -100,12 +100,16 @@ unit test; it is replaced, not extended, when two-way sync arrives.
 - Fusion that needs to rewind for late observations is an extension point. The PoC never rewinds;
   late observations are still recorded.
 
-Cameras that are not synchronised with each other are usable individually. Triangulation requires
-either hardware sync or a `time_sync` profile; without one the feature is unavailable and says why.
+Cameras that are not synchronised with each other are usable individually. Triangulation combines
+views only if each is fresh (within `engine.stale_after_ms`) and within `triangulation.max_skew_ms`
+(default 20 ms) of the newest camera frame in the set; views outside that window are left out, and
+a landmark that then has too few views is not published. The PoC compares
+session-clock capture timestamps as delivered and does not use a `time_sync` profile; how well
+that holds for real cameras is not validated.
 
 ## 3. Skeleton
 
-### Canonical model `kinexa.body.v1`
+### Canonical model `bansayo.body.v1`
 
 A skeleton is **data**: a list of segments, each with a parent, and a list of joint measurement
 definitions. Acquisition code refers to segments by `SegmentId` strings validated against the
@@ -186,8 +190,11 @@ A `SkeletonPose` holds, for every segment in definition order:
 
 and for the root, `root_position_m` with its own provenance.
 
-A directly observed joint position (from triangulation or an XR device) will be an additional
-optional field, `observed_position_m`. Adding it is a backward-compatible change.
+The root position is `measured` when a triangulated pelvis landmark exists and `inferred`
+(floor contact) otherwise; it is used as-is, without smoothing. Other directly observed joint
+positions (from triangulation or an XR device) will be an additional optional field,
+`observed_position_m`. Adding it is a backward-compatible change. The triangulated landmarks
+themselves are published separately (`landmarks_3d`), not inside the pose.
 
 ### Unobserved segments
 
@@ -205,10 +212,12 @@ If no orientation source is configured, or every orientation observation is miss
 
 ### Root position
 
-Without a positional source the root is placed by a floor-contact rule: horizontal position fixed
-at the origin, height chosen so that the lowest foot contact point lies on `y = 0`. Provenance is
-`inferred`. A squat lowers the pelvis; a jump is not representable, and the feature list says root
-position is not measured.
+With a triangulated pelvis landmark (two or more calibrated, synchronised cameras) the root is that
+measured position, provenance `measured`. Without one it is placed by a floor-contact rule:
+horizontal position fixed at the origin, height chosen so that the lowest foot contact point lies on
+`y = 0`. Provenance is `inferred`. A squat lowers the pelvis; a jump is not representable, and the
+feature list says root position is inferred. The measured root needs trackers as well: cameras
+alone still publish no skeleton pose.
 
 ### Joint measurements
 
@@ -289,9 +298,8 @@ Every degraded, unavailable or inferred condition carries machine-readable `Reas
 | `mounting_calibration_missing`, `mounting_calibration_stale` | Device |
 | `heading_alignment_assumed` | Device |
 | `body_proportions_assumed` | — |
-| `root_position_not_measured` | — |
-| `camera_uncalibrated` | Camera |
-| `needs_two_calibrated_cameras`, `cameras_not_synchronized` | — |
+| `root_position_inferred` | — |
+| `insufficient_cameras`, `camera_calibration_missing`, `insufficient_synchronized_views`, `landmarks_partially_reconstructed` | Feature `landmarks_3d_triangulated` |
 | `not_implemented` | Feature |
 
 ## 5. Devices and capabilities
@@ -330,14 +338,14 @@ the wrong unit by accident.
 |---|---|---|---|
 | Single-camera 2D landmarks | `PoseLandmarks2D` | `image/<camera>` | No — pixels |
 | Model-inferred 3D | `PoseLandmarks3D::ModelRelative` | `model/<camera>` | No — root-relative, unknown scale |
-| Multi-camera triangulated 3D | `PoseLandmarks3D::Triangulated` | `world` | Yes, with per-point view count and reprojection error |
+| Multi-camera triangulated 3D | `PoseLandmarks3D::Triangulated` | `world` | Yes, with per-point view count, reprojection error and the cameras used and rejected |
 | Calibrated metric measurements | Any value in `world` with a valid `calibration_ref` | `world` | Yes |
 
 `ModelRelative` and `Triangulated` are different variants with different fields. There is no
 function that turns the first into the second.
 
 Each camera names the `LandmarkSchema` its landmarks follow. The simulated camera uses
-`kinexa.body.v1.joints`: one landmark per segment origin, in skeleton order, with an edge for
+`bansayo.body.v1.joints`: one landmark per segment origin, in skeleton order, with an edge for
 each parent link. Real detectors bring their own schemas (for example COCO-17), and mapping a
 schema onto skeleton joints belongs to the camera milestone.
 
@@ -351,10 +359,10 @@ assignments and calibration, and publishes the result. Clients render it; they c
 | `segment_orientation` | A tracking or degraded device with `orientation` is assigned to the segment and its mounting profile is valid | That segment is `inferred`, with a reason |
 | `skeleton_pose` | At least one segment has a derived orientation | `pose: null` |
 | `joint_angles` | Per joint: both segments observed | `value: null`, with a reason |
-| `root_position` | A positional source exists | Inferred by floor contact; `root_position_not_measured` |
+| `root_position` | A triangulated pelvis landmark exists: `measured` | Degraded when trackers exist: inferred by floor contact, `root_position_inferred`. Unavailable without trackers |
 | `landmarks_2d` | At least one camera delivers landmarks | Unavailable |
-| `landmarks_3d_triangulated` | Two or more cameras, each with valid intrinsics and extrinsics, and synchronised | Unavailable; `not_implemented` in the PoC |
-| `camera_imu_fusion` | `skeleton_pose` and a positional camera observation | Unavailable; `not_implemented` in the PoC |
+| `landmarks_3d_triangulated` | Every schema landmark is reconstructed from two or more cameras, each with valid intrinsics and extrinsics, in a synchronised set | Degraded, `landmarks_partially_reconstructed`, when some landmarks failed. Unavailable: `insufficient_cameras` (fewer than two cameras), `camera_calibration_missing` (fewer than two calibrated), `insufficient_synchronized_views` (calibrated, but too few fresh, synchronised views) |
+| `camera_imu_fusion` | Heading correction and full camera/IMU estimation | Unavailable; `not_implemented`. Only the root position combines the two |
 | `ground_contact` | A contact or pressure sensor is assigned to a foot | Unavailable; `not_implemented` in the PoC |
 | `recording`, `playback` | Data directory writable; a session exists | Unavailable, with a reason |
 
@@ -367,6 +375,8 @@ Worked examples:
 | One IMU, assigned, calibrated | One derived segment; everything else inferred; no joint angles |
 | Thigh and shin IMUs, calibrated | Knee flexion available for that leg |
 | One camera | 2D landmarks; no 3D; skeleton pose unavailable unless IMUs are present |
-| Two cameras, uncalibrated | 2D landmarks from each; triangulation unavailable: `camera_uncalibrated` |
+| Two cameras, uncalibrated | 2D landmarks from each; triangulation unavailable: `camera_calibration_missing` |
+| Two or more calibrated cameras | Metric 3D landmarks in `world`; no skeleton pose without trackers |
+| Trackers plus calibrated cameras | Rotations from the trackers; root position `measured` from the triangulated pelvis |
 | Twelve IMUs, mounting calibration missing | Devices tracking; all segments inferred; reason `mounting_calibration_missing` per device |
 | Nothing connected | Engine healthy, system state `disconnected`, empty states in the UI |

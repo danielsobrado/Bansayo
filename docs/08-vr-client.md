@@ -5,12 +5,12 @@ WebSocket stream as the desktop UI and contains no biomechanics.
 
 ## 1. Two tracking paths, kept separate
 
-| | Path 1 — SlimeVR → SteamVR → OpenXR | Path 2 — Kinexa engine → Godot |
+| | Path 1 — SlimeVR → SteamVR → OpenXR | Path 2 — Bansayo engine → Godot |
 |---|---|---|
 | What it carries | Individual tracker poses that the XR runtime exposes as devices | The canonical skeleton, joint measurements, quality and provenance |
-| Who solves the body | SlimeVR Server | Kinexa engine |
+| Who solves the body | SlimeVR Server | Bansayo engine |
 | How Godot sees it | OpenXR action paths for tracker roles | The WebSocket stream from [04](04-contracts.md) |
-| Good for | Full-body tracking in existing SteamVR titles | Kinexa's own visualisation and training feedback |
+| Good for | Full-body tracking in existing SteamVR titles | Bansayo's own visualisation and training feedback |
 | Status | Designed, runtime-dependent | **PoC** |
 
 The two are never merged inside the client. If both are present they are separate layers that can
@@ -60,11 +60,11 @@ non-trivial code with the engine (ADR-010).
 
 ## 3. Coordinates
 
-Kinexa's world frame and Godot's world share handedness (right), up axis (+Y), unit (metre) and
+Bansayo's world frame and Godot's world share handedness (right), up axis (+Y), unit (metre) and
 character-forward (+Z). Quaternions are `[x, y, z, w]` in both. **No axis conversion is applied.**
 A segment's `rotation` becomes a Godot `Quaternion(x, y, z, w)` and `position_m` a `Vector3`.
 
-The only transform is alignment between Kinexa's world and the XR stage:
+The only transform is alignment between Bansayo's world and the XR stage:
 
 ```text
 T_xr_stage_from_world = translation · yaw rotation
@@ -115,7 +115,7 @@ The debug skeleton needs no mapping: it draws whatever segments the definition c
 
 For avatars (designed), segments map one-to-one onto Godot's humanoid profile:
 
-| Kinexa segment | Godot `SkeletonProfileHumanoid` bone |
+| Bansayo segment | Godot `SkeletonProfileHumanoid` bone |
 |---|---|
 | `pelvis` | `Hips` |
 | `spine` | `Spine` |
@@ -130,7 +130,7 @@ For avatars (designed), segments map one-to-one onto Godot's humanoid profile:
 | `left_shin` | `LeftLowerLeg` |
 | `left_foot` | `LeftFoot` |
 
-Right side likewise. Because every Kinexa segment frame is world-aligned in the T-pose, the
+Right side likewise. Because every Bansayo segment frame is world-aligned in the T-pose, the
 retargeting rule is one multiplication per bone:
 
 ```text
@@ -139,7 +139,7 @@ bone_global_rotation(t) = q_world_from_segment(t) · bone_global_rest_rotation
 
 where the rest rotation is the avatar bone's global rotation in its own T-pose. Bone lengths come
 from the avatar; only the root position is taken from the stream, scaled by the ratio of avatar
-to skeleton leg length so the feet stay on the floor. Avatar bones with no Kinexa segment
+to skeleton leg length so the feet stay on the floor. Avatar bones with no Bansayo segment
 (fingers, toes, upper chest) keep their rest pose.
 
 ## 7. Connection management and loss behaviour
@@ -154,7 +154,7 @@ to skeleton leg length so the feet stay on the floor. Avatar bones with no Kinex
 | Headset removed or XR session lost | The body stream continues; the view switches to the desktop rig if the session ends |
 | Skeleton revision changes | The debug skeleton is rebuilt from the new definition |
 
-The engine address comes from a project setting, overridable by the `KINEXA_ENGINE_URL`
+The engine address comes from a project setting, overridable by the `BANSAYO_ENGINE_URL`
 environment variable.
 
 ## 8. PoC scope

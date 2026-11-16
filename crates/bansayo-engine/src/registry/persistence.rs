@@ -1,6 +1,6 @@
 //! Conservative persistence: invalidation is durable before a changed assignment is acknowledged.
 use crate::skeleton::Skeleton;
-use kinexa_contracts::*;
+use bansayo_contracts::*;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},

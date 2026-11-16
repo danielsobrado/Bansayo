@@ -5,7 +5,7 @@ use axum::{
     extract::{Path, State, rejection::JsonRejection},
     response::{IntoResponse, Response},
 };
-use kinexa_contracts::*;
+use bansayo_contracts::*;
 async fn execute(api: Api, request: ControlRequest) -> Response {
     match api.client.control(request).await {
         Ok(data) => Json(ApiResponse::ok(data)).into_response(),

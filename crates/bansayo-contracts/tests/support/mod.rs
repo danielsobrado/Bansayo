@@ -7,7 +7,7 @@ pub mod generated;
 pub mod skeleton;
 pub mod state;
 
-use kinexa_contracts::{DeviceId, ProfileId, Reason, SegmentId, SessionId, SourceId};
+use bansayo_contracts::{DeviceId, ProfileId, Reason, SegmentId, SessionId, SourceId};
 
 pub fn dev(s: &str) -> DeviceId {
     DeviceId::new(s).expect("valid device id")

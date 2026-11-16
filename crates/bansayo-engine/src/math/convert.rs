@@ -1,6 +1,6 @@
 //! Contract arrays (`[x, y, z, w]`, `[x, y, z]`, `f32`) to and from nalgebra (`f64`).
 
-use kinexa_contracts::{Quat, Vec3};
+use bansayo_contracts::{Quat, Vec3};
 use nalgebra::{Quaternion, UnitQuaternion, Vector3};
 
 /// Rotation used inside the engine.

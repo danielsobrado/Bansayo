@@ -260,7 +260,7 @@
               720
             ],
             "landmark_schema": {
-              "id": "kinexa.body.v1.joints",
+              "id": "bansayo.body.v1.joints",
               "names": [
                 "pelvis",
                 "spine",
@@ -489,7 +489,7 @@
         "state": "degraded",
         "reasons": [
           {
-            "code": "root_position_not_measured",
+            "code": "root_position_inferred",
             "subject": null,
             "message": "Root position is inferred from floor contact."
           }
@@ -505,9 +505,9 @@
         "state": "unavailable",
         "reasons": [
           {
-            "code": "not_implemented",
-            "subject": "landmarks_3d_triangulated",
-            "message": "Triangulation is not implemented in this build."
+            "code": "insufficient_cameras",
+            "subject": null,
+            "message": "Triangulation needs at least two cameras."
           }
         ]
       },

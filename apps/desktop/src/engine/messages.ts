@@ -2,12 +2,12 @@
 import type { ServerMessage } from "@contracts";
 
 type Obj = Record<string, unknown>;
-const isObj = (v: unknown): v is Obj =>
+export const isObj = (v: unknown): v is Obj =>
   typeof v === "object" && v !== null && !Array.isArray(v);
-const isNum = (v: unknown): v is number =>
+export const isNum = (v: unknown): v is number =>
   typeof v === "number" && Number.isFinite(v);
 const isStr = (v: unknown): v is string => typeof v === "string";
-const tuple = (v: unknown, n: number): boolean =>
+export const tuple = (v: unknown, n: number): v is number[] =>
   Array.isArray(v) && v.length === n && v.every(isNum);
 const strings = (v: unknown): boolean => Array.isArray(v) && v.every(isStr);
 const reasons = (v: unknown): boolean =>
@@ -168,6 +168,31 @@ function isLandmarks(v: unknown): boolean {
     )
   );
 }
+/** Only world-frame triangulated sets are drawn; any other kind or frame is dropped. */
+function isTriangulated(v: unknown): boolean {
+  return (
+    isObj(v) &&
+    v.kind === "triangulated" &&
+    isNum(v.t_us) &&
+    isObj(v.frame) &&
+    v.frame.type === "world" &&
+    isStr(v.origin) &&
+    isStr(v.schema_id) &&
+    strings(v.calibration_refs) &&
+    Array.isArray(v.points) &&
+    v.points.every(
+      (p) =>
+        p === null ||
+        (isObj(p) &&
+          tuple(p.m, 3) &&
+          isNum(p.views) &&
+          isNum(p.reprojection_error_px) &&
+          isNum(p.confidence) &&
+          strings(p.used_views) &&
+          strings(p.rejected_views)),
+    )
+  );
+}
 export type ParsedMessage =
   | { kind: "message"; message: ServerMessage }
   | { kind: "unknown"; type: string }
@@ -197,6 +222,9 @@ export function parseServerMessage(text: string): ParsedMessage {
       break;
     case "landmarks_2d":
       valid = isLandmarks(raw.landmarks);
+      break;
+    case "landmarks_3d":
+      valid = isTriangulated(raw.landmarks);
       break;
     case "notice":
       valid = typeof raw.message === "string";

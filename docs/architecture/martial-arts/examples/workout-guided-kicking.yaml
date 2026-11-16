@@ -1,0 +1,136 @@
+# ILLUSTRATIVE content file. Final location: <data_dir>/content/user/workouts/tkd_kicks_15min.yaml
+# A user-defined workout written by the engine from the desktop Workout Builder (PUT /content/workouts/{id}).
+# The same file runs unchanged on the desktop and in VR.
+schema: bansayo.workout/v1
+id: user.daniel.tkd_kicks_15min
+version: 1
+status: draft
+names:
+  display: 15-minute Taekwondo kicking session
+discipline: taekwondo
+intensity: moderate
+estimated_duration_s: 900
+
+blocks:
+  - id: warmup
+    kind: warmup
+    items:
+      - id: hip_raises
+        plan:
+          kind: technique
+          technique: general.mobility.standing_hip_flexion_raise
+          side: alternate
+          stages: [normal]
+          coaching: minimal
+        sets: 1
+        target: { reps: 10 }
+        rest_s: 20
+        time_cap_s: 120
+      - id: squats
+        plan:
+          kind: technique
+          technique: general.strength.squat   # bilateral definition (sides: []): no `side`
+          stages: [normal]
+          coaching: minimal
+        sets: 1
+        target: { reps: 12 }
+        rest_s: 30
+        time_cap_s: 120
+
+  - id: skill
+    kind: skill
+    items:
+      - id: roundhouse_slow
+        plan:
+          kind: technique
+          technique: taekwondo.dollyeo_chagi
+          side: alternate
+          stages: [demo, slow]
+          reference: default
+          coaching: detailed
+        sets: 1
+        target: { reps: 5 }      # per side
+        rest_s: 30
+        time_cap_s: 180
+
+  - id: main
+    kind: main
+    items:
+      - id: roundhouse_right
+        plan:
+          kind: technique
+          technique: taekwondo.dollyeo_chagi
+          side: right
+          stages: [normal]
+          reference: default
+          coaching: standard
+          scoring: scoring.kick.basic
+        sets: 3
+        target: { reps: 10 }
+        rest_s: 45
+        time_cap_s: 180
+        goals:
+          - metric: kick.peak_ankle_height
+            stat: median
+            compare: at_least
+            value: 0.95
+            relative_to: baseline
+          - metric: kick.retraction_time
+            stat: median
+            compare: at_most
+            value: 1.10
+            relative_to: last_session
+      - id: roundhouse_left
+        plan:
+          kind: technique
+          technique: taekwondo.dollyeo_chagi
+          side: left
+          stages: [normal]
+          reference: default
+          coaching: standard
+          scoring: scoring.kick.basic
+        sets: 3
+        target: { reps: 10 }
+        rest_s: 45
+        time_cap_s: 180
+      - id: front_roundhouse_combo
+        plan:
+          kind: combination
+          combination: taekwondo.combo.ap_chagi_dollyeo_chagi
+          stance: as_defined
+          tempo_bpm: null
+          coaching: standard
+        sets: 2
+        target: { reps: 6 }      # rounds
+        rest_s: 45
+        time_cap_s: 150
+
+  - id: cooldown
+    kind: cooldown
+    items:
+      - id: hamstring_fold
+        plan:
+          kind: technique       # a `hold` definition is run through the same plan kind
+          technique: general.mobility.hamstring_forward_fold
+          coaching: minimal
+        sets: 1
+        target: { holds: 2, hold_s: 30 }
+        rest_s: 0
+
+levels:
+  - level: 1
+    overrides:
+      roundhouse_right: { sets: 2, target: { reps: 8 }, rest_s: 60 }
+      roundhouse_left: { sets: 2, target: { reps: 8 }, rest_s: 60 }
+      front_roundhouse_combo: { sets: 1 }
+  - level: 2
+    overrides: {}
+  - level: 3
+    overrides:
+      roundhouse_right: { target: { reps: 12 }, rest_s: 40 }
+      roundhouse_left: { target: { reps: 12 }, rest_s: 40 }
+      front_roundhouse_combo: { sets: 3 }
+
+completion:
+  require: main_blocks
+  time_cap_s: 1200

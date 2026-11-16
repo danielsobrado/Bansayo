@@ -5,7 +5,7 @@
  */
 export type LandmarkSchema = { 
 /**
- * e.g. `kinexa.body.v1.joints`.
+ * e.g. `bansayo.body.v1.joints`.
  */
 id: string, names: Array<string>, 
 /**

@@ -1,4 +1,4 @@
-//! The skeleton: built-in `kinexa.body.v1` definition, proportion scaling, forward kinematics.
+//! The skeleton: built-in `bansayo.body.v1` definition, proportion scaling, forward kinematics.
 //! Pure.
 
 mod definition;

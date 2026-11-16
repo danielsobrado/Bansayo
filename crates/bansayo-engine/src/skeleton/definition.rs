@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use kinexa_contracts::{
+use bansayo_contracts::{
     AngleUnit, CalibrationState, JointDef, LandmarkSchema, SegmentDef, SegmentId,
     SkeletonDefinition,
 };
@@ -167,7 +167,7 @@ impl Skeleton {
         self.segments.is_empty()
     }
 
-    /// `kinexa.body.v1.joints`: a landmark per segment origin, an edge per parent link.
+    /// `bansayo.body.v1.joints`: a landmark per segment origin, an edge per parent link.
     pub fn landmark_schema(&self) -> LandmarkSchema {
         LandmarkSchema {
             id: LANDMARK_SCHEMA_ID.into(),

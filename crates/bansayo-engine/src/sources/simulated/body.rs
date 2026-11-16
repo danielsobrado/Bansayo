@@ -1,7 +1,7 @@
 //! Ground truth of the simulated body: segment world rotations and positions as a pure function
 //! of (motion, time). Feet are placed on the floor by the same floor-contact rule as the solver.
 
-use kinexa_contracts::SegmentId;
+use bansayo_contracts::SegmentId;
 
 use super::motions::{Motion, ScriptedAngles};
 use crate::math::{Rot, V3, rot_x, rot_z};

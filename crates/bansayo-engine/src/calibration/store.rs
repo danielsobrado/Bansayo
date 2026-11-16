@@ -1,5 +1,5 @@
 use crate::math::{Rot, rot_from_wire};
-use kinexa_contracts::*;
+use bansayo_contracts::*;
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
@@ -50,6 +50,7 @@ impl Store {
                                 segment_id: None,
                                 method: "invalid_file".into(),
                                 created_utc: None,
+                                data: Default::default(),
                             });
                     invalid.id = id;
                     invalid.state = CalibrationState::Invalid;
@@ -78,6 +79,37 @@ impl Store {
             })
             .and_then(|p| serde_json::from_value::<MountingData>(p.data.clone().into()).ok())
             .and_then(|p| rot_from_wire(p.q_sensor_from_segment))
+    }
+    /// Typed `data` of a non-stale profile of `kind` for `device`, with its id.
+    pub fn camera<T: serde::de::DeserializeOwned>(
+        &self,
+        kind: CalibrationKind,
+        device: &DeviceId,
+    ) -> Option<(ProfileId, T)> {
+        let p = self.profiles.values().find(|p| {
+            p.kind == kind
+                && !self.stale.contains(&p.id)
+                && p.subject.device_id.as_ref() == Some(device)
+        })?;
+        Some((
+            p.id.clone(),
+            serde_json::from_value(p.data.clone().into()).ok()?,
+        ))
+    }
+    pub fn camera_ref(&self, kind: CalibrationKind, device: &DeviceId) -> CalibrationRef {
+        let profile = self
+            .profiles
+            .values()
+            .find(|p| p.kind == kind && p.subject.device_id.as_ref() == Some(device));
+        CalibrationRef {
+            kind,
+            state: match profile {
+                Some(p) if self.stale.contains(&p.id) => CalibrationState::Stale,
+                Some(_) => CalibrationState::Valid,
+                None => CalibrationState::Missing,
+            },
+            profile_id: profile.map(|p| p.id.clone()),
+        }
     }
     pub fn reference(&self, device: &DeviceId, segment: Option<&SegmentId>) -> CalibrationRef {
         let profile = segment.and_then(|segment| {
@@ -151,6 +183,10 @@ pub fn summary(p: &CalibrationProfile) -> CalibrationProfileSummary {
         segment_id: p.subject.segment_id.clone(),
         method: p.method.clone(),
         created_utc: Some(p.created_utc.clone()),
+        data: match p.kind {
+            CalibrationKind::CameraIntrinsics | CalibrationKind::CameraExtrinsics => p.data.clone(),
+            _ => Default::default(),
+        },
     }
 }
 /// Called on the blocking pool. A profile becomes visible only after its complete file is renamed.

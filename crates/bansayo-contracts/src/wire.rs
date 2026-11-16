@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::{
-    AngleUnit, JointMeasurement, Origin, PoseLandmarks2D, SkeletonDefinition, SkeletonPose,
-    SystemState, TimeUs, TrackingQuality,
+    AngleUnit, JointMeasurement, Origin, PoseLandmarks2D, PoseLandmarks3D, SkeletonDefinition,
+    SkeletonPose, SystemState, TimeUs, TrackingQuality,
 };
 
 /// Wire protocol version announced in `hello` and in the URL prefix.
@@ -88,6 +88,9 @@ pub enum ServerMessage {
     },
     #[serde(rename = "landmarks_2d")]
     Landmarks2d { landmarks: PoseLandmarks2D },
+    /// Engine-triangulated landmarks (`kind: "triangulated"`), sent when a new camera frame set is solved.
+    #[serde(rename = "landmarks_3d")]
+    Landmarks3d { landmarks: PoseLandmarks3D },
     Notice {
         level: NoticeLevel,
         code: String,

@@ -47,7 +47,7 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
     let listener = tokio::net::TcpListener::bind(config.bind).await?;
     let address = listener.local_addr()?;
     let dir = config.config.engine.data_dir.clone();
-    let store = tokio::task::spawn_blocking(move || Store::load(&dir)).await??;
+    let mut store = tokio::task::spawn_blocking(move || Store::load(&dir)).await??;
     let skeleton = Skeleton::builtin(
         &config.config.skeleton.model,
         config.config.skeleton.height_m,
@@ -60,15 +60,30 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
     let mut descriptors = vec![];
     let mut controls = vec![];
     let mut drops = DropCounters::new();
+    let assignments = crate::registry::persistence::load_assignments(
+        &config.config.engine.data_dir,
+        &config.assignments,
+        &skeleton,
+    )?;
+    let (placements, placements_rx) = watch::channel(assignments.clone());
     for spec in &config.simulated {
         let source = SimulatedSource {
             spec: spec.clone(),
             skeleton: skeleton.clone(),
-            assignments: config.assignments.clone(),
+            assignments: placements_rx.clone(),
         };
         for d in source.descriptors() {
             drops.insert(d.id.clone(), Arc::new(AtomicU64::new(0)));
             descriptors.push(d);
+        }
+        // Declared in memory at every start, never written to disk.
+        let created = crate::clock::utc_now_rfc3339();
+        for c in &spec.cameras {
+            store.profiles.extend(
+                crate::sources::simulated::camera::profiles(c, &created)
+                    .into_iter()
+                    .map(|p| (p.id.clone(), p)),
+            );
         }
         let (control, receiver) = watch::channel(Control {
             motion: spec.motion,
@@ -80,11 +95,6 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
         controls.push(control);
         sources.push((source, receiver));
     }
-    let assignments = crate::registry::persistence::load_assignments(
-        &config.config.engine.data_dir,
-        &config.assignments,
-        &skeleton,
-    )?;
     let registry = Registry::new(descriptors, assignments, drops.clone());
     let runner = Runner {
         config: config.clone(),
@@ -95,6 +105,7 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
         events: events_rx,
         controls,
         faults: faults_tx,
+        placements,
     };
     let (client, streams, runner_task) = runner.spawn(cancel.clone());
     let mut tasks: Vec<JoinHandle<Result<(), EngineError>>> = vec![tokio::spawn(async move {
@@ -134,7 +145,7 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
     for warning in &config.warnings {
         tracing::warn!(path=%warning.path,message=%warning.message,"configuration warning");
     }
-    tracing::info!(%address,"Kinexa engine listening");
+    tracing::info!(%address,"Bansayo engine listening");
     Ok(EngineHandle {
         address,
         cancel,

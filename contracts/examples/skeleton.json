@@ -1,7 +1,7 @@
 {
   "type": "skeleton",
   "skeleton": {
-    "model_id": "kinexa.body.v1",
+    "model_id": "bansayo.body.v1",
     "rev": 1,
     "height_m": 1.75,
     "proportions": "assumed",

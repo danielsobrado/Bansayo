@@ -16,7 +16,8 @@
   font-variant-numeric: tabular-nums;
 }
 
-.pill[data-state="tracking"] .glyph {
+.pill[data-state="tracking"] .glyph,
+.pill[data-state="available"] .glyph {
   color: var(--state-tracking);
 }
 .pill[data-state="degraded"] .glyph {

@@ -1,0 +1,111 @@
+# ILLUSTRATIVE — not loadable by the current engine build.
+# Capability profile: hybrid while multi_view holds and at least one IMU has valid mounting.
+# IMUs add angular-velocity observables and bridge camera occlusion; they are never required.
+schema_version: 2
+
+engine:
+  publish_rate_hz: 120
+  stale_after_ms: 250
+  data_dir: ./data
+
+api:
+  bind: 127.0.0.1:7700
+
+skeleton:
+  model: bansayo.body.v1
+  height_m: 1.75
+
+content:
+  dirs: [./content]
+
+sources:
+  - id: cam-front
+    kind: camera
+    enabled: true
+    device: "USB Camera (046d:085c)"
+    transport: usb
+    resolution_px: [1280, 720]
+    rate_hz: 60
+    pixel_format: mjpeg
+    exposure_s: 0.002
+    latency_ms: 40
+    processing_profile: body-halpe26
+    fiducials: true
+    record_video: false
+  - id: cam-side
+    kind: camera
+    enabled: true
+    device: "USB Camera (046d:08e5)"
+    transport: usb
+    resolution_px: [1280, 720]
+    rate_hz: 60
+    pixel_format: mjpeg
+    exposure_s: 0.002
+    latency_ms: 40
+    processing_profile: body-halpe26
+    fiducials: true
+    record_video: false
+
+  # Custom ESP32 trackers: orientation, angular velocity and acceleration with two-way clock sync.
+  - id: trackers
+    kind: esp32_udp
+    enabled: true
+    bind: 0.0.0.0:6970
+    output_rate_hz: 200
+
+  # Disabling a sensor: the SlimeVR path stays configured but off. Nothing else changes.
+  - id: slime
+    kind: slimevr_solarxr
+    enabled: false
+    url: ws://127.0.0.1:21110
+
+processing_profiles:
+  body-halpe26:
+    detector: { model_path: models/yolox-m-humanart.onnx, every_frames: 10, score_min: 0.5 }
+    pose:
+      model_id: rtmpose-m-halpe26
+      model_path: models/rtmpose-m-halpe26.onnx
+      landmark_schema: halpe26
+      keypoint_score_min: 0.3
+    execution: [cuda, directml, cpu]
+    max_inference_hz: 120
+
+# Tracker ids are MAC-derived and appear when the trackers announce themselves.
+assignments:
+  ESP-A4CF12B301: pelvis
+  ESP-A4CF12B302: left_thigh
+  ESP-A4CF12B303: left_shin
+  ESP-A4CF12B304: right_thigh
+  ESP-A4CF12B305: right_shin
+
+quality:
+  degraded_rate_fraction: 0.7
+  degraded_quality: 0.5
+  disconnect_after_ms: 1000
+
+triangulation:
+  mode: gated
+  max_skew_ms: 20
+  max_reprojection_error_px: 15.0
+  min_views: 2
+  min_ray_angle_deg: 3.0
+
+fusion:
+  skeleton_fit: true
+  heading_correction: true
+  heading_tau_s: 5
+  heading_valid_s: 10
+  heading_reacquire_deg: 60
+  heading_reacquire_s: 2
+
+evidence:
+  detector_noise_floor_px: 2.0
+  sync_sigma_ms: 4
+  imu: { tilt_sigma_rad: 0.035, heading_sigma0_rad: 0.05, heading_drift_rad_s: 0.0017 }
+
+calibration:
+  mounting_max_age_s: 14400
+  heading_max_age_s: 1800
+
+storage:
+  record_defaults: { inputs: true, motion: true, video: false }

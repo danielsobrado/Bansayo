@@ -1,6 +1,6 @@
 [package]
-name = "kinexa-contracts"
-description = "Kinexa wire and persisted data contracts"
+name = "bansayo-contracts"
+description = "Bansayo wire and persisted data contracts"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

@@ -12,7 +12,7 @@ use crate::{
     skeleton::Skeleton,
     sources::simulated::{Control, motions::Motion},
 };
-use kinexa_contracts::*;
+use bansayo_contracts::*;
 use std::collections::BTreeMap;
 use tokio::sync::{broadcast, mpsc, watch};
 use tokio_util::sync::CancellationToken;
@@ -35,6 +35,8 @@ pub struct Runner {
     pub events: mpsc::Receiver<crate::sources::Ingest>,
     pub controls: Vec<watch::Sender<Control>>,
     pub faults: watch::Sender<BTreeMap<DeviceId, crate::sources::simulated::FaultSetting>>,
+    /// Where simulated trackers are strapped; mirrors `registry.assignments`.
+    pub placements: watch::Sender<BTreeMap<DeviceId, SegmentId>>,
 }
 impl Runner {
     pub fn spawn(
@@ -47,7 +49,7 @@ impl Runner {
             &self.registry,
             &self.store,
             0,
-            self.config.config.engine.stale_after_ms * 1000,
+            &self.config.config,
         );
         let frame = ServerMessage::Frame {
             seq: 0,
@@ -122,14 +124,9 @@ impl Runner {
             &self.registry,
             &self.store,
             now,
-            self.config.config.engine.stale_after_ms * 1000,
+            &self.config.config,
         );
-        let trackers = devices
-            .iter()
-            .any(|d| d.descriptor.kind == DeviceKind::ImuTracker);
-        let cameras = devices
-            .iter()
-            .any(|d| d.descriptor.kind == DeviceKind::Camera);
+        let features = features(&devices, &solved);
         SystemState {
             rev,
             engine: EngineInfo {
@@ -141,12 +138,7 @@ impl Runner {
             },
             devices,
             calibration: self.store.summaries(),
-            features: features(
-                trackers,
-                cameras,
-                solved.quality.observed_segments,
-                solved.quality.total_segments,
-            ),
+            features,
             recording: None,
             playback: None,
             simulation: self.simulation(),

@@ -1,13 +1,13 @@
 [package]
-name = "kinexa-engine"
-description = "Kinexa tracking engine: sources, pipeline, calibration and local API"
+name = "bansayo-engine"
+description = "Bansayo tracking engine: sources, pipeline, calibration and local API"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-kinexa-contracts.workspace = true
+bansayo-contracts.workspace = true
 mcap.workspace = true
 bytes.workspace = true
 axum.workspace = true

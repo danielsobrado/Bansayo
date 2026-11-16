@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { SkeletonDefinition, SystemState } from "@contracts";
+import { calibratedCameras } from "../../engine/cameraCalibration";
 import { readouts } from "../../engine/readouts";
 import { jointHistory, TRACE_WINDOW_US } from "../../engine/jointHistory";
 import { featureReasons, segmentRows } from "../../engine/selectors";
@@ -39,6 +40,12 @@ export function Studio({
   const [view, setView] = useState<ViewPreset>("3D");
   const [skeletonVisible, setSkeletonVisible] = useState(true);
   const [floorVisible, setFloorVisible] = useState(true);
+  const [camerasVisible, setCamerasVisible] = useState(false);
+  const calibration = state?.calibration;
+  const poses = useMemo(
+    () => calibratedCameras(calibration ?? []),
+    [calibration],
+  );
   const [leftOpen, setLeftOpen] = useState(false);
   const [rightOpen, setRightOpen] = useState(false);
   const cameras =
@@ -145,6 +152,15 @@ export function Studio({
               />
               Floor grid<span className="subtle mono">0.5 m</span>
             </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={camerasVisible}
+                onChange={(e) => setCamerasVisible(e.target.checked)}
+              />
+              Cameras
+              <span className="subtle mono">{poses.length} calibrated</span>
+            </label>
           </div>
           <div className="panel-heading segment-heading">
             SEGMENTS{" "}
@@ -202,6 +218,7 @@ export function Studio({
             view={view}
             skeletonVisible={skeletonVisible}
             floorVisible={floorVisible}
+            cameras={camerasVisible ? poses : undefined}
           />
           {cameras.length > 0 && (
             <CameraInset cameras={cameras} main={cameraOnly} />

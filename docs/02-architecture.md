@@ -17,7 +17,7 @@ flowchart LR
     AUX["Distance, pressure, UWB<br/>extension point"]
   end
 
-  subgraph ENGINE["kinexa-engine · one process, modular monolith"]
+  subgraph ENGINE["bansayo-engine · one process, modular monolith"]
     SRC["Sources<br/>one task per source"]
     PIPE["Pipeline runner<br/>single actor, fixed tick"]
     API["Local API<br/>HTTP + WebSocket"]
@@ -53,7 +53,7 @@ Solid lines are PoC. Dashed lines are designed adapters with no code yet.
 
 | Process | Owns | Does not own |
 |---|---|---|
-| `kinexa-engine` | Device I/O, time, calibration, skeleton solving, measurements, quality, recording, configuration | Rendering, UI state |
+| `bansayo-engine` | Device I/O, time, calibration, skeleton solving, measurements, quality, recording, configuration | Rendering, UI state |
 | Desktop UI (browser or Tauri webview) | Presentation, interaction, view state | Kinematics, calibration maths, simulation |
 | Tauri shell | Window, lifecycle, hosting the engine library in-process | Any tracking logic, any data path — the UI talks to the engine over the network contract only |
 | Godot VR client | XR session, rendering, native headset tracking, interpolation for display | Biomechanics, joint angles, calibration maths |
@@ -70,10 +70,10 @@ without the runtime (ADR-001).
 
 | Crate | Contents | May depend on |
 |---|---|---|
-| `kinexa-contracts` | Every type that crosses a process boundary or is persisted: identifiers, frames, observations, landmarks, skeleton, pose, calibration, state, wire messages, API bodies. Serde + ts-rs derives only | `serde`, `ts-rs`. No I/O, no Tokio, no nalgebra |
-| `kinexa-engine` | Library plus the `kinexa-engine` binary | `kinexa-contracts`, Tokio, Axum, nalgebra, MCAP, tracing |
+| `bansayo-contracts` | Every type that crosses a process boundary or is persisted: identifiers, frames, observations, landmarks, skeleton, pose, calibration, state, wire messages, API bodies. Serde + ts-rs derives only | `serde`, `ts-rs`. No I/O, no Tokio, no nalgebra |
+| `bansayo-engine` | Library plus the `bansayo-engine` binary | `bansayo-contracts`, Tokio, Axum, nalgebra, MCAP, tracing |
 
-### Modules of `kinexa-engine`
+### Modules of `bansayo-engine`
 
 ```mermaid
 flowchart TD
@@ -97,13 +97,13 @@ flowchart TD
   subgraph PURE["Pure modules · no Tokio, no I/O"]
     skeleton
     math
-    solve["pipeline::solve, joints, features, quality"]
+    solve["pipeline::solve, triangulate, joints, features, quality"]
     calmath["calibration::mounting"]
   end
   pipeline --> solve
   calibration --> calmath
 
-  contracts["kinexa-contracts"]
+  contracts["bansayo-contracts"]
   config --> contracts
   sources --> contracts
   pipeline --> contracts
@@ -120,7 +120,7 @@ flowchart TD
 | `registry` | Device descriptors, device state machine, stream statistics, segment assignments | Owned by the pipeline runner |
 | `calibration` | Profile store, reference-pose mounting capture, invalidation rules | Persistent, versioned |
 | `skeleton` | Skeleton definition, proportion scaling, forward kinematics | Pure |
-| `pipeline` | Observation buffer, solver stages, joint measurements, quality, feature availability, tick loop | `runner` is the only stateful part |
+| `pipeline` | Observation buffer, solver stages (including multi-camera triangulation), joint measurements, quality, feature availability, tick loop | `runner` is the only stateful part |
 | `recording` | MCAP writer, reader, session index | Blocking file I/O on a dedicated thread |
 | `api` | Axum router, HTTP handlers, WebSocket fan-out, response envelope, origin checks | Translates requests into runner commands |
 | `math` | Conversions between contract arrays and nalgebra, frame helpers | Pure |
@@ -158,7 +158,7 @@ flowchart LR
 - **Blocking work leaves the runtime.** MCAP writing runs on a dedicated thread. Camera inference
   will run on dedicated threads with a single-slot "latest frame" mailbox, so stale frames are
   dropped before inference rather than after.
-- **Shutdown.** Ctrl-C or the embedding host cancels a token; sources stop, the runner drains,
+- **Shutdown.** Ctrl-C or the embedding host cancels a token (the opt-in `--shutdown-on-stdin-close` flag adds closing stdin as a trigger, for a supervising process that cannot deliver Ctrl-C to a child on Windows); sources stop, the runner drains,
   the recorder finalises the MCAP file, the API closes sockets with a normal close code.
 
 ### Rates
@@ -208,14 +208,20 @@ flowchart LR
   L2 --> OUT1["landmarks_2d stream"]
   L2 --> TRI{"≥ 2 calibrated,<br/>synchronised cameras?"}
   TRI -- no --> GAP["3D landmarks unavailable<br/>reason published"]
-  TRI -- yes --> T3["Triangulation · designed"]
+  TRI -- yes --> T3["Triangulation · solver stage"]
   T3 --> L3["PoseLandmarks3D triangulated<br/>world frame, metres"]
+  L3 --> OUT2["landmarks_3d stream"]
   L3 --> SK["Skeleton fit · designed"]
 ```
 
 With one camera the product is 2D landmarks and image-plane angles. A detector that outputs
 model-inferred 3D emits `PoseLandmarks3D` of kind `model_relative`, which is a different type from
 triangulated landmarks and is never placed in the world frame.
+
+Triangulation is a stage inside the solver (`pipeline/triangulate.rs`, called from
+`pipeline/solve.rs`), so live mode and replay run the same code. Its output is derived from the
+recorded 2D landmarks and the calibration profiles; it is not recorded itself. The skeleton fit
+remains designed: camera-only setups publish 3D landmarks but no skeleton pose.
 
 ### Hybrid
 
@@ -233,7 +239,9 @@ flowchart LR
 ```
 
 In the PoC the two pipelines run side by side and independently (fusion stage 1 of the roadmap in
-[05](05-calibration-and-fusion.md)).
+[05](05-calibration-and-fusion.md)), with one exception: when trackers and a triangulated pelvis
+both exist, the skeleton root uses the measured pelvis position instead of the floor-contact guess.
+There is no heading correction and no other camera/IMU fusion.
 
 ## 4. Client communication
 
@@ -242,9 +250,9 @@ In the PoC the two pipelines run side by side and independently (fusion stage 1 
 ```mermaid
 sequenceDiagram
   participant UI as Desktop UI
-  participant E as kinexa-engine
+  participant E as bansayo-engine
   UI->>E: GET /api/v1/health
-  UI->>E: WS /api/v1/stream?topics=frame,state,landmarks_2d
+  UI->>E: WS /api/v1/stream?topics=frame,state,landmarks_2d,landmarks_3d
   E-->>UI: hello (protocol, conventions, skeleton, state)
   loop publish rate
     E-->>UI: frame
@@ -262,7 +270,7 @@ sequenceDiagram
 sequenceDiagram
   participant G as Godot client
   participant X as OpenXR runtime
-  participant E as kinexa-engine
+  participant E as bansayo-engine
   G->>X: Initialise XR (optional — dev mode runs without)
   G->>E: WS /api/v1/stream?topics=frame,state&max_rate_hz=90
   E-->>G: hello
@@ -308,7 +316,7 @@ against the registries, not assumed.
 ## 6. Repository and build structure
 
 ```text
-Kinexa/
+Bansayo/
 ├── Cargo.toml                  Rust workspace, members = crates/*
 ├── rust-toolchain.toml         Pinned stable toolchain
 ├── README.md                   Setup, build, run
@@ -316,8 +324,9 @@ Kinexa/
 ├── .gitignore
 │
 ├── config/                     Example configurations (YAML)
-│   ├── kinexa.example.yaml     Annotated reference for every setting
+│   ├── bansayo.example.yaml     Annotated reference for every setting
 │   ├── sim-full-body.yaml      12 trackers, 2 cameras
+│   ├── sim-multi-camera.yaml   12 trackers, 4 cameras, triangulation settings
 │   ├── sim-six-trackers.yaml   6 trackers (pelvis, chest, thighs, shins), no camera
 │   └── sim-camera-only.yaml    1 camera, no trackers
 │
@@ -326,7 +335,7 @@ Kinexa/
 │   └── examples/               Golden JSON messages, verified by Rust tests
 │
 ├── crates/
-│   ├── kinexa-contracts/
+│   ├── bansayo-contracts/
 │   │   └── src/
 │   │       ├── lib.rs
 │   │       ├── ids.rs          DeviceId, SourceId, SegmentId, validation
@@ -344,7 +353,7 @@ Kinexa/
 │   │       ├── wire.rs         ServerMessage (hello, state, frame, landmarks_2d, notice)
 │   │       └── api.rs          Request and response bodies, ApiResponse envelope
 │   │
-│   └── kinexa-engine/
+│   └── bansayo-engine/
 │       ├── src/
 │       │   ├── main.rs         CLI entry
 │       │   ├── lib.rs          pub fn run(config, shutdown)
@@ -378,7 +387,7 @@ Kinexa/
 │   │   │   ├── ui/             Primitives: Panel, StatePill, ProvenanceTag, OriginBadge, Sparkline…
 │   │   │   ├── lib/            Pure helpers: quaternion maths, formatting, hash routing
 │   │   │   └── styles/         tokens.css, base.css
-│   │   └── src-tauri/          Standalone Cargo package (not a workspace member); path-depends on kinexa-engine
+│   │   └── src-tauri/          Standalone Cargo package (not a workspace member); path-depends on bansayo-engine
 │   │
 │   └── vr/                     Godot 4 project
 │       ├── project.godot
@@ -402,10 +411,10 @@ placeholder modules are created for designed-but-unimplemented features.
 
 | Target | Command | Notes |
 |---|---|---|
-| Engine | `cargo build -p kinexa-engine` | Does not compile Tauri or any webview dependency |
+| Engine | `cargo build -p bansayo-engine` | Does not compile Tauri or any webview dependency |
 | Engine tests | `cargo test --workspace` | Also regenerates and verifies `contracts/` |
-| Regenerate contracts | `cargo test -p kinexa-contracts` | Fails if checked-in output is stale |
-| Run engine | `cargo run -p kinexa-engine -- --config config/sim-full-body.yaml` | |
+| Regenerate contracts | `cargo test -p bansayo-contracts` | Fails if checked-in output is stale |
+| Run engine | `cargo run -p bansayo-engine -- --config config/sim-full-body.yaml` | |
 | UI in browser | `npm run dev` in `apps/desktop` | Needs a running engine |
 | Desktop app | `npm run tauri dev` in `apps/desktop` | Hosts the engine in-process |
 | VR client | Open `apps/vr` in Godot, or `godot --path apps/vr` | Needs a running engine |
@@ -417,12 +426,12 @@ without pulling in the desktop toolchain, and the two agents never edit the same
 
 | Component | Code owner in the PoC | Consumes | Provides |
 |---|---|---|---|
-| `crates/kinexa-contracts` | Agent 1 | Contract spec (doc 04) | Rust types, generated TS, golden examples |
-| `crates/kinexa-engine` | Agent 1 | Contracts, config | HTTP + WebSocket API, recordings |
+| `crates/bansayo-contracts` | Agent 1 | Contract spec (doc 04) | Rust types, generated TS, golden examples |
+| `crates/bansayo-engine` | Agent 1 | Contracts, config | HTTP + WebSocket API, recordings |
 | `config/` | Agent 1 | Config schema (doc 04) | Example configurations |
 | `contracts/` (generated) | Agent 1's generator | — | Types and examples for Agent 2 |
 | `apps/desktop/src` | Agent 2 | `contracts/ts`, HTTP + WebSocket API | Desktop UI |
-| `apps/desktop/src-tauri` | Agent 2 | `kinexa-engine` library entry point `run` | Desktop shell |
+| `apps/desktop/src-tauri` | Agent 2 | `bansayo-engine` library entry point `run` | Desktop shell |
 | `apps/vr` | Agent 2 | WebSocket API, wire spec | VR client |
 | `docs/` | Architect | — | Specification, review |
 | Root `Cargo.toml`, `rust-toolchain.toml`, `.gitignore` | Agent 1 | — | — |

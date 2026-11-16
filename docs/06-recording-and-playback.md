@@ -37,13 +37,13 @@ that this cannot answer, such as searching measurements across sessions (ADR-005
 
 | Element | Content |
 |---|---|
-| Channel `/kinexa/devices` | `device_announced` and `device_link` events, JSON |
-| Channel `/kinexa/obs/<device_id>` | `SensorObservation`, JSON, one channel per device |
-| Channel `/kinexa/context` | Context changes during the session (assignment or calibration change), JSON |
+| Channel `/bansayo/devices` | `device_announced` and `device_link` events, JSON |
+| Channel `/bansayo/obs/<device_id>` | `SensorObservation`, JSON, one channel per device |
+| Channel `/bansayo/context` | Context changes during the session (assignment or calibration change), JSON |
 | Message `log_time` | Session time at which the engine accepted the event |
 | Message `publish_time` | The observation's capture time `t_us` |
 | Attachment `context.json` | Skeleton definition, assignments, calibration profiles, engine and protocol versions at start |
-| Metadata `kinexa.session` | Session id, name, UTC start, origins |
+| Metadata `bansayo.session` | Session id, name, UTC start, origins |
 
 Channels use MCAP's `json` message encoding without a schema record. The file opens in standard
 MCAP tools for inspection.

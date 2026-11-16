@@ -42,8 +42,8 @@ export default defineConfig(({ command, mode }) => {
     build: { assetsInlineLimit: 0, sourcemap: false },
     plugins: [
       {
-        name: "kinexa-csp",
-        transformIndexHtml: (html) => html.replace("%KINEXA_CSP%", csp),
+        name: "bansayo-csp",
+        transformIndexHtml: (html) => html.replace("%BANSAYO_CSP%", csp),
       },
     ],
     test: { include: ["src/**/*.test.ts"] },

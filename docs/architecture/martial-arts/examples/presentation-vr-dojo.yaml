@@ -1,0 +1,72 @@
+# ILLUSTRATIVE presentation profile. Final location: <data_dir>/athletes/<athlete_id>/presentation/vr.yaml
+# Chooses what the VR client shows. It cannot change what the engine measures, scores or coaches.
+schema: bansayo.presentation.vr/v1
+environment: dojo               # dojo | void | passthrough
+mirror:
+  enabled: true
+  distance_m: 2.5
+  mode: true_mirror             # falls back to facing_figure while xr_alignment is not valid
+ghost:
+  enabled: true
+  placement: beside
+  opacity: 0.45
+
+# Coaching overlays per plan kind.
+overlays:
+  technique:
+    joint_angles: true
+    trail: true
+    target_path: true
+    targets: true
+    balance_marker: false
+    phase_label: true
+  combination:
+    joint_angles: false
+    trail: false
+    target_path: false
+    targets: true
+    balance_marker: false
+    phase_label: false
+  form:
+    joint_angles: false
+    trail: false
+    target_path: false
+    targets: false
+    balance_marker: false
+    phase_label: true
+  mobility:
+    joint_angles: true
+    trail: false
+    target_path: false
+    targets: false
+    balance_marker: true
+    phase_label: false
+  assessment:
+    joint_angles: true
+    trail: false
+    target_path: false
+    targets: false
+    balance_marker: false
+    phase_label: false
+  free:
+    joint_angles: false
+    trail: true
+    target_path: false
+    targets: false
+    balance_marker: false
+    phase_label: false
+
+hud:
+  show_measurements: 3
+  show_cue: true
+  show_timer: true
+
+audio:
+  rep_tone: true
+  metronome: false
+  spoken_cues: false
+  volume: 0.6
+
+comfort:
+  boundary_fade_m: 0.5
+  cable_warning: true

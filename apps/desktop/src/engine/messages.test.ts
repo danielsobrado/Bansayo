@@ -70,3 +70,57 @@ describe("camera and device boundaries", () => {
     ).toBe("invalid");
   });
 });
+
+describe("triangulated landmark boundaries", () => {
+  const point = {
+    m: [0, 0.93, 0],
+    views: 2,
+    reprojection_error_px: 1.4,
+    confidence: 0.9,
+    used_views: ["SIM-CAM1", "SIM-CAM2"],
+    rejected_views: [],
+  };
+  const message = {
+    type: "landmarks_3d",
+    landmarks: {
+      kind: "triangulated",
+      t_us: 303800000,
+      frame: { type: "world" },
+      origin: "simulated",
+      schema_id: "bansayo.body.v1.joints",
+      calibration_refs: ["camera-extrinsics-SIM-CAM1"],
+      points: [point, null],
+    },
+  };
+  const parse = (landmarks: object) =>
+    parseServerMessage(
+      JSON.stringify({ ...message, landmarks: { ...message.landmarks, ...landmarks } }),
+    ).kind;
+  it("accepts a well-formed world-frame set with unreconstructed points", () => {
+    expect(parseServerMessage(JSON.stringify(message)).kind).toBe("message");
+  });
+  it("drops non-finite coordinates", () => {
+    const text = JSON.stringify(message).replace("0.93", "1e999");
+    expect(parseServerMessage(text).kind).toBe("invalid");
+  });
+  it("drops wrong shapes and missing arrays", () => {
+    expect(parse({ points: [{ ...point, m: [0, 1] }] })).toBe("invalid");
+    expect(parse({ points: [{ ...point, used_views: undefined }] })).toBe(
+      "invalid",
+    );
+    expect(parse({ points: [{ ...point, rejected_views: "SIM-CAM2" }] })).toBe(
+      "invalid",
+    );
+    expect(parse({ points: undefined })).toBe("invalid");
+    expect(parse({ calibration_refs: undefined })).toBe("invalid");
+    expect(parse({ points: [{ ...point, reprojection_error_px: "1.4" }] })).toBe(
+      "invalid",
+    );
+  });
+  it("drops sets that are not triangulated or not in the world frame", () => {
+    expect(parse({ kind: "model_relative" })).toBe("invalid");
+    expect(parse({ frame: { type: "camera", id: "SIM-CAM1" } })).toBe(
+      "invalid",
+    );
+  });
+});

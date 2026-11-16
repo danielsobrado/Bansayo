@@ -17,7 +17,7 @@
         "type": "world"
       },
       "origin": "simulated",
-      "schema_id": "kinexa.body.v1.joints",
+      "schema_id": "bansayo.body.v1.joints",
       "calibration_refs": [
         "camera-extrinsics-SIM-CAM1",
         "camera-extrinsics-SIM-CAM2"
@@ -31,7 +31,12 @@
           ],
           "views": 2,
           "reprojection_error_px": 1.4,
-          "confidence": 0.9
+          "confidence": 0.9,
+          "used_views": [
+            "SIM-CAM1",
+            "SIM-CAM2"
+          ],
+          "rejected_views": []
         },
         {
           "m": [
@@ -41,7 +46,12 @@
           ],
           "views": 2,
           "reprojection_error_px": 1.4,
-          "confidence": 0.9
+          "confidence": 0.9,
+          "used_views": [
+            "SIM-CAM1",
+            "SIM-CAM2"
+          ],
+          "rejected_views": []
         },
         null
       ]

@@ -48,16 +48,28 @@ export function useSampledFrame<T>(
   hz: number,
   select: (frame: FrameMessage | null, ageMs: number) => T,
 ): T {
-  const read = (): T => {
+  return useSampled(hz, () => {
     const f = frameStore.frame;
     return select(
       f,
       f ? performance.now() - frameStore.receivedAt : Number.POSITIVE_INFINITY,
     );
-  };
+  });
+}
+
+/**
+ * Calls `read` at `hz` and returns its latest result: a readout of plain stores, not geometry.
+ * A change of `key` (e.g. a selection) samples again at once instead of on the next tick.
+ */
+export function useSampled<T>(hz: number, read: () => T, key?: unknown): T {
   const [value, setValue] = useState(read);
   const readRef = useRef(read);
   readRef.current = read;
+  const [sampledKey, setSampledKey] = useState(key);
+  if (!Object.is(sampledKey, key)) {
+    setSampledKey(key);
+    setValue(read());
+  }
   useEffect(() => {
     const id = setInterval(() => setValue(readRef.current()), 1000 / hz);
     return () => clearInterval(id);

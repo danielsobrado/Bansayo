@@ -1,6 +1,6 @@
 //! Validation at live-ingest and persisted-recording boundaries. Internal solver stages trust it.
 use crate::math::rot_from_wire;
-use kinexa_contracts::*;
+use bansayo_contracts::*;
 pub fn descriptor(d: &DeviceDescriptor) -> Result<(), String> {
     if d.nominal_rate_hz
         .is_some_and(|r| !r.is_finite() || r <= 0.0 || r > 1000.0)
@@ -11,16 +11,15 @@ pub fn descriptor(d: &DeviceDescriptor) -> Result<(), String> {
         if camera.resolution_px.contains(&0) {
             return Err("Camera resolution is invalid.".into());
         }
-        if let Some(schema) = &camera.landmark_schema {
-            if schema.names.len() > 1024
+        if let Some(schema) = &camera.landmark_schema
+            && (schema.names.len() > 1024
                 || schema
                     .edges
                     .iter()
                     .flatten()
-                    .any(|i| *i as usize >= schema.names.len())
-            {
-                return Err("Camera landmark schema is invalid.".into());
-            }
+                    .any(|i| *i as usize >= schema.names.len()))
+        {
+            return Err("Camera landmark schema is invalid.".into());
         }
     }
     if (d.kind == DeviceKind::Camera) != d.camera.is_some() {
@@ -63,11 +62,11 @@ pub fn observation(
             {
                 return Err("Landmark metadata is inconsistent.".into());
             }
-            if let Some(schema) = &camera.landmark_schema {
-                if landmarks.schema_id != schema.id || landmarks.points.len() != schema.names.len()
-                {
-                    return Err("Landmarks do not match the declared schema.".into());
-                }
+            if let Some(schema) = &camera.landmark_schema
+                && (landmarks.schema_id != schema.id
+                    || landmarks.points.len() != schema.names.len())
+            {
+                return Err("Landmarks do not match the declared schema.".into());
             }
             if landmarks.points.len() > 1024
                 || landmarks.points.iter().flatten().any(|p| {

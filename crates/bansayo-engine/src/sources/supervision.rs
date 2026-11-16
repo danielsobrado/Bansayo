@@ -1,6 +1,6 @@
 //! Source isolation and capped restart policy. A failed source cannot terminate tracking or HTTP.
 use super::{Ingest, Source, SourceContext};
-use kinexa_contracts::DeviceId;
+use bansayo_contracts::DeviceId;
 use std::time::{Duration, Instant};
 pub const MAX_FAILURES: u32 = 5;
 pub const INITIAL_BACKOFF: Duration = Duration::from_millis(100);
