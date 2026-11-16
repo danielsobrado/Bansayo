@@ -123,9 +123,15 @@ pub fn load(dir: &Path, id: &SessionId) -> Result<Recording, String> {
         }
     }
     events.sort_by_key(|e| e.accepted_us);
+    let initial: Context = initial.ok_or("Recording context is missing.")?;
+    // Replay ends at the session duration, so every event must be within it to be replayed.
+    let end = initial.started_t_us.saturating_add(session.duration_us);
+    if events.last().is_some_and(|e| e.accepted_us > end) {
+        return Err("Recording events extend beyond the session duration.".into());
+    }
     Ok(Recording {
         session,
-        initial: initial.ok_or("Recording context is missing.")?,
+        initial,
         events,
     })
 }

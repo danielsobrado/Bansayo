@@ -6,6 +6,8 @@ use crate::{
     skeleton::Skeleton,
 };
 use bansayo_contracts::*;
+/// Solver ticks per `advance` call; a longer backlog continues on the next call.
+pub const MAX_TICKS_PER_ADVANCE: usize = 256;
 pub struct Replay {
     pub recording: Recording,
     pub registry: Registry,
@@ -53,22 +55,36 @@ impl Replay {
         self.cursor = 0;
         self.position_us = position;
         self.clock_position = position as f64;
-        self.apply_until(self.recording.initial.started_t_us + position)?;
+        self.apply_until(self.recording.initial.started_t_us + position, None)?;
         self.next_tick = (position as f64 * self.rate() / 1e6).ceil() as u64;
         Ok(())
     }
     fn rate(&self) -> f64 {
         self.recording.initial.config.engine.publish_rate_hz
     }
-    fn apply_until(&mut self, time: u64) -> Result<(), String> {
-        while let Some(event) = self
+    fn tick_offset(&self, tick: u64) -> u64 {
+        (tick as f64 * 1e6 / self.rate()).round() as u64
+    }
+    /// Applies every recorded event accepted at or before `time`, in recorded order, and appends
+    /// the 2D landmarks of the applied camera observations to `landmarks`.
+    fn apply_until(
+        &mut self,
+        time: u64,
+        mut landmarks: Option<&mut Vec<ServerMessage>>,
+    ) -> Result<(), String> {
+        while let Some(recorded) = self
             .recording
             .events
             .get(self.cursor)
             .filter(|e| e.accepted_us <= time)
         {
-            match &event.data {
+            match &recorded.data {
                 RecordedData::Event(event) => {
+                    if let (Some(out), SourceEvent::Observation { observation }) =
+                        (landmarks.as_deref_mut(), event.as_ref())
+                    {
+                        out.extend(landmarks_2d(observation));
+                    }
                     self.registry.event(*event.clone());
                 }
                 RecordedData::Context(context) => {
@@ -121,46 +137,46 @@ impl Replay {
             .chain(self.solve_at(time))
             .collect()
     }
-    /// Fixed virtual ticks are independent of wall-clock pacing. The caller publishes frames as
-    /// latest only; recorded 2D landmarks come out in recorded order, before the tick that applied them.
+    /// Advances the virtual clock. Solver ticks run at fixed virtual intervals, each after the
+    /// events accepted by its time; once no tick is pending, events up to the virtual target are
+    /// applied too, so observations after the last tick are not lost. Recorded 2D landmarks come
+    /// out once each, in recorded order. The output depends only on the virtual time reached, not
+    /// on how it was divided into calls.
     pub fn advance(&mut self, elapsed_us: u64) -> Result<Vec<ServerMessage>, String> {
         if self.paused {
             return Ok(vec![]);
         }
         self.clock_position += elapsed_us as f64 * self.speed as f64;
         let duration = self.recording.session.duration_us;
+        let started = self.recording.initial.started_t_us;
         let target = (self.clock_position as u64).min(duration);
-        let mut frames = vec![];
-        // A pathological scheduling pause cannot allocate an unbounded tick batch.
-        for _ in 0..256 {
-            let offset = (self.next_tick as f64 * 1e6 / self.rate()).round() as u64;
+        let mut messages = vec![];
+        let mut ticks = 0;
+        loop {
+            let offset = self.tick_offset(self.next_tick);
             if offset > target {
                 break;
             }
-            let time = self.recording.initial.started_t_us + offset;
-            let start = self.cursor;
-            self.apply_until(time)?;
-            for recorded in &self.recording.events[start..self.cursor] {
-                if let RecordedData::Event(event) = &recorded.data
-                    && let SourceEvent::Observation { observation } = event.as_ref()
-                {
-                    frames.extend(landmarks_2d(observation));
-                }
+            if ticks == MAX_TICKS_PER_ADVANCE {
+                // Backlog: the position stops at the last solved tick; later events wait for it.
+                return Ok(messages);
             }
-            frames.extend(self.solve_at(time));
+            self.apply_until(started + offset, Some(&mut messages))?;
+            messages.extend(self.solve_at(started + offset));
+            self.position_us = offset;
             self.next_tick += 1;
+            ticks += 1;
         }
+        self.apply_until(started + target, Some(&mut messages))?;
         self.position_us = target;
-        if self.clock_position >= duration as f64
-            && (self.next_tick as f64 * 1e6 / self.rate()).round() as u64 > duration
-        {
+        if self.clock_position >= duration as f64 {
             if self.looping && duration > 0 {
                 self.seek(0)?;
             } else {
                 self.paused = true;
             }
         }
-        Ok(frames)
+        Ok(messages)
     }
 }
 fn landmarks_2d(observation: &SensorObservation) -> Option<ServerMessage> {

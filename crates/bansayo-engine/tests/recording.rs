@@ -208,11 +208,11 @@ sources:
     while !replay.paused {
         replayed.extend(landmark_seqs(&replay.advance(10_000).unwrap()));
     }
-    // Ticks stop at the recording's end; at most one camera frame can fall after the last tick.
-    assert_eq!(replayed, recorded[..replayed.len()]);
-    assert!(
-        recorded.len() - replayed.len() <= 1,
-        "{replayed:?} vs {recorded:?}"
+    // Every recorded camera frame replays exactly once, including any after the last tick.
+    assert_eq!(replayed, recorded);
+    assert_eq!(
+        replay.position_us, recording.session.duration_us,
+        "a finished replay reports the session end"
     );
     // A paused seek shows the camera frame current at that position.
     let (accepted_us, seq) = frames[2];
