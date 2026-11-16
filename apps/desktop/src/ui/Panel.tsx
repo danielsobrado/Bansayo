@@ -12,7 +12,10 @@ interface PanelProps {
 /** A docked panel section with an uppercase label title. */
 export function Panel({ title, titleId, className, children }: PanelProps) {
   return (
-    <section className={className ? `${styles.panel} ${className}` : styles.panel} aria-labelledby={titleId}>
+    <section
+      className={className ? `${styles.panel} ${className}` : styles.panel}
+      aria-labelledby={titleId}
+    >
       <h2 className={styles.title} id={titleId}>
         {title}
       </h2>

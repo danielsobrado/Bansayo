@@ -8,6 +8,8 @@ rust-version.workspace = true
 
 [dependencies]
 kinexa-contracts.workspace = true
+mcap.workspace = true
+bytes.workspace = true
 axum.workspace = true
 clap.workspace = true
 futures-util.workspace = true

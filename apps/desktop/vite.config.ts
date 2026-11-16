@@ -25,10 +25,19 @@ export default defineConfig(({ command, mode }) => {
 
   return {
     resolve: {
-      alias: { "@contracts": fileURLToPath(new URL("../../contracts/ts/index.ts", import.meta.url)) },
+      alias: {
+        "@contracts": fileURLToPath(
+          new URL("../../contracts/ts/index.ts", import.meta.url),
+        ),
+      },
     },
     define: { __ENGINE_URL__: JSON.stringify(httpOrigin) },
-    server: { port: 5173, strictPort: true, fs: { allow: ["../.."] } },
+    server: {
+      port: 5173,
+      strictPort: true,
+      fs: { allow: ["../.."] },
+      watch: { ignored: ["**/src-tauri/**"] },
+    },
     preview: { port: 5173, strictPort: true },
     build: { assetsInlineLimit: 0, sourcemap: false },
     plugins: [

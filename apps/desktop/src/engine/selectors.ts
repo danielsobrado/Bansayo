@@ -14,32 +14,47 @@ import type {
 
 export type CalibrationReadiness = "ready" | "action_needed" | "assumptions";
 
-const NEEDS_ACTION: ReadonlySet<string> = new Set<CalibrationState>(["missing", "stale", "invalid"]);
+const NEEDS_ACTION: ReadonlySet<string> = new Set<CalibrationState>([
+  "missing",
+  "stale",
+  "invalid",
+]);
 
 /**
  * Status-bar summary of the calibration states the engine reports: any missing, stale or invalid
  * profile means action is needed; otherwise any assumed one means running on assumptions.
  */
-export function calibrationReadiness(state: SystemState | null): CalibrationReadiness | null {
+export function calibrationReadiness(
+  state: SystemState | null,
+): CalibrationReadiness | null {
   if (!state) return null;
   const states: string[] = state.calibration.map((c) => c.state);
-  for (const d of state.devices) for (const c of d.calibration) states.push(c.state);
+  for (const d of state.devices)
+    for (const c of d.calibration) states.push(c.state);
   if (states.some((s) => NEEDS_ACTION.has(s))) return "action_needed";
   if (states.includes("assumed")) return "assumptions";
   return "ready";
 }
 
 /** Distinct origins that are not `live`, in order of first appearance. */
-export function nonLiveOrigins(origins: readonly Origin[] | null | undefined): string[] {
+export function nonLiveOrigins(
+  origins: readonly Origin[] | null | undefined,
+): string[] {
   if (!origins) return [];
   return [...new Set(origins.filter((o) => o !== "live"))];
 }
 
-export function featureReasons(state: SystemState | null, id: FeatureId): Reason[] {
+export function featureReasons(
+  state: SystemState | null,
+  id: FeatureId,
+): Reason[] {
   return state?.features.find((f) => f.id === id)?.reasons ?? [];
 }
 
-export function deviceById(state: SystemState | null, id: string): DeviceStatus | null {
+export function deviceById(
+  state: SystemState | null,
+  id: string,
+): DeviceStatus | null {
   return state?.devices.find((d) => d.descriptor.id === id) ?? null;
 }
 

@@ -3,13 +3,13 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// The only `schema_version` this build supports.
 pub const SUPPORTED_SCHEMA_VERSION: u32 = 1;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
     pub schema_version: u32,
@@ -33,7 +33,7 @@ pub struct Config {
     pub processing_profiles: Option<Value>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct EngineConfig {
     /// Skeleton solve and publication rate.
@@ -46,11 +46,15 @@ pub struct EngineConfig {
 
 impl Default for EngineConfig {
     fn default() -> Self {
-        Self { publish_rate_hz: 60.0, stale_after_ms: 250, data_dir: PathBuf::from("./data") }
+        Self {
+            publish_rate_hz: 60.0,
+            stale_after_ms: 250,
+            data_dir: PathBuf::from("./data"),
+        }
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct ApiConfig {
     pub bind: String,
@@ -73,7 +77,7 @@ impl Default for ApiConfig {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum LogLevel {
     Trace,
@@ -96,7 +100,7 @@ impl LogLevel {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum LogFormat {
     #[default]
@@ -104,14 +108,14 @@ pub enum LogFormat {
     Json,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct LoggingConfig {
     pub level: LogLevel,
     pub format: LogFormat,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct SkeletonConfig {
     pub model: String,
@@ -120,11 +124,14 @@ pub struct SkeletonConfig {
 
 impl Default for SkeletonConfig {
     fn default() -> Self {
-        Self { model: "kinexa.body.v1".into(), height_m: 1.75 }
+        Self {
+            model: "kinexa.body.v1".into(),
+            height_m: 1.75,
+        }
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct QualityConfig {
     /// Measured rate below this fraction of nominal → degraded.
@@ -137,12 +144,16 @@ pub struct QualityConfig {
 
 impl Default for QualityConfig {
     fn default() -> Self {
-        Self { degraded_rate_fraction: 0.7, degraded_quality: 0.5, disconnect_after_ms: 1000 }
+        Self {
+            degraded_rate_fraction: 0.7,
+            degraded_quality: 0.5,
+            disconnect_after_ms: 1000,
+        }
     }
 }
 
 /// A source. Designed kinds parse so they can be rejected with a clear message.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum SourceConfig {
     Simulated(SimulatedSourceConfig),
@@ -152,14 +163,14 @@ pub enum SourceConfig {
 }
 
 /// Fields of a source kind that is designed but not implemented.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct DesignedSourceConfig {
     pub id: String,
     #[serde(flatten)]
     pub rest: BTreeMap<String, Value>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct SimulatedSourceConfig {
     pub id: String,
@@ -180,7 +191,7 @@ pub struct SimulatedSourceConfig {
     #[serde(default)]
     pub scenario_period_s: Option<f64>,
     #[serde(default)]
-    pub scenario: Option<Value>,
+    pub scenario: Option<Vec<ScenarioStep>>,
 }
 
 fn enabled_default() -> bool {
@@ -195,7 +206,7 @@ fn speed_default() -> f64 {
     1.0
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct SimTrackerConfig {
     pub id: String,
@@ -206,7 +217,7 @@ pub struct SimTrackerConfig {
     pub heading_offset_deg: f64,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct SimCameraConfig {
     pub id: String,
@@ -217,4 +228,13 @@ pub struct SimCameraConfig {
     pub look_at_m: [f64; 3],
     #[serde(default)]
     pub noise_px: f64,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ScenarioStep {
+    pub at_s: f64,
+    pub device: String,
+    pub action: kinexa_contracts::FaultAction,
+    pub quality: Option<f32>,
 }

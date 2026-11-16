@@ -106,14 +106,28 @@ export class SkeletonRig {
       "solid-derived": fill(palette.derived, 1),
       inferred: fill(palette.inferred, INFERRED_OPACITY),
     };
-    this.lineMaterial = new LineDashedMaterial({ color: palette.inferred, dashSize: DASH_M, gapSize: DASH_M });
+    this.lineMaterial = new LineDashedMaterial({
+      color: palette.inferred,
+      dashSize: DASH_M,
+      gapSize: DASH_M,
+    });
     this.outlineMaterial = new LineBasicMaterial(); // replaced below; keeps the field definitely assigned
     this.outlineMaterial.dispose();
-    this.outlineMaterial = new MeshStandardMaterial({ color: palette.accent, side: BackSide, roughness: 1, metalness: 0 });
-    for (const pair of Object.values(this.materials)) this.disposables.push(pair.normal, pair.dim);
+    this.outlineMaterial = new MeshStandardMaterial({
+      color: palette.accent,
+      side: BackSide,
+      roughness: 1,
+      metalness: 0,
+    });
+    for (const pair of Object.values(this.materials))
+      this.disposables.push(pair.normal, pair.dim);
     this.disposables.push(this.lineMaterial, this.outlineMaterial);
 
-    const jointGeometry = new SphereGeometry(1, RADIAL_SEGMENTS, RADIAL_SEGMENTS / 2);
+    const jointGeometry = new SphereGeometry(
+      1,
+      RADIAL_SEGMENTS,
+      RADIAL_SEGMENTS / 2,
+    );
     this.disposables.push(jointGeometry);
     const up = new Vector3(0, 1, 0);
 
@@ -122,9 +136,15 @@ export class SkeletonRig {
       bone.name = seg.id;
       const tail = new Vector3(...seg.tail_m);
       const length = tail.length();
-      const r0 = Math.min(RADIUS_MAX_M, Math.max(RADIUS_MIN_M, length * RADIUS_PER_LENGTH));
+      const r0 = Math.min(
+        RADIUS_MAX_M,
+        Math.max(RADIUS_MIN_M, length * RADIUS_PER_LENGTH),
+      );
 
-      const joint = new Mesh(jointGeometry, this.materials["solid-derived"].normal);
+      const joint = new Mesh(
+        jointGeometry,
+        this.materials["solid-derived"].normal,
+      );
       joint.scale.setScalar(r0 * JOINT_RADIUS_FACTOR);
       joint.userData.segmentIndex = i;
       bone.add(joint);
@@ -134,7 +154,10 @@ export class SkeletonRig {
       if (length > 0) {
         const geometry = taperedCapsule(length, r0, r0 * DISTAL_TAPER);
         this.disposables.push(geometry);
-        const capsule = new Mesh(geometry, this.materials["solid-derived"].normal);
+        const capsule = new Mesh(
+          geometry,
+          this.materials["solid-derived"].normal,
+        );
         capsule.quaternion.setFromUnitVectors(up, tail.clone().normalize());
         capsule.userData.segmentIndex = i;
         const outline = new Mesh(geometry, this.outlineMaterial);
@@ -146,7 +169,10 @@ export class SkeletonRig {
         this.outlines.push(outline);
         this.pickables.push(capsule);
 
-        const lineGeometry = new BufferGeometry().setFromPoints([new Vector3(), tail]);
+        const lineGeometry = new BufferGeometry().setFromPoints([
+          new Vector3(),
+          tail,
+        ]);
         this.disposables.push(lineGeometry);
         const line = new Line(lineGeometry, this.lineMaterial);
         line.computeLineDistances();

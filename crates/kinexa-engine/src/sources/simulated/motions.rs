@@ -125,12 +125,26 @@ impl Motion {
             }
             Self::KneeFlexion => {
                 let p = phase(t_s, KNEE_FLEXION_PERIOD_S);
-                let flex = |active: bool| if active { rad(KNEE_FLEXION_MAX_DEG) * (2.0 * PI * p).sin().powi(2) } else { 0.0 };
-                ScriptedAngles { left_knee: flex(p < 0.5), right_knee: flex(p >= 0.5), ..Default::default() }
+                let flex = |active: bool| {
+                    if active {
+                        rad(KNEE_FLEXION_MAX_DEG) * (2.0 * PI * p).sin().powi(2)
+                    } else {
+                        0.0
+                    }
+                };
+                ScriptedAngles {
+                    left_knee: flex(p < 0.5),
+                    right_knee: flex(p >= 0.5),
+                    ..Default::default()
+                }
             }
             Self::ArmRaise => {
                 let e = rad(ARM_RAISE_MAX_DEG) * bump(phase(t_s, ARM_RAISE_PERIOD_S));
-                ScriptedAngles { left_shoulder: e, right_shoulder: e, ..Default::default() }
+                ScriptedAngles {
+                    left_shoulder: e,
+                    right_shoulder: e,
+                    ..Default::default()
+                }
             }
             Self::FrontKick => {
                 let s = bump(phase(t_s, FRONT_KICK_PERIOD_S));

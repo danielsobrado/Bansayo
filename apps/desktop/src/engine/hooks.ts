@@ -1,12 +1,27 @@
 /** React access to the engine stores. Low-rate only: pose data is read by the render loop. */
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import type { ApiResponse, SkeletonDefinition, SystemState } from "@contracts";
 import { announce } from "../lib/announcer";
-import { connectionStore, frameStore, skeletonStore, systemStateStore, type ConnectionStatus, type FrameMessage } from "./stores";
+import {
+  connectionStore,
+  frameStore,
+  skeletonStore,
+  systemStateStore,
+  type ConnectionStatus,
+  type FrameMessage,
+} from "./stores";
 
 /** Selects from the system state; recomputed only when the state or the selector changes. */
 export function useSystemState<T>(select: (s: SystemState | null) => T): T {
-  const cache = useRef<{ s: SystemState | null; select: unknown; v: T } | null>(null);
+  const cache = useRef<{ s: SystemState | null; select: unknown; v: T } | null>(
+    null,
+  );
   return useSyncExternalStore(systemStateStore.subscribe, () => {
     const s = systemStateStore.get();
     const c = cache.current;
@@ -29,10 +44,16 @@ export function useSkeleton(): SkeletonDefinition | null {
  * Samples the latest frame at `hz` and returns what `select` takes from it. `ageMs` is the time
  * since the frame was received. Selectors should return readouts, not pose geometry.
  */
-export function useSampledFrame<T>(hz: number, select: (frame: FrameMessage | null, ageMs: number) => T): T {
+export function useSampledFrame<T>(
+  hz: number,
+  select: (frame: FrameMessage | null, ageMs: number) => T,
+): T {
   const read = (): T => {
     const f = frameStore.frame;
-    return select(f, f ? performance.now() - frameStore.receivedAt : Number.POSITIVE_INFINITY);
+    return select(
+      f,
+      f ? performance.now() - frameStore.receivedAt : Number.POSITIVE_INFINITY,
+    );
   };
   const [value, setValue] = useState(read);
   const readRef = useRef(read);
@@ -54,7 +75,10 @@ export interface ActionStatus {
 export function useAction<A extends unknown[], T>(
   fn: (...args: A) => Promise<ApiResponse<T>>,
 ): [(...args: A) => Promise<ApiResponse<T>>, ActionStatus] {
-  const [status, setStatus] = useState<ActionStatus>({ pending: false, error: null });
+  const [status, setStatus] = useState<ActionStatus>({
+    pending: false,
+    error: null,
+  });
   const run = useCallback(
     async (...args: A) => {
       setStatus({ pending: true, error: null });

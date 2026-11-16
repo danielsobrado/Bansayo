@@ -22,7 +22,12 @@ interface SparklineProps {
 }
 
 /** A rolling trace on a small canvas. Draws in the current text colour. */
-export function Sparkline({ series, windowUs, version, label }: SparklineProps) {
+export function Sparkline({
+  series,
+  windowUs,
+  version,
+  label,
+}: SparklineProps) {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -32,7 +37,10 @@ export function Sparkline({ series, windowUs, version, label }: SparklineProps) 
     const dpr = window.devicePixelRatio || 1;
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
-    if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+    if (
+      canvas.width !== Math.round(w * dpr) ||
+      canvas.height !== Math.round(h * dpr)
+    ) {
       canvas.width = Math.round(w * dpr);
       canvas.height = Math.round(h * dpr);
     }
@@ -60,7 +68,8 @@ export function Sparkline({ series, windowUs, version, label }: SparklineProps) 
     const span = Math.max(max - min, MIN_SPAN);
     const mid = (max + min) / 2;
     const pad = 2;
-    const y = (v: number): number => pad + (h - 2 * pad) * (1 - (v - (mid - span / 2)) / span);
+    const y = (v: number): number =>
+      pad + (h - 2 * pad) * (1 - (v - (mid - span / 2)) / span);
     const x = (t: number): number => ((t - tStart) / windowUs) * w;
 
     ctx.strokeStyle = getComputedStyle(canvas).color;
@@ -83,5 +92,7 @@ export function Sparkline({ series, windowUs, version, label }: SparklineProps) 
     ctx.stroke();
   }, [series, windowUs, version]);
 
-  return <canvas ref={ref} className={styles.canvas} role="img" aria-label={label} />;
+  return (
+    <canvas ref={ref} className={styles.canvas} role="img" aria-label={label} />
+  );
 }

@@ -1,0 +1,55 @@
+schema_version: 1
+engine:
+  publish_rate_hz: 60
+  stale_after_ms: 250
+  data_dir: ./data
+api:
+  bind: 127.0.0.1:7700
+assignments:
+  SIM-T01: pelvis
+  SIM-T02: chest
+  SIM-T03: left_thigh
+  SIM-T04: left_shin
+  SIM-T05: right_thigh
+  SIM-T06: right_shin
+  SIM-T07: left_foot
+  SIM-T08: right_foot
+  SIM-T09: left_upper_arm
+  SIM-T10: left_forearm
+  SIM-T11: right_upper_arm
+  SIM-T12: right_forearm
+sources:
+  - id: sim
+    kind: simulated
+    enabled: true
+    seed: 42
+    motion: standing
+    speed: 1.0
+    trackers:
+      - { id: SIM-T01, rate_hz: 100, noise_deg: 0.2 }
+      - { id: SIM-T02, rate_hz: 100, noise_deg: 0.2 }
+      - { id: SIM-T03, rate_hz: 100, noise_deg: 0.2 }
+      - { id: SIM-T04, rate_hz: 100, noise_deg: 0.2 }
+      - { id: SIM-T05, rate_hz: 100, noise_deg: 0.2 }
+      - { id: SIM-T06, rate_hz: 100, noise_deg: 0.2 }
+      - { id: SIM-T07, rate_hz: 100, noise_deg: 0.2 }
+      - { id: SIM-T08, rate_hz: 100, noise_deg: 0.2 }
+      - { id: SIM-T09, rate_hz: 100, noise_deg: 0.2 }
+      - { id: SIM-T10, rate_hz: 100, noise_deg: 0.2 }
+      - { id: SIM-T11, rate_hz: 100, noise_deg: 0.2 }
+      - { id: SIM-T12, rate_hz: 100, noise_deg: 0.2 }
+    cameras:
+      - id: SIM-CAM1
+        rate_hz: 30
+        resolution_px: [1280, 720]
+        fov_y_deg: 50
+        position_m: [0.0, 1.2, 3.2]
+        look_at_m: [0.0, 1.0, 0.0]
+        noise_px: 1.5
+      - id: SIM-CAM2
+        rate_hz: 30
+        resolution_px: [1280, 720]
+        fov_y_deg: 50
+        position_m: [3.2, 1.2, 0.0]
+        look_at_m: [0.0, 1.0, 0.0]
+        noise_px: 1.5

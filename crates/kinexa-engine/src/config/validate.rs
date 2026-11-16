@@ -54,6 +54,8 @@ pub struct SimulatedSpec {
     pub speed: f64,
     pub trackers: Vec<TrackerSpec>,
     pub cameras: Vec<CameraSpec>,
+    pub scenario: Vec<ScenarioStep>,
+    pub scenario_period_s: Option<f64>,
 }
 
 /// A configuration that passed validation, with typed identifiers.
@@ -77,28 +79,43 @@ struct Check {
 
 impl Check {
     fn err(&mut self, path: impl Into<String>, message: impl Into<String>) {
-        self.problems.push(Problem { path: path.into(), message: message.into() });
+        self.problems.push(Problem {
+            path: path.into(),
+            message: message.into(),
+        });
     }
 
     fn warn(&mut self, path: impl Into<String>, message: impl Into<String>) {
-        self.warnings.push(Problem { path: path.into(), message: message.into() });
+        self.warnings.push(Problem {
+            path: path.into(),
+            message: message.into(),
+        });
     }
 
     fn range(&mut self, path: &str, value: f64, min: f64, max: f64) {
         if !(value.is_finite() && value >= min && value <= max) {
-            self.err(path, format!("must be between {min} and {max}, got {value}"));
+            self.err(
+                path,
+                format!("must be between {min} and {max}, got {value}"),
+            );
         }
     }
 
     fn positive(&mut self, path: &str, value: f64, max: f64) {
         if !(value.is_finite() && value > 0.0 && value <= max) {
-            self.err(path, format!("must be greater than 0 and at most {max}, got {value}"));
+            self.err(
+                path,
+                format!("must be greater than 0 and at most {max}, got {value}"),
+            );
         }
     }
 }
 
 pub(super) fn validate(config: Config) -> Result<Validated, Vec<Problem>> {
-    let mut c = Check { problems: vec![], warnings: vec![] };
+    let mut c = Check {
+        problems: vec![],
+        warnings: vec![],
+    };
     if config.schema_version != SUPPORTED_SCHEMA_VERSION {
         c.err(
             "schema_version",
@@ -111,7 +128,10 @@ pub(super) fn validate(config: Config) -> Result<Validated, Vec<Problem>> {
     check_engine(&mut c, &config.engine);
     check_quality(&mut c, &config.quality);
     let bind = check_api(&mut c, &config.api);
-    let skeleton = Skeleton::builtin(&config.skeleton.model, config.skeleton.height_m.clamp(0.5, 2.5));
+    let skeleton = Skeleton::builtin(
+        &config.skeleton.model,
+        config.skeleton.height_m.clamp(0.5, 2.5),
+    );
     if let Err(e) = &skeleton {
         c.err("skeleton.model", e.to_string());
     }
@@ -120,9 +140,20 @@ pub(super) fn validate(config: Config) -> Result<Validated, Vec<Problem>> {
         c.err("processing_profiles", "not implemented in this build");
     }
     let (simulated, devices) = check_sources(&mut c, &config.sources);
-    let assignments = check_assignments(&mut c, &config.assignments, skeleton.ok().as_ref(), &devices);
+    let assignments = check_assignments(
+        &mut c,
+        &config.assignments,
+        skeleton.ok().as_ref(),
+        &devices,
+    );
     if c.problems.is_empty() {
-        Ok(Validated { config, bind: bind.unwrap_or_else(|| ([127, 0, 0, 1], 0).into()), assignments, simulated, warnings: c.warnings })
+        Ok(Validated {
+            config,
+            bind: bind.unwrap_or_else(|| ([127, 0, 0, 1], 0).into()),
+            assignments,
+            simulated,
+            warnings: c.warnings,
+        })
     } else {
         Err(c.problems)
     }
@@ -130,35 +161,74 @@ pub(super) fn validate(config: Config) -> Result<Validated, Vec<Problem>> {
 
 fn check_engine(c: &mut Check, e: &EngineConfig) {
     c.range("engine.publish_rate_hz", e.publish_rate_hz, 1.0, 1000.0);
-    c.range("engine.stale_after_ms", e.stale_after_ms as f64, 1.0, 60_000.0);
+    c.range(
+        "engine.stale_after_ms",
+        e.stale_after_ms as f64,
+        1.0,
+        60_000.0,
+    );
     if let Err(msg) = check_data_dir(&e.data_dir) {
-        c.err("engine.data_dir", format!("{} is not writable: {msg}", e.data_dir.display()));
+        c.err(
+            "engine.data_dir",
+            format!("{} is not writable: {msg}", e.data_dir.display()),
+        );
     }
 }
 
 fn check_data_dir(dir: &PathBuf) -> Result<(), String> {
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    let probe = dir.join(".kinexa-write-probe");
-    std::fs::write(&probe, b"").map_err(|e| e.to_string())?;
-    std::fs::remove_file(&probe).map_err(|e| e.to_string())
+    for index in 0..64 {
+        let probe = dir.join(format!(
+            ".kinexa-write-probe-{}-{index}",
+            std::process::id()
+        ));
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&probe)
+        {
+            Ok(file) => {
+                drop(file);
+                return std::fs::remove_file(probe).map_err(|e| e.to_string());
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e.to_string()),
+        }
+    }
+    Err("could not allocate a validation probe".into())
 }
 
 fn check_quality(c: &mut Check, q: &QualityConfig) {
-    c.positive("quality.degraded_rate_fraction", q.degraded_rate_fraction, 1.0);
+    c.positive(
+        "quality.degraded_rate_fraction",
+        q.degraded_rate_fraction,
+        1.0,
+    );
     c.range("quality.degraded_quality", q.degraded_quality, 0.0, 1.0);
-    c.range("quality.disconnect_after_ms", q.disconnect_after_ms as f64, 1.0, 60_000.0);
+    c.range(
+        "quality.disconnect_after_ms",
+        q.disconnect_after_ms as f64,
+        1.0,
+        60_000.0,
+    );
 }
 
 fn check_api(c: &mut Check, api: &ApiConfig) -> Option<SocketAddr> {
     match api.bind.parse::<SocketAddr>() {
         Ok(addr) => {
             if !addr.ip().is_loopback() {
-                c.warn("api.bind", format!("{addr} exposes the engine to the network"));
+                c.warn(
+                    "api.bind",
+                    format!("{addr} exposes the engine to the network"),
+                );
             }
             Some(addr)
         }
         Err(_) => {
-            c.err("api.bind", format!("{:?} is not an address such as 127.0.0.1:7700", api.bind));
+            c.err(
+                "api.bind",
+                format!("{:?} is not an address such as 127.0.0.1:7700", api.bind),
+            );
             None
         }
     }
@@ -166,7 +236,10 @@ fn check_api(c: &mut Check, api: &ApiConfig) -> Option<SocketAddr> {
 
 /// Validates every source; returns the enabled simulated sources and every device id with its
 /// kind (`true` for orientation trackers).
-fn check_sources(c: &mut Check, sources: &[SourceConfig]) -> (Vec<SimulatedSpec>, HashMap<String, bool>) {
+fn check_sources(
+    c: &mut Check,
+    sources: &[SourceConfig],
+) -> (Vec<SimulatedSpec>, HashMap<String, bool>) {
     let mut source_ids: HashMap<String, usize> = HashMap::new();
     let mut devices: HashMap<String, (String, bool)> = HashMap::new();
     let mut out = vec![];
@@ -174,13 +247,21 @@ fn check_sources(c: &mut Check, sources: &[SourceConfig]) -> (Vec<SimulatedSpec>
         let path = format!("sources[{i}]");
         let id = match source {
             SourceConfig::Simulated(s) => &s.id,
-            SourceConfig::SlimevrSolarxr(d) | SourceConfig::Esp32Udp(d) | SourceConfig::Camera(d) => &d.id,
+            SourceConfig::SlimevrSolarxr(d)
+            | SourceConfig::Esp32Udp(d)
+            | SourceConfig::Camera(d) => &d.id,
         };
         if SourceId::new(id.as_str()).is_err() {
-            c.err(format!("{path}.id"), format!("{id:?} is not a valid source id (A-Z a-z 0-9 _ . -)"));
+            c.err(
+                format!("{path}.id"),
+                format!("{id:?} is not a valid source id (A-Z a-z 0-9 _ . -)"),
+            );
         }
         if let Some(prev) = source_ids.insert(id.clone(), i) {
-            c.err(format!("{path}.id"), format!("{id:?} is already used by sources[{prev}]"));
+            c.err(
+                format!("{path}.id"),
+                format!("{id:?} is already used by sources[{prev}]"),
+            );
         }
         match source {
             SourceConfig::Simulated(s) => {
@@ -191,7 +272,13 @@ fn check_sources(c: &mut Check, sources: &[SourceConfig]) -> (Vec<SimulatedSpec>
             _ => c.err(format!("{path}.kind"), "not implemented in this build"),
         }
     }
-    (out, devices.into_iter().map(|(k, (_, tracker))| (k, tracker)).collect())
+    (
+        out,
+        devices
+            .into_iter()
+            .map(|(k, (_, tracker))| (k, tracker))
+            .collect(),
+    )
 }
 
 fn claim_device(
@@ -204,11 +291,17 @@ fn claim_device(
 ) -> Option<DeviceId> {
     let parsed = DeviceId::new(id);
     if parsed.is_err() {
-        c.err(path, format!("{id:?} is not a valid device id (A-Z a-z 0-9 _ . -, at most 64)"));
+        c.err(
+            path,
+            format!("{id:?} is not a valid device id (A-Z a-z 0-9 _ . -, at most 64)"),
+        );
     }
     if let Some((prev, prev_tracker)) = devices.get(id) {
         let kind = if *prev_tracker { "tracker" } else { "camera" };
-        c.err(path, format!("{id:?} is already used by a {kind} at {prev}"));
+        c.err(
+            path,
+            format!("{id:?} is already used by a {kind} at {prev}"),
+        );
     } else {
         devices.insert(id.to_owned(), (format!("{path} ({what})"), tracker));
     }
@@ -224,18 +317,43 @@ fn check_simulated(
     let motion = Motion::from_id(&s.motion);
     if motion.is_none() {
         let ids: Vec<&str> = Motion::ALL.iter().map(|m| m.id()).collect();
-        c.err(format!("{path}.motion"), format!("{:?} is not one of {}", s.motion, ids.join(", ")));
+        c.err(
+            format!("{path}.motion"),
+            format!("{:?} is not one of {}", s.motion, ids.join(", ")),
+        );
     }
     c.positive(&format!("{path}.speed"), s.speed, MAX_SIM_SPEED);
-    if s.scenario.is_some() || s.scenario_period_s.is_some() {
-        c.err(format!("{path}.scenario"), "scripted scenarios are not implemented in this build");
+    if let Some(period) = s.scenario_period_s {
+        c.positive(&format!("{path}.scenario_period_s"), period, 86400.0);
+    }
+    for (i, step) in s.scenario.iter().flatten().enumerate() {
+        let p = format!("{path}.scenario[{i}]");
+        c.range(
+            &format!("{p}.at_s"),
+            step.at_s,
+            0.0,
+            s.scenario_period_s.unwrap_or(86400.0),
+        );
+        if !s.trackers.iter().any(|t| t.id == step.device)
+            && !s.cameras.iter().any(|t| t.id == step.device)
+        {
+            c.err(format!("{p}.device"), "must name a device in this source");
+        }
+        if let Some(q) = step.quality {
+            c.range(&format!("{p}.quality"), q as f64, 0.0, 1.0);
+        }
     }
     let mut trackers = vec![];
     for (j, t) in s.trackers.iter().enumerate() {
         let p = format!("{path}.trackers[{j}]");
         c.range(&format!("{p}.rate_hz"), t.rate_hz, 1.0, 1000.0);
         c.range(&format!("{p}.noise_deg"), t.noise_deg, 0.0, 45.0);
-        c.range(&format!("{p}.heading_offset_deg"), t.heading_offset_deg, -180.0, 180.0);
+        c.range(
+            &format!("{p}.heading_offset_deg"),
+            t.heading_offset_deg,
+            -180.0,
+            180.0,
+        );
         if let Some(id) = claim_device(c, &format!("{p}.id"), &t.id, "tracker", true, devices) {
             trackers.push(TrackerSpec {
                 id,
@@ -254,9 +372,16 @@ fn check_simulated(
         }
         c.range(&format!("{p}.fov_y_deg"), k.fov_y_deg, 1.0, 179.0);
         c.range(&format!("{p}.noise_px"), k.noise_px, 0.0, 50.0);
-        let finite = k.position_m.iter().chain(&k.look_at_m).all(|v| v.is_finite());
-        if !finite || k.position_m == k.look_at_m {
-            c.err(format!("{p}.look_at_m"), "must be finite and differ from position_m");
+        let finite = k
+            .position_m
+            .iter()
+            .chain(&k.look_at_m)
+            .all(|v| v.is_finite());
+        if !finite || (k.position_m[0] == k.look_at_m[0] && k.position_m[2] == k.look_at_m[2]) {
+            c.err(
+                format!("{p}.look_at_m"),
+                "must be finite and have a nonvertical viewing direction from position_m",
+            );
         }
         if let Some(id) = claim_device(c, &format!("{p}.id"), &k.id, "camera", false, devices) {
             cameras.push(CameraSpec {
@@ -277,6 +402,8 @@ fn check_simulated(
         speed: s.speed,
         trackers,
         cameras,
+        scenario: s.scenario.clone().unwrap_or_default(),
+        scenario_period_s: s.scenario_period_s,
     })
 }
 
@@ -294,17 +421,31 @@ fn check_assignments(
         if id.is_err() {
             c.err(&path, format!("{device:?} is not a valid device id"));
         }
-        let seg = SegmentId::new(segment.as_str()).ok().filter(|s| skeleton.is_none_or(|sk| sk.index_of(s).is_some()));
+        let seg = SegmentId::new(segment.as_str())
+            .ok()
+            .filter(|s| skeleton.is_none_or(|sk| sk.index_of(s).is_some()));
         if seg.is_none() {
-            c.err(&path, format!("{segment:?} is not a segment of kinexa.body.v1"));
+            c.err(
+                &path,
+                format!("{segment:?} is not a segment of kinexa.body.v1"),
+            );
         }
         match devices.get(device) {
-            None => c.warn(&path, "refers to a device that is not configured; it may appear later"),
-            Some(false) => c.err(&path, "is a camera; only orientation trackers can be assigned"),
+            None => c.warn(
+                &path,
+                "refers to a device that is not configured; it may appear later",
+            ),
+            Some(false) => c.err(
+                &path,
+                "is a camera; only orientation trackers can be assigned",
+            ),
             Some(true) => {}
         }
         if let Some(other) = taken.insert(segment, device) {
-            c.err("assignments", format!("{other} and {device} are both assigned to {segment}"));
+            c.err(
+                "assignments",
+                format!("{other} and {device} are both assigned to {segment}"),
+            );
         }
         if let (Ok(id), Some(seg)) = (id, seg) {
             out.insert(id, seg);
@@ -349,16 +490,38 @@ sources:
             dir = dir.path().display().to_string()
         );
         let p = problems(&yaml);
-        let has = |prefix: &str, text: &str| p.iter().any(|l| l.starts_with(prefix) && l.contains(text));
+        let has =
+            |prefix: &str, text: &str| p.iter().any(|l| l.starts_with(prefix) && l.contains(text));
         assert!(has("schema_version", "2 is not supported"), "{p:#?}");
-        assert!(has("engine.publish_rate_hz", "between 1 and 1000"), "{p:#?}");
+        assert!(
+            has("engine.publish_rate_hz", "between 1 and 1000"),
+            "{p:#?}"
+        );
         assert!(has("api.bind", "not an address"), "{p:#?}");
-        assert!(has("assignments.SIM-T01", "\"left_tigh\" is not a segment"), "{p:#?}");
-        assert!(has("assignments", "SIM-T02 and SIM-T03 are both assigned to pelvis"), "{p:#?}");
+        assert!(
+            has("assignments.SIM-T01", "\"left_tigh\" is not a segment"),
+            "{p:#?}"
+        );
+        assert!(
+            has(
+                "assignments",
+                "SIM-T02 and SIM-T03 are both assigned to pelvis"
+            ),
+            "{p:#?}"
+        );
         assert!(has("sources[0].motion", "\"dance\""), "{p:#?}");
-        assert!(has("sources[0].trackers[2].rate_hz", "between 1 and 1000"), "{p:#?}");
-        assert!(has("sources[0].cameras[0].id", "already used by a tracker"), "{p:#?}");
-        assert!(has("sources[1].kind", "not implemented in this build"), "{p:#?}");
+        assert!(
+            has("sources[0].trackers[2].rate_hz", "between 1 and 1000"),
+            "{p:#?}"
+        );
+        assert!(
+            has("sources[0].cameras[0].id", "already used by a tracker"),
+            "{p:#?}"
+        );
+        assert!(
+            has("sources[1].kind", "not implemented in this build"),
+            "{p:#?}"
+        );
         assert!(p.len() >= 9);
     }
 
@@ -374,7 +537,10 @@ sources:
     #[test]
     fn minimal_configuration_is_valid() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let yaml = format!("schema_version: 1\nengine: {{ data_dir: {:?} }}\n", dir.path().display().to_string());
+        let yaml = format!(
+            "schema_version: 1\nengine: {{ data_dir: {:?} }}\n",
+            dir.path().display().to_string()
+        );
         let v = parse(&yaml).expect("valid");
         assert!(v.simulated.is_empty() && v.assignments.is_empty());
     }

@@ -9,7 +9,7 @@
 
   /* Text */
   --ink-1: oklch(96% 0.005 250);
-  --ink-2: oklch(80% 0.010 250);
+  --ink-2: oklch(80% 0.01 250);
   --ink-3: oklch(66% 0.012 250);
   --accent: oklch(78% 0.13 205);
 
@@ -17,14 +17,14 @@
   --state-tracking: oklch(78% 0.16 150);
   --state-degraded: oklch(80% 0.15 80);
   --state-acquiring: oklch(74% 0.13 250);
-  --state-disconnected: oklch(62% 0.010 250);
+  --state-disconnected: oklch(62% 0.01 250);
   --state-unavailable: oklch(66% 0.19 25);
 
   /* Provenance. --prov-unavailable raised from 50% to 60% lightness for AA on --surface-1. */
   --prov-measured: oklch(96% 0.005 250);
   --prov-derived: oklch(78% 0.13 205);
   --prov-inferred: oklch(72% 0.14 300);
-  --prov-unavailable: oklch(60% 0.010 250);
+  --prov-unavailable: oklch(60% 0.01 250);
 
   /* Type */
   --font-sans: "IBM Plex Sans", system-ui, sans-serif;

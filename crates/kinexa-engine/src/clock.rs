@@ -71,7 +71,9 @@ impl OffsetEstimator {
         }
         self.window.push_back(receive_us as i64 - device_us as i64);
         let offset = self.window.iter().copied().min().unwrap_or(0);
-        u64::try_from(device_us as i64 + offset).unwrap_or(0).min(receive_us)
+        u64::try_from(device_us as i64 + offset)
+            .unwrap_or(0)
+            .min(receive_us)
     }
 
     /// Whether enough samples have been seen for the estimate to be trusted.

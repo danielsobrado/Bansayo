@@ -49,17 +49,19 @@ pub struct Skeleton {
 #[error("skeleton model {0:?} is not built into this engine (available: {MODEL_ID})")]
 pub struct UnknownModel(pub String);
 
-fn mirror(row: &Row) -> (String, Option<String>, [f64; 3], [f64; 3]) {
+type ResolvedRow = (String, Option<String>, [f64; 3], [f64; 3]);
+
+fn mirror(row: &Row) -> ResolvedRow {
     let flip = |v: [f64; 3]| [-v[0], v[1], v[2]];
     let name = |s: &str| s.replacen("left_", "right_", 1);
     (name(row.0), row.1.map(name), flip(row.2), flip(row.3))
 }
 
-fn plain(row: &Row) -> (String, Option<String>, [f64; 3], [f64; 3]) {
+fn plain(row: &Row) -> ResolvedRow {
     (row.0.to_owned(), row.1.map(str::to_owned), row.2, row.3)
 }
 
-fn rows() -> Vec<(String, Option<String>, [f64; 3], [f64; 3])> {
+fn rows() -> Vec<ResolvedRow> {
     CENTRE
         .iter()
         .map(plain)
@@ -91,8 +93,11 @@ impl Skeleton {
             return Err(UnknownModel(model.to_owned()));
         }
         let rows = rows();
-        let index: HashMap<SegmentId, usize> =
-            rows.iter().enumerate().map(|(i, r)| (segment_id(&r.0), i)).collect();
+        let index: HashMap<SegmentId, usize> = rows
+            .iter()
+            .enumerate()
+            .map(|(i, r)| (segment_id(&r.0), i))
+            .collect();
         let segments: Vec<Segment> = rows
             .iter()
             .map(|(id, parent, offset, tail)| Segment {
@@ -109,7 +114,11 @@ impl Skeleton {
             .collect();
         let joints = JOINTS
             .iter()
-            .map(|&(_, _, a, b, _, kind)| Joint { a: index[&segment_id(a)], b: index[&segment_id(b)], kind })
+            .map(|&(_, _, a, b, _, kind)| Joint {
+                a: index[&segment_id(a)],
+                b: index[&segment_id(b)],
+                kind,
+            })
             .collect();
         let definition = SkeletonDefinition {
             model_id: MODEL_ID.into(),
@@ -138,7 +147,12 @@ impl Skeleton {
                 })
                 .collect(),
         };
-        Ok(Self { definition, segments, joints, index })
+        Ok(Self {
+            definition,
+            segments,
+            joints,
+            index,
+        })
     }
 
     pub fn index_of(&self, id: &SegmentId) -> Option<usize> {

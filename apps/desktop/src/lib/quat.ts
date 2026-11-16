@@ -4,7 +4,11 @@ export type Vec3 = [number, number, number];
 export type Quat = [number, number, number, number];
 
 /** Rotates `v` by unit quaternion `q` (v' = q·v·q⁻¹) into `out`, which is returned. */
-export function rotateVec3(q: Readonly<Quat>, v: Readonly<Vec3>, out: Vec3): Vec3 {
+export function rotateVec3(
+  q: Readonly<Quat>,
+  v: Readonly<Vec3>,
+  out: Vec3,
+): Vec3 {
   const [qx, qy, qz, qw] = q;
   const [vx, vy, vz] = v;
   // t = 2 · (q.xyz × v)
@@ -19,7 +23,12 @@ export function rotateVec3(q: Readonly<Quat>, v: Readonly<Vec3>, out: Vec3): Vec
 }
 
 /** World position of the point `local` (in the segment frame) for a segment at `origin` with `rotation`. */
-export function segmentPoint(origin: Readonly<Vec3>, rotation: Readonly<Quat>, local: Readonly<Vec3>, out: Vec3): Vec3 {
+export function segmentPoint(
+  origin: Readonly<Vec3>,
+  rotation: Readonly<Quat>,
+  local: Readonly<Vec3>,
+  out: Vec3,
+): Vec3 {
   rotateVec3(rotation, local, out);
   out[0] += origin[0];
   out[1] += origin[1];

@@ -16,9 +16,16 @@ interface ProvenanceTagProps {
 }
 
 /** Provenance as hue plus border style: solid measured/derived, dashed inferred, dotted unavailable. */
-export function ProvenanceTag({ provenance, short = false }: ProvenanceTagProps) {
+export function ProvenanceTag({
+  provenance,
+  short = false,
+}: ProvenanceTagProps) {
   return (
-    <span className={styles.tag} data-prov={provenance} title={short ? provenance : undefined}>
+    <span
+      className={styles.tag}
+      data-prov={provenance}
+      title={short ? provenance : undefined}
+    >
       {short ? lookup(SHORT, provenance, provenance) : provenance}
     </span>
   );

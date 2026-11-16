@@ -2,7 +2,13 @@
  * Client-side copies of what the engine reports. The connection writes them; components read them
  * through hooks; the render loop reads `frameStore` directly.
  */
-import type { DeviceId, PoseLandmarks2D, ServerMessage, SkeletonDefinition, SystemState } from "@contracts";
+import type {
+  DeviceId,
+  PoseLandmarks2D,
+  ServerMessage,
+  SkeletonDefinition,
+  SystemState,
+} from "@contracts";
 import { createStore } from "./store";
 import { jointHistory } from "./jointHistory";
 
@@ -17,10 +23,15 @@ export type ConnectionStatus =
   | { kind: "disconnected"; retryAt: number }
   | { kind: "incompatible"; engineProtocol: number; supportedProtocol: number };
 
-export const connectionStore = createStore<ConnectionStatus>({ kind: "connecting", attempt: 0 });
+export const connectionStore = createStore<ConnectionStatus>({
+  kind: "connecting",
+  attempt: 0,
+});
 export const systemStateStore = createStore<SystemState | null>(null);
 export const skeletonStore = createStore<SkeletonDefinition | null>(null);
-export const landmarksStore = createStore<ReadonlyMap<DeviceId, PoseLandmarks2D>>(new Map());
+export const landmarksStore = createStore<
+  ReadonlyMap<DeviceId, PoseLandmarks2D>
+>(new Map());
 
 /**
  * Latest frame. A plain mutable holder, not React state: the render loop polls it every animation
@@ -35,6 +46,7 @@ export const frameStore = {
   /** Applies a frame unless its `seq` is not greater than the last applied one. Returns whether it was applied. */
   apply(frame: FrameMessage, now: number): boolean {
     if (frame.seq <= this.lastSeq) return false;
+    if (this.frame && frame.t_us < this.frame.t_us) jointHistory.clear();
     this.lastSeq = frame.seq;
     this.frame = frame;
     this.receivedAt = now;
@@ -43,9 +55,14 @@ export const frameStore = {
   },
 
   clear(): void {
+    this.invalidate();
+    this.lastSeq = -1;
+  },
+
+  /** A new timeline/definition clears readouts without weakening sequence ordering. */
+  invalidate(): void {
     this.frame = null;
     this.receivedAt = 0;
-    this.lastSeq = -1;
     jointHistory.clear();
   },
 };

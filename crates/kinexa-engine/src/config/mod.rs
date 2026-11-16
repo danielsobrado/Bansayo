@@ -4,6 +4,6 @@ mod load;
 mod schema;
 mod validate;
 
-pub use load::{ConfigError, load, parse};
+pub use load::{ConfigError, load, load_with_data_dir, parse};
 pub use schema::*;
-pub use validate::{Problem, Validated};
+pub use validate::{CameraSpec, Problem, SimulatedSpec, TrackerSpec, Validated};

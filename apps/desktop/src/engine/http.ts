@@ -47,9 +47,14 @@ export async function request<T>(
   try {
     json = await res.json();
   } catch {
-    return failure(`The engine answered with an unreadable response (HTTP ${res.status}).`);
+    return failure(
+      `The engine answered with an unreadable response (HTTP ${res.status}).`,
+    );
   }
-  if (!isEnvelope(json)) return failure(`The engine answered with an unexpected response (HTTP ${res.status}).`);
+  if (!isEnvelope(json))
+    return failure(
+      `The engine answered with an unexpected response (HTTP ${res.status}).`,
+    );
   // The envelope is checked; the payload type is the route's contract.
   return json as ApiResponse<T>;
 }

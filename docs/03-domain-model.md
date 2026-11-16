@@ -197,7 +197,11 @@ as such. The same happens when a tracker goes stale: the limb returns to its par
 pose and changes appearance. It does not freeze in its last pose, because a frozen limb looks like
 data.
 
-If no segment at all has a usable orientation, `pose` is `null`.
+Fresh orientation inputs that lack mounting calibration produce an entirely inferred rest pose,
+with reason `mounting_calibration_missing`. This makes the reference-pose capture workflow visible
+without presenting any segment as tracked (acceptance criterion A1.5 in [10](10-poc-plan.md)).
+If no orientation source is configured, or every orientation observation is missing or stale,
+`pose` is `null`. Camera landmarks alone never produce a world skeleton.
 
 ### Root position
 

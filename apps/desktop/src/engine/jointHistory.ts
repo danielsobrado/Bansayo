@@ -27,7 +27,8 @@ class JointHistory {
     this.times[this.head] = frame.t_us;
     for (let j = 0; j < n; j++) {
       const v = frame.joints[j]?.value;
-      this.values[j]![this.head] = v === null || v === undefined ? Number.NaN : v;
+      this.values[j]![this.head] =
+        v === null || v === undefined ? Number.NaN : v;
     }
     this.head = (this.head + 1) % CAPACITY;
     if (this.count < CAPACITY) this.count++;
@@ -48,7 +49,10 @@ class JointHistory {
   }
 
   private reset(jointCount: number): void {
-    this.values = Array.from({ length: jointCount }, () => new Float32Array(CAPACITY));
+    this.values = Array.from(
+      { length: jointCount },
+      () => new Float32Array(CAPACITY),
+    );
     this.clear();
   }
 }

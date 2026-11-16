@@ -4,11 +4,19 @@ import { useEffect, useRef } from "react";
 const TEXT_ENTRY = new Set(["INPUT", "SELECT", "TEXTAREA"]);
 
 /** Whether a key event should be left to the focused element. */
-export function isTypingTarget(target: EventTarget | null, key: string): boolean {
-  if (typeof HTMLElement === "undefined" || !(target instanceof HTMLElement)) return false;
+export function isTypingTarget(
+  target: EventTarget | null,
+  key: string,
+): boolean {
+  if (typeof HTMLElement === "undefined" || !(target instanceof HTMLElement))
+    return false;
+  if (target.closest("dialog[open]")) return true;
   if (target.isContentEditable || TEXT_ENTRY.has(target.tagName)) return true;
   // Space and Enter activate a focused button or link; do not also run a shortcut.
-  return (key === " " || key === "Enter") && (target.tagName === "BUTTON" || target.tagName === "A");
+  return (
+    (key === " " || key === "Enter") &&
+    (target.tagName === "BUTTON" || target.tagName === "A")
+  );
 }
 
 /**
@@ -21,6 +29,8 @@ export function useShortcuts(keys: Readonly<Record<string, () => void>>): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return;
+      // A disabled capture control can move focus to <body>; the modal still owns Escape.
+      if (document.querySelector("dialog[open]")) return;
       if (isTypingTarget(e.target, e.key)) return;
       const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
       const fn = ref.current[k];

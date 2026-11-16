@@ -11,7 +11,8 @@ export function radToDeg(rad: number): number {
 
 /** An angle in radians shown in degrees with one decimal, or a dash when there is no value. */
 export function formatAngle(rad: number | null | undefined): string {
-  if (rad === null || rad === undefined || !Number.isFinite(rad)) return EM_DASH;
+  if (rad === null || rad === undefined || !Number.isFinite(rad))
+    return EM_DASH;
   const deg = radToDeg(rad);
   // Avoid "-0.0°".
   const fixed = (Math.abs(deg) < 0.05 ? 0 : deg).toFixed(1);
@@ -32,7 +33,8 @@ export function formatMs(ms: number | null | undefined): string {
 
 /** Microseconds as `m:ss`, or a dash. */
 export function formatDurationUs(us: number | null | undefined): string {
-  if (us === null || us === undefined || !Number.isFinite(us) || us < 0) return EM_DASH;
+  if (us === null || us === undefined || !Number.isFinite(us) || us < 0)
+    return EM_DASH;
   const totalS = Math.floor(us / 1_000_000);
   const m = Math.floor(totalS / 60);
   const s = totalS % 60;
@@ -53,6 +55,10 @@ export function humanizeId(id: string): string {
  * Looks up `key` in a table keyed by a contract enum. Unknown values — which newer engines may
  * send (docs/04 §2) — fall back instead of failing.
  */
-export function lookup<K extends string, V>(table: Readonly<Record<K, V>>, key: string, fallback: V): V {
+export function lookup<K extends string, V>(
+  table: Readonly<Record<K, V>>,
+  key: string,
+  fallback: V,
+): V {
   return Object.hasOwn(table, key) ? table[key as K] : fallback;
 }

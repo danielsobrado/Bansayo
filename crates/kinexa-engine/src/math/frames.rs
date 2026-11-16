@@ -24,5 +24,9 @@ pub fn yaw_deg(deg: f64) -> Rot {
 /// Unsigned angle between two vectors, radians. Zero if either is zero.
 pub fn angle_between(a: &V3, b: &V3) -> f64 {
     let n = a.norm() * b.norm();
-    if n == 0.0 { 0.0 } else { (a.dot(b) / n).clamp(-1.0, 1.0).acos() }
+    if n == 0.0 {
+        0.0
+    } else {
+        (a.dot(b) / n).clamp(-1.0, 1.0).acos()
+    }
 }

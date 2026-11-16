@@ -1,0 +1,29 @@
+schema_version: 1
+engine:
+  publish_rate_hz: 60
+  stale_after_ms: 250
+  data_dir: ./data
+api:
+  bind: 127.0.0.1:7700
+assignments:
+  SIM-T01: pelvis
+  SIM-T02: chest
+  SIM-T03: left_thigh
+  SIM-T04: left_shin
+  SIM-T05: right_thigh
+  SIM-T06: right_shin
+sources:
+  - id: sim
+    kind: simulated
+    enabled: true
+    seed: 42
+    motion: standing
+    speed: 1.0
+    trackers:
+      - { id: SIM-T01, rate_hz: 100, noise_deg: 0.2 }
+      - { id: SIM-T02, rate_hz: 100, noise_deg: 0.2 }
+      - { id: SIM-T03, rate_hz: 100, noise_deg: 0.2 }
+      - { id: SIM-T04, rate_hz: 100, noise_deg: 0.2 }
+      - { id: SIM-T05, rate_hz: 100, noise_deg: 0.2 }
+      - { id: SIM-T06, rate_hz: 100, noise_deg: 0.2 }
+    cameras: []

@@ -35,7 +35,11 @@ function gammaEncode(x: number): number {
 /** Gamma-encoded sRGB in 0..1, clamped to the gamut. */
 export function oklchToSrgb(l: number, c: number, h: number): Rgb {
   const [r, g, b] = oklchToLinearSrgb(l, c, h);
-  return [gammaEncode(clamp01(r)), gammaEncode(clamp01(g)), gammaEncode(clamp01(b))];
+  return [
+    gammaEncode(clamp01(r)),
+    gammaEncode(clamp01(g)),
+    gammaEncode(clamp01(b)),
+  ];
 }
 
 /** WCAG 2 relative luminance of an `oklch(...)` colour. */

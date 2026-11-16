@@ -25,7 +25,12 @@ pub fn floor_contact_root(skeleton: &Skeleton, rotations: &[Rot]) -> V3 {
         .segments
         .iter()
         .enumerate()
-        .flat_map(|(i, s)| s.contact_points.iter().map(move |c| (positions[i] + rotations[i] * c).y))
+        .flat_map(|(i, s)| {
+            let position = positions[i];
+            s.contact_points
+                .iter()
+                .map(move |c| (position + rotations[i] * c).y)
+        })
         .reduce(f64::min);
     match lowest {
         Some(y) => V3::new(0.0, -y, 0.0),
@@ -45,7 +50,11 @@ mod tests {
         let root = floor_contact_root(&sk, &rot);
         assert!((root.y - 0.530 * 1.75).abs() < 1e-9);
         let pos = forward_kinematics(&sk, &rot, root);
-        let head = sk.segments.iter().position(|s| s.id.as_str() == "head").expect("head");
+        let head = sk
+            .segments
+            .iter()
+            .position(|s| s.id.as_str() == "head")
+            .expect("head");
         assert!((pos[head].y + sk.segments[head].tail.y - 1.75).abs() < 1e-9);
     }
 
@@ -53,7 +62,11 @@ mod tests {
     fn child_follows_parent_rotation() {
         let sk = Skeleton::builtin(MODEL_ID, 1.75).expect("builtin");
         let mut rot = vec![Rot::identity(); sk.len()];
-        let thigh = sk.segments.iter().position(|s| s.id.as_str() == "left_thigh").expect("thigh");
+        let thigh = sk
+            .segments
+            .iter()
+            .position(|s| s.id.as_str() == "left_thigh")
+            .expect("thigh");
         let shin = thigh + 1;
         rot[thigh] = crate::math::rot_x(-std::f64::consts::FRAC_PI_2);
         let pos = forward_kinematics(&sk, &rot, V3::zeros());

@@ -1,0 +1,21 @@
+schema_version: 1
+engine:
+  publish_rate_hz: 60
+  stale_after_ms: 250
+  data_dir: ./data
+api:
+  bind: 127.0.0.1:7700
+sources:
+  - id: sim
+    kind: simulated
+    seed: 42
+    motion: squat
+    trackers: []
+    cameras:
+      - id: SIM-CAM1
+        rate_hz: 30
+        resolution_px: [1280, 720]
+        fov_y_deg: 50
+        position_m: [0.0, 1.2, 3.2]
+        look_at_m: [0.0, 1.0, 0.0]
+        noise_px: 1.5

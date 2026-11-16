@@ -20,10 +20,10 @@ export const BACKOFF_MAX_MS = 8_000;
 
 /** The part of `WebSocket` the connection uses, so tests can supply a fake. */
 export interface SocketLike {
-  onopen: ((ev: unknown) => void) | null;
-  onmessage: ((ev: { data: unknown }) => void) | null;
-  onclose: ((ev: unknown) => void) | null;
-  onerror: ((ev: unknown) => void) | null;
+  onopen: ((ev: Event) => void) | null;
+  onmessage: ((ev: MessageEvent<unknown>) => void) | null;
+  onclose: ((ev: CloseEvent) => void) | null;
+  onerror: ((ev: Event) => void) | null;
   close(): void;
 }
 
@@ -99,9 +99,13 @@ export class EngineConnection {
         frameStore.apply(m, this.deps.monotonic());
         break;
       case "state":
+        if (systemStateStore.get()?.engine.mode !== m.state.engine.mode)
+          frameStore.invalidate();
         systemStateStore.set(m.state);
         break;
       case "skeleton":
+        if (skeletonStore.get()?.rev !== m.skeleton.rev)
+          frameStore.invalidate();
         skeletonStore.set(m.skeleton);
         break;
       case "landmarks_2d": {
@@ -125,7 +129,9 @@ export class EngineConnection {
         engineProtocol: m.protocol_version,
         supportedProtocol: SUPPORTED_PROTOCOL_VERSION,
       });
-      announce(`Incompatible engine: protocol ${m.protocol_version}, this app supports ${SUPPORTED_PROTOCOL_VERSION}.`);
+      announce(
+        `Incompatible engine: protocol ${m.protocol_version}, this app supports ${SUPPORTED_PROTOCOL_VERSION}.`,
+      );
       // Reconnecting cannot fix a version mismatch; the user must update one side.
       this.stop();
       return;
@@ -136,7 +142,11 @@ export class EngineConnection {
     systemStateStore.set(m.state);
     this.greeted = true;
     this.attempt = 0;
-    connectionStore.set({ kind: "open", engineVersion: m.engine_version, protocolVersion: m.protocol_version });
+    connectionStore.set({
+      kind: "open",
+      engineVersion: m.engine_version,
+      protocolVersion: m.protocol_version,
+    });
     announce("Connected to the engine.");
   }
 
@@ -169,7 +179,10 @@ export class EngineConnection {
     clearLiveValues();
     const delay = backoffDelay(this.attempt);
     this.attempt++;
-    connectionStore.set({ kind: "disconnected", retryAt: this.deps.now() + delay });
+    connectionStore.set({
+      kind: "disconnected",
+      retryAt: this.deps.now() + delay,
+    });
     if (wasOpen) announce("Engine disconnected. Live values cleared.");
     this.timer = this.deps.setTimer(() => {
       this.timer = null;

@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "Local motion UI with no filesystem or shell commands exposed to the webview.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

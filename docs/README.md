@@ -3,9 +3,11 @@
 Kinexa is an open-source, local-first platform for capturing, reconstructing, analysing and
 visualising human motion from wearable IMUs, cameras, or both.
 
-**Status: design approved by the architect, implementation not started.** Nothing described here
-exists as code yet. Each document marks what the first PoC implements and what is only an
-extension point.
+**Status: the local PoC is implemented and undergoing final validation.** The Rust engine,
+browser Studio and native shell now exist. The Godot project is included but its import/runtime
+validation remains unverified at the owner's request. The
+[implementation and validation record](13-implementation-status.md) separates completed checks
+from remaining validation. Each design document also distinguishes PoC scope from extension points.
 
 ## Reading order
 
@@ -23,6 +25,7 @@ extension point.
 | 10 | [PoC plan](10-poc-plan.md) | Stages, agent briefs, file ownership, acceptance criteria, prerequisites |
 | 11 | [Risks and validation](11-risks-and-validation.md) | Open risks, decisions that need hardware, deferred validation |
 | 12 | [Decisions](12-decisions.md) | Architecture decision records |
+| 13 | [Implementation status](13-implementation-status.md) | What exists, validation evidence and remaining limitations |
 
 ## Conventions used in these documents
 

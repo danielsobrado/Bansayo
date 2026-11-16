@@ -14,10 +14,16 @@ export interface Palette {
 }
 
 /** Reads one `--token` from the document; tokens are oklch() per styles/tokens.css. */
-export function tokenColor(name: string, from: Element = document.documentElement): Color {
+export function tokenColor(
+  name: string,
+  from: Element = document.documentElement,
+): Color {
   const value = getComputedStyle(from).getPropertyValue(name).trim();
   const parsed = parseOklch(value);
-  if (!parsed) throw new Error(`Design token ${name} is not an oklch() colour: "${value}"`);
+  if (!parsed)
+    throw new Error(
+      `Design token ${name} is not an oklch() colour: "${value}"`,
+    );
   const [r, g, b] = oklchToSrgb(...parsed);
   return new Color().setRGB(r, g, b, SRGBColorSpace);
 }
@@ -37,5 +43,7 @@ export function readPalette(): Palette {
 
 /** Reads a token as a CSS string, for canvas text. */
 export function tokenCss(name: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return getComputedStyle(document.documentElement)
+    .getPropertyValue(name)
+    .trim();
 }
