@@ -2,6 +2,10 @@
 
 Local, user-supplied pretrained ONNX files and ONNX Runtime for the real-camera path (ADR-009). **Do not commit or redistribute them.** A `kind: camera` source loads them from its `models_dir` (default `./models`); configuration validation reports missing model files.
 
+**Install with `python scripts/setup.py models onnxruntime`** from the repository root: it
+downloads the archives below, checks their SHA-256 and extracts exactly the files listed here.
+The tables record the sources the script pins.
+
 | File | Source URL | Bytes | SHA-256 | Downloaded |
 |---|---|---|---|---|
 | rtmpose-m.onnx | https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/onnx_sdk/rtmpose-m_simcc-body7_pt-body7_420e-256x192-e48f03d0_20230504.zip (member `end2end.onnx`) | 54330655 | 5c0a4bf67953e6d2ac43ce15e77dc9d5d354ae18430a47d2c5963a7bc5683e3c | 16 November 2026 |
@@ -31,10 +35,11 @@ On Windows the DirectML build runs on any DirectX 12 GPU:
 |---|---|---|
 | onnxruntime/onnxruntime.dll, DirectML.dll, onnxruntime_providers_shared.dll | PyPI wheel `onnxruntime_directml-1.24.4-cp312-cp312-win_amd64.whl` (members under `onnxruntime/capi/`), sha256 f2ecb68b7b7b259d2ef3112ae760149f9b5a1e7c0fbb73d539da6250a648a614 | 1.24.4 (MIT) |
 
-```sh
-pip download onnxruntime-directml==1.24.4 --no-deps --only-binary=:all: --platform win_amd64 --python-version 312 -d wheel
-# then copy onnxruntime/capi/*.dll from the wheel (a zip) into models/onnxruntime/
-```
+Linux x64 and macOS arm64 get the CPU build from the official release archives
+(`onnxruntime-linux-x64-1.24.4.tgz`, sha256 3a211fbea252c1e66290658f1b735b772056149f28321e71c308942cdb54b747;
+`onnxruntime-osx-arm64-1.24.4.tgz`, sha256 93787795f47e1eee369182e43ed51b9e5da0878ab0346aecf4258979b8bba989),
+installed as `libonnxruntime.so` / `libonnxruntime.dylib`. Other platforms: set `ORT_DYLIB_PATH`
+to an ONNX Runtime 1.24 library.
 
 ## Verified output
 

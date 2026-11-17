@@ -22,10 +22,39 @@ connected yet**, so nothing here establishes measurement accuracy. Joint definit
 See the [implementation and validation record](docs/13-implementation-status.md) and
 [architecture documentation](docs/README.md).
 
-## Run the engine and Studio
+## Setup
 
-Prerequisites: Rust 1.92+, Node.js 22+ and npm. Native desktop builds also need the platform build
-tools (Xcode Command Line Tools on macOS; Visual Studio C++ Build Tools and WebView2 on Windows).
+Install the system tools once: [Rust](https://rustup.rs) (the pinned toolchain in
+`rust-toolchain.toml` is selected automatically), [Node.js 22+](https://nodejs.org) with npm,
+Python 3.10+, and optionally [Godot 4.5](https://godotengine.org) for the VR room. Native desktop
+builds also need the platform build tools (Xcode Command Line Tools on macOS; Visual Studio C++
+Build Tools and WebView2 on Windows).
+
+Then let the setup script download, verify and configure everything else:
+
+```sh
+python scripts/setup.py          # all steps; safe to re-run, skips what is in place
+python scripts/setup.py check    # report what is installed, change nothing
+```
+
+| Step | What it does |
+|---|---|
+| `prerequisites` | Reports cargo, node, npm, Python and Godot versions |
+| `models` | Downloads the YOLOX-m and RTMPose-m ONNX models into `models/` |
+| `onnxruntime` | Installs ONNX Runtime 1.24.4 into `models/onnxruntime/` (DirectML on Windows, CPU on Linux x64 / macOS arm64) |
+| `python` | `pip install --user opencv-python numpy` for camera calibration, if missing |
+| `desktop` | `npm ci` in `apps/desktop` |
+| `engine` | `cargo build --release -p bansayo-engine` |
+| `godot` | Imports `apps/vr` and runs its smoke test, if Godot is on PATH |
+| `verify` | Validates `config/cameras-two.yaml` against the installed models and runs the calibration selftest |
+
+Run single steps by name (`python scripts/setup.py models onnxruntime`); `--force` replaces
+files already present. Every download is checked against a pinned SHA-256 before it is
+extracted. Models and runtime are local, git-ignored files; their sources and licence notes are
+in [models/README.md](models/README.md). Nothing is installed system-wide except the optional
+user-level pip packages.
+
+## Run the engine and Studio
 
 From the repository root:
 
@@ -70,19 +99,19 @@ still requires recapture.
 
 ## Attach physical cameras
 
-1. Put the model files and ONNX Runtime in `models/` as described in
-   [models/README.md](models/README.md) (they are local, git-ignored files).
+1. Run `python scripts/setup.py` (see [Setup](#setup)).
 2. Plug in two to four USB cameras with overlapping views of the training area (front and side
-   first) and list them: `cargo run -p bansayo-engine -- --list-cameras`.
-3. Copy [config/cameras-two.yaml](config/cameras-two.yaml), set each camera's `device` index and
-   `resolution_px`, and add entries for a third or fourth camera. A camera that negotiates another
+   first).
+3. Run `python scripts/setup.py cameras`: it lists the attached cameras and writes
+   `config/local-cameras.yaml` (git-ignored) from [config/cameras-two.yaml](config/cameras-two.yaml)
+   with one entry per camera. Adjust `resolution_px` if needed: a camera that negotiates another
    resolution reports the value to set. `--check` validates the file and the model paths.
 4. Calibrate with a printed ChArUco board (Python 3 with `opencv-python` and `numpy`), with the
    engine stopped while capturing:
    ```sh
    python scripts/calibrate_cameras.py board --out board.png      # print large, measure a square
    python scripts/calibrate_cameras.py capture --camera CAM-FRONT=0 --camera CAM-SIDE=1 --out calib
-   cargo run --release -p bansayo-engine -- --config my-cameras.yaml
+   cargo run --release -p bansayo-engine -- --config config/local-cameras.yaml
    python scripts/calibrate_cameras.py solve --dir calib --square-m 0.20 --engine http://127.0.0.1:7700
    ```
    Capture 15–30 sets with the board tilted across each view, then a few with it flat on the floor

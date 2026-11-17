@@ -1,8 +1,8 @@
-# Two physical USB cameras, 2D pose inference and triangulation; no trackers.
-# Find device indices with `cargo run -p bansayo-engine -- --list-cameras`.
-# Requires the local model files and ONNX Runtime described in models/README.md, and camera
-# intrinsics/extrinsics profiles (scripts/calibrate_cameras.py) before 3D landmarks appear.
-# Add up to MAX_CAMERAS entries to `cameras:`; nothing else changes for three or four cameras.
+# Physical USB cameras, 2D pose inference and triangulation; no trackers.
+# `python scripts/setup.py` installs the models and ONNX Runtime; `python scripts/setup.py cameras`
+# writes config/local-cameras.yaml from this file with one entry per attached camera.
+# Calibrate with scripts/calibrate_cameras.py before 3D landmarks appear (README, "Attach
+# physical cameras"). Up to MAX_CAMERAS (8) entries; three or four need no other change.
 schema_version: 1
 engine:
   publish_rate_hz: 60
