@@ -223,7 +223,7 @@ fn triangulated_landmarks() -> PoseLandmarks3D {
     let points = (0..2)
         .map(|i| {
             Some(TriangulatedLandmark3D {
-                sigma_m: None,
+                sigma_m: Some(0.006),
                 m: [0.0, 0.9275 + 0.105 * i as f32, 0.0],
                 views: 2,
                 reprojection_error_px: 1.4,
@@ -474,6 +474,200 @@ fn api() -> Vec<Example> {
     ]
 }
 
+pub fn capability_report() -> CapabilityReport {
+    CapabilityReport {
+        profile: CapabilityProfileId::Inertial,
+        profile_override: None,
+        tracking_config_id: "7dedce1c701e1c00".into(),
+        calibration_set_id: "792a197680de1518".into(),
+        inputs: vec![InputAvailability {
+            class: InputClass::R,
+            target: "pelvis".into(),
+            state: FeatureState::Available,
+            methods: vec![MethodId::ImuMounted],
+            rate_hz: Some(100.0),
+            reasons: vec![],
+        }],
+        observables: vec![
+            ObservableAvailability {
+                id: "trunk_forward_lean".into(),
+                state: FeatureState::Available,
+                method: Some(MethodId::ImuMounted),
+                reasons: vec![],
+            },
+            ObservableAvailability {
+                id: "input.SIM-T01.angular_velocity".into(),
+                state: FeatureState::Unavailable,
+                method: None,
+                reasons: vec![reason(
+                    "not_implemented",
+                    Some("SIM-T01"),
+                    "Angular velocity is recorded but not consumed by a solver stage.",
+                )],
+            },
+        ],
+    }
+}
+fn movement_examples() -> Vec<Example> {
+    let def = skeleton::definition();
+    let poses = skeleton::rest_pose_segments();
+    let root_evidence = Evidence {
+        provenance: Provenance::Inferred,
+        method: MethodId::FloorContact,
+        confidence: None,
+        sigma: None,
+        sigma_basis: None,
+        t_obs_us: Some(T_US - 5_000),
+        sources: vec![dev("SIM-T01")],
+    };
+    let root = KeypointState {
+        position_m: poses[0].position_m,
+        evidence: root_evidence,
+    };
+    let segments: Vec<_> = poses
+        .iter()
+        .map(|p| {
+            let axis = Evidence {
+                provenance: p.provenance,
+                method: if p.provenance == Provenance::Derived {
+                    MethodId::ImuMounted
+                } else {
+                    MethodId::RestFill
+                },
+                confidence: p.confidence,
+                sigma: None,
+                sigma_basis: None,
+                t_obs_us: if p.sources.is_empty() {
+                    None
+                } else {
+                    Some(T_US - 5_000)
+                },
+                sources: p.sources.clone(),
+            };
+            SegmentState {
+                rotation: p.rotation,
+                axis: axis.clone(),
+                twist: axis,
+                angular_velocity_rad_s: None,
+                angular_velocity: Evidence {
+                    provenance: Provenance::Unavailable,
+                    method: MethodId::ImuGyro,
+                    confidence: None,
+                    sigma: None,
+                    sigma_basis: None,
+                    t_obs_us: None,
+                    sources: vec![],
+                },
+            }
+        })
+        .collect();
+    let mut keypoints: Vec<_> = poses
+        .iter()
+        .map(|p| {
+            Some(KeypointState {
+                position_m: p.position_m,
+                evidence: Evidence {
+                    provenance: Provenance::Inferred,
+                    method: MethodId::Fk,
+                    confidence: None,
+                    sigma: None,
+                    sigma_basis: None,
+                    t_obs_us: Some(T_US - 5_000),
+                    sources: vec![dev("SIM-T01")],
+                },
+            })
+        })
+        .collect();
+    keypoints[0] = Some(root.clone());
+    for (segment, contact) in [
+        (4, None),
+        (8, None),
+        (12, None),
+        (15, Some(1)),
+        (18, Some(1)),
+        (15, Some(0)),
+        (18, Some(0)),
+    ] {
+        let s = &def.segments[segment];
+        let offset = contact.map_or(s.tail_m, |i| s.contact_points_m[i]);
+        let mut p = keypoints[segment].clone().unwrap();
+        p.position_m = std::array::from_fn(|i| p.position_m[i] + offset[i]);
+        keypoints.push(Some(p));
+    }
+    let body = BodyState {
+        skeleton_rev: def.rev,
+        segments,
+        keypoints,
+        root,
+    };
+    let planar = PlanarBody {
+        camera_id: dev(CAMERA),
+        t_obs_us: T_US - 5_000,
+        scale_px: None,
+        keypoints: vec![None; 26],
+        view: PlanarView::Unknown,
+    };
+    let sample = MotionSample {
+        seq: 18_230,
+        t_us: T_US,
+        origins: vec![Origin::Simulated],
+        body: Some(body.clone()),
+        planar: vec![],
+    };
+    let schema = LandmarkSchema {
+        id: BODY_KEYPOINT_SCHEMA_ID.into(),
+        names: BODY_KEYPOINT_NAMES.map(String::from).to_vec(),
+        edges: def
+            .segments
+            .iter()
+            .enumerate()
+            .filter_map(|(i, s)| {
+                s.parent
+                    .as_ref()
+                    .and_then(|p| def.segments.iter().position(|s| &s.id == p))
+                    .map(|p| [p as u32, i as u32])
+            })
+            .chain([
+                [4, 19],
+                [8, 20],
+                [12, 21],
+                [15, 22],
+                [18, 23],
+                [15, 24],
+                [18, 25],
+            ])
+            .collect(),
+    };
+    vec![
+        ex("capability_report", capability_report()),
+        ex("motion_sample", sample),
+        ex(
+            "motion_sample_no_body",
+            MotionSample {
+                seq: 1,
+                t_us: 1,
+                origins: vec![],
+                body: None,
+                planar: vec![],
+            },
+        ),
+        ex("body_state", body.clone()),
+        ex("evidence", body.segments[0].axis.clone()),
+        ex("segment_state", body.segments[0].clone()),
+        ex("keypoint_state", body.root),
+        ex("planar_body", planar),
+        ex(
+            "planar_keypoint",
+            PlanarKeypoint {
+                x: 0.3,
+                y: 1.0,
+                confidence: 0.95,
+            },
+        ),
+        ex("body_keypoint_schema", schema),
+    ]
+}
+
 pub fn all() -> Vec<Example> {
     let skeleton = skeleton::definition();
     debug_assert_eq!(skeleton.height_m, HEIGHT_M as f32);
@@ -513,6 +707,7 @@ pub fn all() -> Vec<Example> {
         ex("calibration_profile_mounting", calibration_profile()),
         ex("recording_session", state::recording_session()),
     ];
+    out.extend(movement_examples());
     out.extend(observations());
     out.extend(source_events());
     out.extend(api());

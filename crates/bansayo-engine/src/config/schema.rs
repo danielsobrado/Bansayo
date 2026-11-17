@@ -32,6 +32,8 @@ pub struct Config {
     pub triangulation: TriangulationConfig,
     #[serde(default)]
     pub evidence: EvidenceConfig,
+    #[serde(default)]
+    pub tracking: TrackingConfig,
     /// Reserved for camera processing; rejected until the camera milestone.
     #[serde(default)]
     pub processing_profiles: Option<Value>,
@@ -341,4 +343,10 @@ impl Default for EvidenceConfig {
             detector_noise_floor_px: 2.0,
         }
     }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct TrackingConfig {
+    pub profile_override: Option<bansayo_contracts::CapabilityProfileId>,
 }

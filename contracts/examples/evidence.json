@@ -1,0 +1,11 @@
+{
+  "provenance": "derived",
+  "method": "imu_mounted",
+  "confidence": 0.97,
+  "sigma": null,
+  "sigma_basis": null,
+  "t_obs_us": 303828333,
+  "sources": [
+    "SIM-T01"
+  ]
+}

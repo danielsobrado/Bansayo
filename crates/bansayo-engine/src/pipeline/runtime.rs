@@ -23,6 +23,8 @@ pub(super) struct Runtime {
     pub state: watch::Sender<SystemState>,
     pub state_wire: watch::Sender<Arc<Encoded>>,
     pub frame: watch::Sender<Arc<Encoded>>,
+    pub motion: watch::Sender<Arc<MotionSample>>,
+    pub pending_motion: Option<MotionSample>,
     pub landmarks: broadcast::Sender<Arc<Encoded>>,
     pub capture: Option<Capture>,
     pub busy: bool,
@@ -40,7 +42,10 @@ impl Runtime {
     pub fn new(
         commands: mpsc::Sender<Command>,
         state: watch::Sender<SystemState>,
-        frame: watch::Sender<Arc<Encoded>>,
+        frames: (
+            watch::Sender<Arc<Encoded>>,
+            watch::Sender<Arc<MotionSample>>,
+        ),
         landmarks: broadcast::Sender<Arc<Encoded>>,
         notices: broadcast::Sender<Arc<Encoded>>,
         skeleton: watch::Sender<SkeletonDefinition>,
@@ -50,7 +55,9 @@ impl Runtime {
             commands,
             state_wire,
             state,
-            frame,
+            frame: frames.0,
+            motion: frames.1,
+            pending_motion: None,
             landmarks,
             capture: None,
             busy: false,
@@ -125,6 +132,14 @@ impl Runtime {
             );
             state.engine.state = solved.quality.state;
             state.features = features(&state.devices, &solved);
+            state.capability_report = Some(super::features::capability_report(
+                &replay.skeleton,
+                &replay.registry,
+                &replay.store,
+                &solved,
+                &replay.recording.initial.config,
+                now,
+            ));
         }
         for feature in &mut state.features {
             if matches!(feature.id, FeatureId::Recording | FeatureId::Playback) {
@@ -157,6 +172,22 @@ impl Runtime {
         if let ServerMessage::Frame { seq, .. } = &mut message {
             self.seq += 1;
             *seq = self.seq;
+        }
+        if let ServerMessage::Frame { t_us, .. } = &message {
+            let sample = self
+                .replay
+                .as_ref()
+                .and_then(|r| r.latest_motion.as_ref())
+                .or(self.pending_motion.as_ref())
+                .filter(|m| m.t_us == *t_us)
+                .cloned();
+            if let Some(mut sample) = sample {
+                sample.seq = self.seq;
+                if let Some(b) = sample.body.as_mut() {
+                    b.skeleton_rev = self.skeleton.borrow().rev;
+                }
+                self.motion.send_replace(Arc::new(sample));
+            }
         }
         self.frame.send_replace(Encoded::new(&message, self.seq));
     }
@@ -342,6 +373,28 @@ impl Runtime {
                             now,
                             &engine.config.config,
                         );
+                        let origins = engine
+                            .registry
+                            .entries
+                            .values()
+                            .map(|e| e.descriptor.origin)
+                            .collect::<std::collections::HashSet<_>>()
+                            .into_iter()
+                            .collect::<Vec<_>>();
+                        let mut origins = origins;
+                        origins.sort_by_key(|o| match o {
+                            Origin::Live => 0,
+                            Origin::Simulated => 1,
+                            Origin::Fixture => 2,
+                        });
+                        self.pending_motion = Some(super::motion::sample(
+                            &engine.skeleton,
+                            &engine.registry,
+                            &solved,
+                            0,
+                            now,
+                            origins,
+                        ));
                         let mut joints =
                             measure(&engine.skeleton, &solved.rotations, &solved.observed);
                         super::joints::confidence(

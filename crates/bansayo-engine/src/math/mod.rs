@@ -5,3 +5,5 @@ mod frames;
 
 pub use convert::*;
 pub use frames::*;
+
+pub mod hash;

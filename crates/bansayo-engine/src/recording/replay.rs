@@ -17,6 +17,7 @@ pub struct Replay {
     pub speed: f32,
     pub looping: bool,
     pub position_us: u64,
+    pub latest_motion: Option<MotionSample>,
     cursor: usize,
     next_tick: u64,
     clock_position: f64,
@@ -33,6 +34,7 @@ impl Replay {
             speed,
             looping,
             position_us: 0,
+            latest_motion: None,
             cursor: 0,
             next_tick: 0,
             clock_position: 0.0,
@@ -56,6 +58,10 @@ impl Replay {
         self.position_us = position;
         self.clock_position = position as f64;
         self.apply_until(self.recording.initial.started_t_us + position, None)?;
+        self.latest_motion = Some(
+            self.solve_at(self.recording.initial.started_t_us + position)
+                .1,
+        );
         self.next_tick = (position as f64 * self.rate() / 1e6).ceil() as u64;
         Ok(())
     }
@@ -99,7 +105,7 @@ impl Replay {
         Ok(())
     }
     /// The frame at `time`, preceded by the triangulated landmarks when there are any.
-    fn solve_at(&self, time: u64) -> Vec<ServerMessage> {
+    fn solve_at(&self, time: u64) -> (Vec<ServerMessage>, MotionSample) {
         let solved = solve(
             &self.skeleton,
             &self.registry,
@@ -107,12 +113,20 @@ impl Replay {
             time,
             &self.recording.initial.config,
         );
+        let sample = crate::pipeline::motion::sample(
+            &self.skeleton,
+            &self.registry,
+            &solved,
+            0,
+            time,
+            self.recording.session.origins.clone(),
+        );
         let mut joints = measure(&self.skeleton, &solved.rotations, &solved.observed);
         crate::pipeline::joints::confidence(&self.skeleton, &mut joints, solved.pose.as_ref());
         let landmarks = solved
             .landmarks_3d
             .map(|landmarks| ServerMessage::Landmarks3d { landmarks });
-        landmarks
+        let messages = landmarks
             .into_iter()
             .chain([ServerMessage::Frame {
                 seq: 0,
@@ -122,7 +136,8 @@ impl Replay {
                 pose: solved.pose,
                 quality: solved.quality,
             }])
-            .collect()
+            .collect();
+        (messages, sample)
     }
     /// The state at the current position, with each camera's latest landmarks unless stale there.
     pub fn preview(&self) -> Vec<ServerMessage> {
@@ -134,7 +149,7 @@ impl Replay {
             .filter_map(|e| e.latest.get(&crate::registry::ObservationKind::Landmarks2d))
             .filter(|o| time.saturating_sub(o.t_us) <= stale_us)
             .filter_map(landmarks_2d)
-            .chain(self.solve_at(time))
+            .chain(self.solve_at(time).0)
             .collect()
     }
     /// Advances the virtual clock. Solver ticks run at fixed virtual intervals, each after the
@@ -162,7 +177,9 @@ impl Replay {
                 return Ok(messages);
             }
             self.apply_until(started + offset, Some(&mut messages))?;
-            messages.extend(self.solve_at(started + offset));
+            let (frames, sample) = self.solve_at(started + offset);
+            self.latest_motion = Some(sample);
+            messages.extend(frames);
             self.position_us = offset;
             self.next_tick += 1;
             ticks += 1;

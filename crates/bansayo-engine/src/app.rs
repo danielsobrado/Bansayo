@@ -93,7 +93,7 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
             suspended: false,
         });
         controls.push(control);
-        sources.push(ConfiguredSource::Simulated(source, receiver));
+        sources.push(ConfiguredSource::Simulated(Box::new(source), receiver));
     }
     let previews = Previews::default();
     for spec in &config.cameras {
@@ -170,7 +170,7 @@ pub async fn run(
 
 /// Closed source kinds use static dispatch and one spawning match; no trait objects.
 enum ConfiguredSource {
-    Simulated(SimulatedSource, watch::Receiver<Control>),
+    Simulated(Box<SimulatedSource>, watch::Receiver<Control>),
     Camera(CameraSource),
 }
 impl ConfiguredSource {
@@ -189,7 +189,7 @@ impl ConfiguredSource {
                 Self::Simulated(source, control) => {
                     let devices = source.descriptors().into_iter().map(|d| d.id).collect();
                     crate::sources::supervision::supervise(
-                        source,
+                        *source,
                         devices,
                         SimulatedContext {
                             common,

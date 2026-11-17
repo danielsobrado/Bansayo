@@ -1,0 +1,18 @@
+{
+  "position_m": [
+    0.0,
+    0.9275,
+    0.0
+  ],
+  "evidence": {
+    "provenance": "inferred",
+    "method": "floor_contact",
+    "confidence": null,
+    "sigma": null,
+    "sigma_basis": null,
+    "t_obs_us": 303828333,
+    "sources": [
+      "SIM-T01"
+    ]
+  }
+}

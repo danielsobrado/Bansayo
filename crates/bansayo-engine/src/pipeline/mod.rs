@@ -10,3 +10,6 @@ pub mod skeleton_fit;
 pub mod solve;
 pub mod triangulate;
 pub use runner::*;
+
+mod capability;
+pub mod motion;

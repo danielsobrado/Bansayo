@@ -19,6 +19,7 @@
           0.9275,
           0.0
         ],
+        "sigma_m": 0.006,
         "views": 2,
         "reprojection_error_px": 1.4,
         "confidence": 0.9,
@@ -34,6 +35,7 @@
           1.0325,
           0.0
         ],
+        "sigma_m": 0.006,
         "views": 2,
         "reprojection_error_px": 1.4,
         "confidence": 0.9,

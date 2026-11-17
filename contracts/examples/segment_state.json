@@ -1,0 +1,40 @@
+{
+  "rotation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+  ],
+  "axis": {
+    "provenance": "derived",
+    "method": "imu_mounted",
+    "confidence": 0.97,
+    "sigma": null,
+    "sigma_basis": null,
+    "t_obs_us": 303828333,
+    "sources": [
+      "SIM-T01"
+    ]
+  },
+  "twist": {
+    "provenance": "derived",
+    "method": "imu_mounted",
+    "confidence": 0.97,
+    "sigma": null,
+    "sigma_basis": null,
+    "t_obs_us": 303828333,
+    "sources": [
+      "SIM-T01"
+    ]
+  },
+  "angular_velocity_rad_s": null,
+  "angular_velocity": {
+    "provenance": "unavailable",
+    "method": "imu_gyro",
+    "confidence": null,
+    "sigma": null,
+    "sigma_basis": null,
+    "t_obs_us": null,
+    "sources": []
+  }
+}

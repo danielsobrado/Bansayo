@@ -1,0 +1,1193 @@
+{
+  "skeleton_rev": 1,
+  "segments": [
+    {
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis": {
+        "provenance": "derived",
+        "method": "imu_mounted",
+        "confidence": 0.97,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T01"
+        ]
+      },
+      "twist": {
+        "provenance": "derived",
+        "method": "imu_mounted",
+        "confidence": 0.97,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T01"
+        ]
+      },
+      "angular_velocity_rad_s": null,
+      "angular_velocity": {
+        "provenance": "unavailable",
+        "method": "imu_gyro",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      }
+    },
+    {
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis": {
+        "provenance": "inferred",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "twist": {
+        "provenance": "inferred",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "angular_velocity_rad_s": null,
+      "angular_velocity": {
+        "provenance": "unavailable",
+        "method": "imu_gyro",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      }
+    },
+    {
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis": {
+        "provenance": "derived",
+        "method": "imu_mounted",
+        "confidence": 0.97,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T02"
+        ]
+      },
+      "twist": {
+        "provenance": "derived",
+        "method": "imu_mounted",
+        "confidence": 0.97,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T02"
+        ]
+      },
+      "angular_velocity_rad_s": null,
+      "angular_velocity": {
+        "provenance": "unavailable",
+        "method": "imu_gyro",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      }
+    },
+    {
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis": {
+        "provenance": "inferred",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "twist": {
+        "provenance": "inferred",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "angular_velocity_rad_s": null,
+      "angular_velocity": {
+        "provenance": "unavailable",
+        "method": "imu_gyro",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      }
+    },
+    {
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis": {
+        "provenance": "inferred",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "twist": {
+        "provenance": "inferred",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "angular_velocity_rad_s": null,
+      "angular_velocity": {
+        "provenance": "unavailable",
+        "method": "imu_gyro",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      }
+    },
+    {
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis": {
+        "provenance": "inferred",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "twist": {
+        "provenance": "inferred",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "angular_velocity_rad_s": null,
+      "angular_velocity": {
+        "provenance": "unavailable",
+        "method": "imu_gyro",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      }
+    },
+    {
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis": {
+        "provenance": "inferred",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "twist": {
+        "provenance": "inferred",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "angular_velocity_rad_s": null,
+      "angular_velocity": {
+        "provenance": "unavailable",
+        "method": "imu_gyro",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      }
+    },
+    {
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis": {
+        "provenance": "inferred",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "twist": {
+        "provenance": "inferred",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "angular_velocity_rad_s": null,
+      "angular_velocity": {
+        "provenance": "unavailable",
+        "method": "imu_gyro",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      }
+    },
+    {
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis": {
+        "provenance": "inferred",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "twist": {
+        "provenance": "inferred",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "angular_velocity_rad_s": null,
+      "angular_velocity": {
+        "provenance": "unavailable",
+        "method": "imu_gyro",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      }
+    },
+    {
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis": {
+        "provenance": "inferred",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "twist": {
+        "provenance": "inferred",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "angular_velocity_rad_s": null,
+      "angular_velocity": {
+        "provenance": "unavailable",
+        "method": "imu_gyro",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      }
+    },
+    {
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis": {
+        "provenance": "inferred",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "twist": {
+        "provenance": "inferred",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "angular_velocity_rad_s": null,
+      "angular_velocity": {
+        "provenance": "unavailable",
+        "method": "imu_gyro",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      }
+    },
+    {
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis": {
+        "provenance": "inferred",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "twist": {
+        "provenance": "inferred",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "angular_velocity_rad_s": null,
+      "angular_velocity": {
+        "provenance": "unavailable",
+        "method": "imu_gyro",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      }
+    },
+    {
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis": {
+        "provenance": "inferred",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "twist": {
+        "provenance": "inferred",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "angular_velocity_rad_s": null,
+      "angular_velocity": {
+        "provenance": "unavailable",
+        "method": "imu_gyro",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      }
+    },
+    {
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis": {
+        "provenance": "derived",
+        "method": "imu_mounted",
+        "confidence": 0.97,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T03"
+        ]
+      },
+      "twist": {
+        "provenance": "derived",
+        "method": "imu_mounted",
+        "confidence": 0.97,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T03"
+        ]
+      },
+      "angular_velocity_rad_s": null,
+      "angular_velocity": {
+        "provenance": "unavailable",
+        "method": "imu_gyro",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      }
+    },
+    {
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis": {
+        "provenance": "derived",
+        "method": "imu_mounted",
+        "confidence": 0.97,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T04"
+        ]
+      },
+      "twist": {
+        "provenance": "derived",
+        "method": "imu_mounted",
+        "confidence": 0.97,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T04"
+        ]
+      },
+      "angular_velocity_rad_s": null,
+      "angular_velocity": {
+        "provenance": "unavailable",
+        "method": "imu_gyro",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      }
+    },
+    {
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis": {
+        "provenance": "inferred",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "twist": {
+        "provenance": "inferred",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "angular_velocity_rad_s": null,
+      "angular_velocity": {
+        "provenance": "unavailable",
+        "method": "imu_gyro",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      }
+    },
+    {
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis": {
+        "provenance": "inferred",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "twist": {
+        "provenance": "inferred",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "angular_velocity_rad_s": null,
+      "angular_velocity": {
+        "provenance": "unavailable",
+        "method": "imu_gyro",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      }
+    },
+    {
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis": {
+        "provenance": "inferred",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "twist": {
+        "provenance": "inferred",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "angular_velocity_rad_s": null,
+      "angular_velocity": {
+        "provenance": "unavailable",
+        "method": "imu_gyro",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      }
+    },
+    {
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis": {
+        "provenance": "inferred",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "twist": {
+        "provenance": "inferred",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "angular_velocity_rad_s": null,
+      "angular_velocity": {
+        "provenance": "unavailable",
+        "method": "imu_gyro",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      }
+    }
+  ],
+  "keypoints": [
+    {
+      "position_m": [
+        0.0,
+        0.9275,
+        0.0
+      ],
+      "evidence": {
+        "provenance": "inferred",
+        "method": "floor_contact",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T01"
+        ]
+      }
+    },
+    {
+      "position_m": [
+        0.0,
+        1.0325,
+        0.0
+      ],
+      "evidence": {
+        "provenance": "inferred",
+        "method": "fk",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T01"
+        ]
+      }
+    },
+    {
+      "position_m": [
+        0.0,
+        1.225,
+        0.0
+      ],
+      "evidence": {
+        "provenance": "inferred",
+        "method": "fk",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T01"
+        ]
+      }
+    },
+    {
+      "position_m": [
+        0.0,
+        1.4315,
+        0.0
+      ],
+      "evidence": {
+        "provenance": "inferred",
+        "method": "fk",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T01"
+        ]
+      }
+    },
+    {
+      "position_m": [
+        0.0,
+        1.5225,
+        0.0
+      ],
+      "evidence": {
+        "provenance": "inferred",
+        "method": "fk",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T01"
+        ]
+      }
+    },
+    {
+      "position_m": [
+        0.035,
+        1.4,
+        0.0
+      ],
+      "evidence": {
+        "provenance": "inferred",
+        "method": "fk",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T01"
+        ]
+      }
+    },
+    {
+      "position_m": [
+        0.226625,
+        1.4315,
+        0.0
+      ],
+      "evidence": {
+        "provenance": "inferred",
+        "method": "fk",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T01"
+        ]
+      }
+    },
+    {
+      "position_m": [
+        0.552125,
+        1.4315,
+        0.0
+      ],
+      "evidence": {
+        "provenance": "inferred",
+        "method": "fk",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T01"
+        ]
+      }
+    },
+    {
+      "position_m": [
+        0.807625,
+        1.4315,
+        0.0
+      ],
+      "evidence": {
+        "provenance": "inferred",
+        "method": "fk",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T01"
+        ]
+      }
+    },
+    {
+      "position_m": [
+        -0.035,
+        1.4,
+        0.0
+      ],
+      "evidence": {
+        "provenance": "inferred",
+        "method": "fk",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T01"
+        ]
+      }
+    },
+    {
+      "position_m": [
+        -0.226625,
+        1.4315,
+        0.0
+      ],
+      "evidence": {
+        "provenance": "inferred",
+        "method": "fk",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T01"
+        ]
+      }
+    },
+    {
+      "position_m": [
+        -0.552125,
+        1.4315,
+        0.0
+      ],
+      "evidence": {
+        "provenance": "inferred",
+        "method": "fk",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T01"
+        ]
+      }
+    },
+    {
+      "position_m": [
+        -0.807625,
+        1.4315,
+        0.0
+      ],
+      "evidence": {
+        "provenance": "inferred",
+        "method": "fk",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T01"
+        ]
+      }
+    },
+    {
+      "position_m": [
+        0.167125,
+        0.9275,
+        0.0
+      ],
+      "evidence": {
+        "provenance": "inferred",
+        "method": "fk",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T01"
+        ]
+      }
+    },
+    {
+      "position_m": [
+        0.167125,
+        0.49875,
+        0.0
+      ],
+      "evidence": {
+        "provenance": "inferred",
+        "method": "fk",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T01"
+        ]
+      }
+    },
+    {
+      "position_m": [
+        0.167125,
+        0.06825,
+        0.0
+      ],
+      "evidence": {
+        "provenance": "inferred",
+        "method": "fk",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T01"
+        ]
+      }
+    },
+    {
+      "position_m": [
+        -0.167125,
+        0.9275,
+        0.0
+      ],
+      "evidence": {
+        "provenance": "inferred",
+        "method": "fk",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T01"
+        ]
+      }
+    },
+    {
+      "position_m": [
+        -0.167125,
+        0.49875,
+        0.0
+      ],
+      "evidence": {
+        "provenance": "inferred",
+        "method": "fk",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T01"
+        ]
+      }
+    },
+    {
+      "position_m": [
+        -0.167125,
+        0.06825,
+        0.0
+      ],
+      "evidence": {
+        "provenance": "inferred",
+        "method": "fk",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T01"
+        ]
+      }
+    },
+    {
+      "position_m": [
+        0.0,
+        1.75,
+        0.0
+      ],
+      "evidence": {
+        "provenance": "inferred",
+        "method": "fk",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T01"
+        ]
+      }
+    },
+    {
+      "position_m": [
+        0.996625,
+        1.4315,
+        0.0
+      ],
+      "evidence": {
+        "provenance": "inferred",
+        "method": "fk",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T01"
+        ]
+      }
+    },
+    {
+      "position_m": [
+        -0.996625,
+        1.4315,
+        0.0
+      ],
+      "evidence": {
+        "provenance": "inferred",
+        "method": "fk",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T01"
+        ]
+      }
+    },
+    {
+      "position_m": [
+        0.167125,
+        0.0,
+        0.1925
+      ],
+      "evidence": {
+        "provenance": "inferred",
+        "method": "fk",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T01"
+        ]
+      }
+    },
+    {
+      "position_m": [
+        -0.167125,
+        0.0,
+        0.1925
+      ],
+      "evidence": {
+        "provenance": "inferred",
+        "method": "fk",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T01"
+        ]
+      }
+    },
+    {
+      "position_m": [
+        0.167125,
+        0.0,
+        -0.0735
+      ],
+      "evidence": {
+        "provenance": "inferred",
+        "method": "fk",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T01"
+        ]
+      }
+    },
+    {
+      "position_m": [
+        -0.167125,
+        0.0,
+        -0.0735
+      ],
+      "evidence": {
+        "provenance": "inferred",
+        "method": "fk",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303828333,
+        "sources": [
+          "SIM-T01"
+        ]
+      }
+    }
+  ],
+  "root": {
+    "position_m": [
+      0.0,
+      0.9275,
+      0.0
+    ],
+    "evidence": {
+      "provenance": "inferred",
+      "method": "floor_contact",
+      "confidence": null,
+      "sigma": null,
+      "sigma_basis": null,
+      "t_obs_us": 303828333,
+      "sources": [
+        "SIM-T01"
+      ]
+    }
+  }
+}

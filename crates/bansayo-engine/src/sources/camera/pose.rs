@@ -318,6 +318,7 @@ pub struct OneEuro {
     dx: f32,
     t_us: u64,
 }
+pub const SMOOTHING_IDENTITY: &str = "one_euro:min_cutoff_hz=1.5,beta=0.02,derivative_cutoff_hz=1";
 const MIN_CUTOFF_HZ: f32 = 1.5;
 const BETA: f32 = 0.02;
 const D_CUTOFF_HZ: f32 = 1.0;

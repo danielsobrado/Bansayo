@@ -430,6 +430,44 @@
   },
   "state": {
     "rev": 412,
+    "capability_report": {
+      "profile": "inertial",
+      "profile_override": null,
+      "tracking_config_id": "7dedce1c701e1c00",
+      "calibration_set_id": "792a197680de1518",
+      "inputs": [
+        {
+          "class": "R",
+          "target": "pelvis",
+          "state": "available",
+          "methods": [
+            "imu_mounted"
+          ],
+          "rate_hz": 100.0,
+          "reasons": []
+        }
+      ],
+      "observables": [
+        {
+          "id": "trunk_forward_lean",
+          "state": "available",
+          "method": "imu_mounted",
+          "reasons": []
+        },
+        {
+          "id": "input.SIM-T01.angular_velocity",
+          "state": "unavailable",
+          "method": null,
+          "reasons": [
+            {
+              "code": "not_implemented",
+              "subject": "SIM-T01",
+              "message": "Angular velocity is recorded but not consumed by a solver stage."
+            }
+          ]
+        }
+      ]
+    },
     "engine": {
       "version": "0.1.0",
       "protocol_version": 1,

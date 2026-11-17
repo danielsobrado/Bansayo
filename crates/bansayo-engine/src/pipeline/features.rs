@@ -146,3 +146,5 @@ pub fn unconsumed(capability: SensorCapability) -> Option<Reason> {
         )
     })
 }
+
+pub use super::capability::report as capability_report;

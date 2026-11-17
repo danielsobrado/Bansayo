@@ -79,7 +79,7 @@ fn simulator_profiles_come_from_contributing_inputs_and_hashes_are_stable() {
     for (yaml, expected) in [
         (
             include_str!("../../../config/sim-full-body.yaml"),
-            CapabilityProfileId::Inertial,
+            CapabilityProfileId::Hybrid,
         ),
         (
             include_str!("../../../config/sim-six-trackers.yaml"),
@@ -157,4 +157,27 @@ fn camera_fit_never_claims_observed_twist_and_stale_sources_lower_profile() {
         capability_report(&sk, &reg, &store, &solved, &cfg.config, 2_000_000).profile,
         CapabilityProfileId::None
     );
+}
+
+#[test]
+fn overrides_cannot_raise_profiles_and_only_valid_profiles_in_use_change_calibration_identity() {
+    let (cfg, sk, reg, mut store) = rig(include_str!("../../../config/sim-six-trackers.yaml"));
+    let solved = solve(&sk, &reg, &store, 1_000_000, &cfg.config);
+    let original = capability_report(&sk, &reg, &store, &solved, &cfg.config, 1_000_000);
+    let mut config = cfg.config.clone();
+    config.tracking.profile_override = Some(CapabilityProfileId::Extended);
+    assert_eq!(
+        capability_report(&sk, &reg, &store, &solved, &config, 1_000_000).profile,
+        CapabilityProfileId::Inertial
+    );
+    config.tracking.profile_override = Some(CapabilityProfileId::None);
+    assert_eq!(
+        capability_report(&sk, &reg, &store, &solved, &config, 1_000_000).profile,
+        CapabilityProfileId::None
+    );
+    let id = store.profiles.keys().next().unwrap().clone();
+    store.stale.insert(id);
+    let report = capability_report(&sk, &reg, &store, &solved, &cfg.config, 1_000_000);
+    assert_ne!(report.calibration_set_id, original.calibration_set_id);
+    assert_eq!(report.tracking_config_id, original.tracking_config_id);
 }

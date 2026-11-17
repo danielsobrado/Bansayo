@@ -19,6 +19,7 @@ use tokio_util::sync::CancellationToken;
 #[derive(Clone)]
 pub struct Streams {
     pub state: watch::Receiver<SystemState>,
+    pub motion: watch::Receiver<std::sync::Arc<MotionSample>>,
     pub frame: watch::Receiver<std::sync::Arc<super::encoded::Encoded>>,
     pub state_wire: watch::Receiver<std::sync::Arc<super::encoded::Encoded>>,
     pub landmarks: broadcast::Sender<std::sync::Arc<super::encoded::Encoded>>,
@@ -51,6 +52,9 @@ impl Runner {
             0,
             &self.config.config,
         );
+        let initial_motion =
+            super::motion::sample(&self.skeleton, &self.registry, &solved, 0, 0, vec![]);
+        let (motion_tx, motion_rx) = watch::channel(std::sync::Arc::new(initial_motion));
         let frame = ServerMessage::Frame {
             seq: 0,
             t_us: 0,
@@ -71,6 +75,7 @@ impl Runner {
         let (landmarks, _) = broadcast::channel(64);
         let (notices, _) = broadcast::channel(32);
         let streams = Streams {
+            motion: motion_rx,
             state: state_rx,
             state_wire: state_wire_rx,
             frame: frame_rx,
@@ -87,7 +92,7 @@ impl Runner {
             super::runtime::Runtime::new(
                 tx,
                 state_tx,
-                frame_tx,
+                (frame_tx, motion_tx),
                 landmarks,
                 notices,
                 skeleton_tx,
@@ -128,7 +133,14 @@ impl Runner {
         );
         let features = features(&devices, &solved);
         SystemState {
-            capability_report: None,
+            capability_report: Some(super::features::capability_report(
+                &self.skeleton,
+                &self.registry,
+                &self.store,
+                &solved,
+                &self.config.config,
+                now,
+            )),
             rev,
             engine: EngineInfo {
                 version: env!("CARGO_PKG_VERSION").into(),
