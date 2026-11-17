@@ -1,0 +1,7 @@
+.field { display: grid; gap: var(--space-4); min-width: 0; }
+.label { color: var(--ink-2); font-size: var(--text-small); }
+.input { width: 100%; min-height: var(--control-height); padding: var(--space-4) var(--space-8); background: var(--surface-0); border: var(--hairline) solid var(--line); border-radius: var(--radius-control); color: var(--ink-1); font: inherit; }
+.input[aria-invalid="true"] { border-color: var(--state-unavailable); }
+.input:disabled { color: var(--ink-3); cursor: not-allowed; }
+.hint { color: var(--ink-3); font-size: var(--text-small); }
+.error { color: var(--state-unavailable); font-size: var(--text-small); }

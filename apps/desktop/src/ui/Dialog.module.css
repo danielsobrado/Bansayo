@@ -1,0 +1,6 @@
+.dialog { width: min(480px, calc(100vw - 2 * var(--space-24))); max-height: calc(100dvh - 2 * var(--space-24)); padding: var(--space-24); overflow: auto; color: var(--ink-1); background: var(--surface-1); border: var(--hairline) solid var(--line); border-radius: var(--radius-float); box-shadow: var(--shadow-float); }
+.dialog::backdrop { background: var(--scrim); }
+.title { font-size: var(--text-title); }
+.description { color: var(--ink-2); }
+.body { display: grid; gap: var(--space-12); margin-block: var(--space-16); }
+.actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: var(--space-8); }

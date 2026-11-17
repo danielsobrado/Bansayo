@@ -1,0 +1,1 @@
+.drawer { margin: 0 0 0 auto; width: min(400px, 100vw); height: 100dvh; max-height: 100dvh; border-radius: var(--radius-panel); border-block: 0; border-right: 0; }

@@ -1,0 +1,6 @@
+.field { display: grid; gap: var(--space-4); min-width: 0; }
+.label { color: var(--ink-2); font-size: var(--text-small); }
+.select { width: 100%; min-width: 0; min-height: var(--control-height); }
+.select[aria-invalid="true"] { border-color: var(--state-unavailable); }
+.hint { color: var(--ink-3); font-size: var(--text-small); }
+.error { color: var(--state-unavailable); font-size: var(--text-small); }

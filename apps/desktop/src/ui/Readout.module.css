@@ -1,0 +1,5 @@
+.readout { display: grid; gap: var(--space-4); }
+.label { color: var(--ink-2); font-size: var(--text-label); letter-spacing: var(--tracking-label); text-transform: uppercase; }
+.value { color: var(--ink-1); font-family: var(--font-mono); font-size: var(--text-readout); font-variant-numeric: tabular-nums; line-height: 1.2; }
+.readout[data-large="true"] .value { font-size: var(--text-readout-lg); }
+.unit { color: var(--ink-2); font-size: var(--text-small); }

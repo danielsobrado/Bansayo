@@ -1,0 +1,4 @@
+.button { min-height: var(--control-height); border-radius: var(--radius-control); }
+.button[data-variant="primary"] { border-color: var(--accent); color: var(--accent); }
+.button[data-variant="danger"] { border-color: var(--state-unavailable); color: var(--state-unavailable); }
+.button:disabled { color: var(--ink-3); border-color: var(--line); }

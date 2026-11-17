@@ -22,8 +22,8 @@ describe("display conventions", () => {
     expect(out[2]).toBeCloseTo(0);
   });
   it("falls back from unknown hash workspaces", () => {
-    expect(parseHash("#/studio", ["studio"], "studio")).toBe("studio");
-    expect(parseHash("#/unknown", ["studio"], "studio")).toBe("studio");
+    expect(parseHash("#/studio", ["studio"], "studio")).toEqual({workspace:"studio",rest:[]});
+    expect(parseHash("#/unknown", ["studio"], "studio")).toEqual({workspace:"studio",rest:[]});
   });
   it("keeps text and semantic readout tokens at AA contrast on panels", () => {
     const css = readFileSync(

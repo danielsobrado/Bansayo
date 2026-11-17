@@ -6,9 +6,11 @@ export function parseHash(
   hash: string,
   known: readonly string[],
   fallback: string,
-): string {
-  const id = hash.replace(/^#\/?/, "").split(/[/?]/)[0] ?? "";
-  return known.includes(id) ? id : fallback;
+): { workspace: string; rest: string[] } {
+  const [workspace = "", ...rest] = hash.replace(/^#\/?/, "").split("?")[0]!.split("/");
+  return known.includes(workspace)
+    ? { workspace, rest: rest.filter(Boolean) }
+    : { workspace: fallback, rest: [] };
 }
 
 const subscribe = (cb: () => void): (() => void) => {
@@ -18,7 +20,7 @@ const subscribe = (cb: () => void): (() => void) => {
 
 export function useRoute(known: readonly string[], fallback: string): string {
   return useSyncExternalStore(subscribe, () =>
-    parseHash(window.location.hash, known, fallback),
+    parseHash(window.location.hash, known, fallback).workspace,
   );
 }
 
