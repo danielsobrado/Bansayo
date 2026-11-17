@@ -3,6 +3,10 @@ import type { DeviceStatus } from "@contracts";
 import { freshLandmarks } from "../../engine/stores";
 import { tokenCss } from "../../viewport/palette";
 import { OriginBadge } from "../../ui/OriginBadge";
+import { API_BASE } from "../../engine/config";
+
+/** The engine refreshes previews at most every 100 ms. */
+const PREVIEW_POLL_MS = 150;
 
 /** Landmarks stay in the external store. This canvas reads them without React frame updates. */
 export function CameraPreview({
@@ -16,6 +20,7 @@ export function CameraPreview({
   const ref = useRef<HTMLCanvasElement>(null);
   const highlightRef = useRef(highlight);
   highlightRef.current = highlight;
+  const hasImage = device.descriptor.origin !== "simulated";
   useEffect(() => {
     const canvas = ref.current;
     const ctx = canvas?.getContext("2d");
@@ -29,15 +34,43 @@ export function CameraPreview({
     const accent = tokenCss("--accent");
     const schema = device.descriptor.camera?.landmark_schema;
     let id = 0;
+    // Physical cameras: newest JPEG preview, polled; drawn stretched to image pixels.
+    let image: ImageBitmap | null = null;
+    let stopped = false;
+    let poll = 0;
+    async function fetchPreview() {
+      if (stopped) return;
+      try {
+        if (!document.hidden) {
+          const response = await fetch(
+            `${API_BASE}/cameras/${encodeURIComponent(device.descriptor.id)}/preview.jpg`,
+            { cache: "no-store" },
+          );
+          if (response.ok) {
+            const next = await createImageBitmap(await response.blob());
+            image?.close();
+            image = next;
+          }
+        }
+      } catch {
+        // Engine restarting or camera gone: keep the last image and retry.
+      }
+      if (!stopped) poll = window.setTimeout(fetchPreview, PREVIEW_POLL_MS);
+    }
+    if (device.descriptor.origin !== "simulated") void fetchPreview();
     function draw() {
       id = requestAnimationFrame(draw);
       if (document.hidden || !ctx || !canvas) return;
       const w = canvas.width;
       const h = canvas.height;
       ctx.clearRect(0, 0, w, h);
-      ctx.strokeStyle = faint;
-      ctx.lineWidth = 1;
-      ctx.strokeRect(w * 0.05, h * 0.05, w * 0.9, h * 0.9);
+      if (image) {
+        ctx.drawImage(image, 0, 0, w, h);
+      } else {
+        ctx.strokeStyle = faint;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(w * 0.05, h * 0.05, w * 0.9, h * 0.9);
+      }
       const landmarks = freshLandmarks(performance.now()).get(
         device.descriptor.id,
       );
@@ -48,6 +81,17 @@ export function CameraPreview({
         ctx.fillText("Waiting for 2D landmarks", w / 2, h / 2);
         return;
       }
+      const detected = landmarks.points.filter(Boolean).length;
+      ctx.font = `${Math.max(16, w / 55)}px sans-serif`;
+      ctx.textAlign = "left";
+      ctx.fillStyle = detected ? ink : unavailable;
+      ctx.fillText(
+        detected
+          ? `${detected}/${landmarks.points.length} landmarks`
+          : "No person detected",
+        w * 0.02,
+        h * 0.06,
+      );
       ctx.strokeStyle = ink;
       ctx.fillStyle = ink;
       ctx.lineWidth = Math.max(2, w / 450);
@@ -78,18 +122,23 @@ export function CameraPreview({
       }
     }
     draw();
-    return () => cancelAnimationFrame(id);
+    return () => {
+      stopped = true;
+      window.clearTimeout(poll);
+      image?.close();
+      cancelAnimationFrame(id);
+    };
   }, [device.descriptor]);
   return (
     <div className="camera-preview">
       <canvas
         ref={ref}
         role="img"
-        aria-label={`2D landmarks from ${device.descriptor.id}, in image pixels`}
+        aria-label={`${hasImage ? "Camera image and " : ""}2D landmarks from ${device.descriptor.id}, in image pixels`}
       />
       <div className="camera-preview-label">
         <OriginBadge label={device.descriptor.origin} />
-        <span>No image · 2D landmarks</span>
+        <span>{hasImage ? "Camera image" : "No image"} · 2D landmarks</span>
       </div>
     </div>
   );

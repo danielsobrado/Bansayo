@@ -151,8 +151,8 @@ export function Cameras({ state }: { state: SystemState | null }) {
               <p className="calibration-note">
                 Each camera gives 2D landmarks in image pixels. Metric 3D
                 positions come only from triangulating two or more calibrated,
-                synchronised cameras. In this PoC cameras and landmarks are
-                simulated: no video is captured and no detector runs.
+                synchronised cameras. Simulated cameras project the simulated
+                body; physical cameras run person detection and RTMPose.
               </p>
             </div>
             <LandmarkInspector inspection={sampled.inspection} />
@@ -196,10 +196,9 @@ export function Cameras({ state }: { state: SystemState | null }) {
           title={state ? "No cameras configured" : "Waiting for the engine"}
         >
           <p>
-            Add cameras to the simulated source in the configuration file, or
-            run sim-camera-only.yaml. Each camera gives 2D landmarks; metric 3D
-            needs two or more calibrated, synchronised cameras. Cameras and
-            landmarks are simulated: no video is captured and no detector runs.
+            Add a camera source to the configuration file (cameras-two.yaml for
+            USB cameras), or run sim-camera-only.yaml. Each camera gives 2D
+            landmarks; metric 3D needs two or more calibrated cameras.
           </p>
         </EmptyState>
       )}

@@ -74,8 +74,8 @@ export function Devices({
             <EmptyState title="No devices configured">
               <p>
                 Sources are defined in the engine configuration. Try
-                sim-full-body.yaml, sim-six-trackers.yaml or
-                sim-camera-only.yaml.
+                sim-full-body.yaml, sim-six-trackers.yaml,
+                sim-camera-only.yaml or cameras-two.yaml.
               </p>
             </EmptyState>
           ) : (
