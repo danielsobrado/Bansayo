@@ -131,7 +131,7 @@ impl Replay {
         self.registry
             .entries
             .values()
-            .filter_map(|e| e.latest.as_ref())
+            .filter_map(|e| e.latest.get(&crate::registry::ObservationKind::Landmarks2d))
             .filter(|o| time.saturating_sub(o.t_us) <= stale_us)
             .filter_map(landmarks_2d)
             .chain(self.solve_at(time))

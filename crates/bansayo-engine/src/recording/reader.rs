@@ -105,9 +105,13 @@ pub fn load(dir: &Path, id: &SessionId) -> Result<Recording, String> {
                         &entry.descriptor,
                         message.log_time / 1000,
                     )?;
-                    if entry.latest.as_ref().is_some_and(|last| {
-                        observation.seq <= last.seq || observation.t_us < last.t_us
-                    }) {
+                    if entry
+                        .latest
+                        .get(&crate::registry::ObservationKind::of(&observation.data))
+                        .is_some_and(|last| {
+                            observation.seq <= last.seq || observation.t_us < last.t_us
+                        })
+                    {
                         return Err("Recorded observations are out of order.".into());
                     }
                 }

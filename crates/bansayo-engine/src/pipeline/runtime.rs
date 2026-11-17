@@ -205,7 +205,7 @@ impl Runtime {
                         if let Some(entry) = engine.registry.entries.get_mut(&id) {
                             entry.failure = Some(message.clone());
                             entry.connected = false;
-                            entry.latest = None;
+                            entry.latest.clear();
                             entry.recent.clear();
                             entry.landmarks.clear();
                             entry.first_us = None;

@@ -4,7 +4,7 @@ use crate::{
     config::Config,
     math::{Rot, rot_from_wire, rot_to_wire, v3_from_wire, v3_to_wire},
     pipeline::{skeleton_fit::fit, triangulate::triangulate},
-    registry::{Registry, reason},
+    registry::{ObservationKind, Registry, reason},
     skeleton::{Skeleton, floor_contact_root, forward_kinematics, proportions::LANDMARK_SCHEMA_ID},
 };
 use bansayo_contracts::*;
@@ -54,8 +54,8 @@ pub fn solve(
         };
         let Some(o) = entry
             .latest
-            .as_ref()
-            .filter(|o| now.saturating_sub(o.t_us) <= stale_us)
+            .get(&ObservationKind::Orientation)
+            .filter(|o| o.t_us <= now && now.saturating_sub(o.t_us) <= stale_us)
         else {
             reasons.push(reason(
                 "observation_stale",
@@ -134,10 +134,13 @@ pub fn solve(
     let root = measured_root.unwrap_or_else(|| floor_contact_root(sk, &rotations));
     let positions = forward_kinematics(sk, &rotations, root);
     let fresh_orientation = registry.entries.values().any(|e| {
-        e.latest.as_ref().is_some_and(|o| {
-            matches!(o.data, ObservationData::Orientation { .. })
-                && now.saturating_sub(o.t_us) <= stale_us
-        })
+        e.latest
+            .get(&ObservationKind::Orientation)
+            .is_some_and(|o| {
+                matches!(o.data, ObservationData::Orientation { .. })
+                    && o.t_us <= now
+                    && now.saturating_sub(o.t_us) <= stale_us
+            })
     });
     let pose = (fresh_orientation || camera_fit.is_some()).then(|| SkeletonPose {
         skeleton_rev: sk.definition.rev,

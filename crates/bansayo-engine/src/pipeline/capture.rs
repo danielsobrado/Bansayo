@@ -40,9 +40,12 @@ impl Runner {
                     format!("Tracker {id} is not assigned to a segment."),
                 )
             })?;
-            if e.latest.as_ref().is_none_or(|o| {
-                now.saturating_sub(o.t_us) > self.config.config.engine.stale_after_ms * 1000
-            }) {
+            if e.latest
+                .get(&crate::registry::ObservationKind::Orientation)
+                .is_none_or(|o| {
+                    now.saturating_sub(o.t_us) > self.config.config.engine.stale_after_ms * 1000
+                })
+            {
                 return Err(ControlError::new(
                     ApiErrorCode::Unavailable,
                     format!("Tracker {id} is not delivering data."),

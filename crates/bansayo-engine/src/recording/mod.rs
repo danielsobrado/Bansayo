@@ -51,7 +51,7 @@ impl Context {
             latest: registry
                 .entries
                 .values()
-                .filter_map(|e| e.latest.clone())
+                .flat_map(|e| e.latest.values().cloned())
                 .collect(),
             config: config.clone(),
             links: registry

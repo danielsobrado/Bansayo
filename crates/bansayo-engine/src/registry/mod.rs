@@ -5,10 +5,38 @@ use bansayo_contracts::*;
 use std::collections::BTreeMap;
 /// Camera frames kept per camera: about a quarter second at 30 Hz.
 pub const LANDMARK_HISTORY: usize = 8;
+/// Streams have independent sequence numbers and timestamps, even on the same device.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ObservationKind {
+    Orientation,
+    AngularVelocity,
+    Acceleration,
+    Position,
+    Distance,
+    Contact,
+    Landmarks2d,
+    Landmarks3d,
+    Diagnostics,
+}
+impl ObservationKind {
+    pub fn of(data: &ObservationData) -> Self {
+        match data {
+            ObservationData::Orientation { .. } => Self::Orientation,
+            ObservationData::AngularVelocity { .. } => Self::AngularVelocity,
+            ObservationData::Acceleration { .. } => Self::Acceleration,
+            ObservationData::Position { .. } => Self::Position,
+            ObservationData::Distance { .. } => Self::Distance,
+            ObservationData::Contact { .. } => Self::Contact,
+            ObservationData::Landmarks2d { .. } => Self::Landmarks2d,
+            ObservationData::Landmarks3d { .. } => Self::Landmarks3d,
+            ObservationData::Diagnostics { .. } => Self::Diagnostics,
+        }
+    }
+}
 #[derive(Clone)]
 pub struct Entry {
     pub descriptor: DeviceDescriptor,
-    pub latest: Option<SensorObservation>,
+    pub latest: BTreeMap<ObservationKind, SensorObservation>,
     pub received: u64,
     pub first_us: Option<u64>,
     pub dropped: u64,
@@ -39,7 +67,7 @@ impl Registry {
                         d.id.clone(),
                         Entry {
                             descriptor: d,
-                            latest: None,
+                            latest: BTreeMap::new(),
                             received: 0,
                             first_us: None,
                             dropped: 0,
@@ -74,7 +102,7 @@ impl Registry {
                     e.first_us = None;
                     e.recent.clear();
                     e.landmarks.clear();
-                    e.latest = None;
+                    e.latest.clear();
                 }
                 true
             }
@@ -86,7 +114,7 @@ impl Registry {
                 };
                 slot.insert(Entry {
                     descriptor,
-                    latest: None,
+                    latest: BTreeMap::new(),
                     received: 0,
                     first_us: None,
                     dropped: 0,
@@ -105,7 +133,8 @@ impl Registry {
         let Some(entry) = self.entries.get_mut(&o.device_id) else {
             return false;
         };
-        if let Some(last) = &entry.latest {
+        let kind = ObservationKind::of(&o.data);
+        if let Some(last) = entry.latest.get(&kind) {
             if o.seq <= last.seq || o.t_us < last.t_us {
                 return false;
             }
@@ -113,10 +142,28 @@ impl Registry {
         }
         entry.connected = true;
         entry.failure = None;
-        if entry.recent.len() == 256 {
-            entry.recent.pop_front();
+        // The descriptor rate is the primary stream rate, not the sum of multiplexed streams.
+        let primary = if entry
+            .descriptor
+            .capabilities
+            .contains(&SensorCapability::Orientation)
+        {
+            ObservationKind::Orientation
+        } else if entry
+            .descriptor
+            .capabilities
+            .contains(&SensorCapability::Landmarks2d)
+        {
+            ObservationKind::Landmarks2d
+        } else {
+            kind
+        };
+        if kind == primary {
+            if entry.recent.len() == 256 {
+                entry.recent.pop_front();
+            }
+            entry.recent.push_back(o.t_us);
         }
-        entry.recent.push_back(o.t_us);
         if let Some(q) = o.confidence {
             entry.reported_quality = q;
         }
@@ -128,7 +175,7 @@ impl Registry {
             }
             entry.landmarks.push_back(o.clone());
         }
-        entry.latest = Some(o);
+        entry.latest.insert(kind, o);
         true
     }
     pub fn status(&self, now: u64, quality: &QualityConfig, store: &Store) -> Vec<DeviceStatus> {
@@ -136,7 +183,7 @@ impl Registry {
             .values()
             .map(|e| {
                 let assignment = self.assignments.get(&e.descriptor.id).cloned();
-                let last = e.latest.as_ref();
+                let last = e.latest.values().max_by_key(|o| o.t_us);
                 let age = last.map(|o| now.saturating_sub(o.t_us));
                 let rate = match (e.recent.front(), e.recent.back()) {
                     (Some(first), Some(last)) if last > first => {
