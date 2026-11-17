@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "20261117T053748Z-4nqg",
+  "name": "Phase 0 before reference b61c6b7",
+  "created_utc": "2026-11-17T05:37:48Z",
+  "duration_us": 7500000,
+  "size_bytes": 3272648,
+  "origins": [
+    "simulated"
+  ],
+  "device_count": 12,
+  "engine_version": "0.1.0",
+  "protocol_version": 1
+}
