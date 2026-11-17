@@ -83,7 +83,10 @@ profile now uses line-tables-only debug info and none for third-party crates (ro
   rather than completing. Criterion 3 therefore cannot be met as written on a simulated rig
   without a new grading input. Not redesigned; candidates for the owner: propagate keypoint sigma
   through the skeleton fit (04 §8 "segment long axis") and let grade B use it, or restate the
-  criterion as "records the loss in each repetition's evidence".
+  criterion as "records the loss in each repetition's evidence". **Owner decision (17 November
+  2026): restate.** 18 §3 now reads "the session completes, and every later repetition's
+  evidence records the reduced set of contributing cameras". Whether the current code records
+  that is checked at the start of Phase 2.
 - 18 §4 shows `/content/index` and `/capability`; the capability report is in `SystemState`
   (Phase 0), so the desktop reads it there.
 
