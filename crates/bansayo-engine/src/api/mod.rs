@@ -1,5 +1,6 @@
 //! HTTP boundary: only pipeline commands and shared contracts cross into the engine.
 mod control;
+mod training;
 mod ws;
 use crate::pipeline::{
     Streams,
@@ -24,6 +25,12 @@ pub struct Api {
     pub publish_rate: f64,
     pub cancel: CancellationToken,
     pub previews: crate::sources::camera::Previews,
+    pub training: crate::training::TrainingClient,
+    pub training_streams: crate::training::TrainingStreams,
+    pub content: Arc<crate::content_store::ContentStore>,
+    pub store: Option<crate::store::Writer>,
+    pub data_dir: std::path::PathBuf,
+    pub progress: crate::config::ProgressSection,
 }
 pub fn router(api: Api) -> Router {
     Router::new()
@@ -50,6 +57,51 @@ pub fn router(api: Api) -> Router {
         .route("/api/v1/playback/start", post(control::playback_start))
         .route("/api/v1/playback", put(control::playback_update))
         .route("/api/v1/playback/stop", post(control::playback_stop))
+        .route("/api/v1/content/index", get(training::content_index))
+        .route("/api/v1/content/i18n/{lang}", get(training::i18n))
+        .route("/api/v1/content/{kind}/{id}", get(training::content_get))
+        .route(
+            "/api/v1/athletes",
+            get(training::athletes).post(training::athlete_create),
+        )
+        .route("/api/v1/athletes/active", put(training::athlete_active))
+        .route(
+            "/api/v1/athletes/{id}",
+            get(training::athlete_get).put(training::athlete_put),
+        )
+        .route(
+            "/api/v1/athletes/{id}/consent",
+            post(training::athlete_consent),
+        )
+        .route(
+            "/api/v1/training/sessions",
+            get(training::sessions).post(training::session_create),
+        )
+        .route("/api/v1/training/state", get(training::training_state))
+        .route("/api/v1/training/command", post(training::training_command))
+        .route(
+            "/api/v1/training/sessions/{id}",
+            get(training::session_get).delete(training::session_delete),
+        )
+        .route(
+            "/api/v1/training/sessions/{id}/events",
+            get(training::session_events),
+        )
+        .route(
+            "/api/v1/training/sessions/{id}/reps",
+            get(training::session_reps),
+        )
+        .route(
+            "/api/v1/training/sessions/{id}/provenance",
+            get(training::session_provenance),
+        )
+        .route(
+            "/api/v1/training/sessions/{id}/rpe",
+            post(training::session_rpe),
+        )
+        .route("/api/v1/training/reps/{id}/{rep}", get(training::rep_get))
+        .route("/api/v1/progress/series", get(training::progress_series))
+        .route("/api/v1/progress/summary", get(training::progress_summary))
         .fallback(|| async {
             failure(
                 ApiErrorCode::NotFound,

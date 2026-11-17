@@ -1,0 +1,182 @@
+{
+  "type": "training_event",
+  "session_id": "20261117T120000Z-k3b9",
+  "event": {
+    "event_seq": 88,
+    "t_us": 303825000,
+    "type": "rep_completed",
+    "position": {
+      "block": 0,
+      "item": 0,
+      "set": 2,
+      "round": null,
+      "step": null
+    },
+    "data": {
+      "cue": null,
+      "excluded": false,
+      "measurements": [
+        {
+          "comparability_class": "6c1f0a9e2b7d4c3a",
+          "evidence": {
+            "confidence": 0.9200000166893005,
+            "method": "fk",
+            "provenance": "derived",
+            "sigma": null,
+            "sigma_basis": null,
+            "sources": [
+              "SIM-CAM1",
+              "SIM-CAM2"
+            ],
+            "t_obs_us": 303816666
+          },
+          "grade": "B",
+          "metric": "kick.total_time@1",
+          "norm": null,
+          "reasons": [
+            {
+              "code": "origin_not_live",
+              "message": "Simulated or recorded inputs are not graded A.",
+              "subject": null
+            }
+          ],
+          "unit": "ms",
+          "value": 1325.0
+        },
+        {
+          "comparability_class": "0d4e8a2f61b3c975",
+          "evidence": {
+            "confidence": 0.9200000166893005,
+            "method": "fk",
+            "provenance": "derived",
+            "sigma": null,
+            "sigma_basis": null,
+            "sources": [
+              "SIM-CAM1",
+              "SIM-CAM2"
+            ],
+            "t_obs_us": 303816666
+          },
+          "grade": "X",
+          "metric": "kick.peak_ankle_height@1",
+          "norm": null,
+          "reasons": [
+            {
+              "code": "calibration_missing",
+              "message": "A calibration this measurement needs is not valid.",
+              "subject": "floor_plane"
+            }
+          ],
+          "unit": "m",
+          "value": null
+        }
+      ],
+      "repetition": {
+        "capability_profile": "multi_view",
+        "outcome": "completed",
+        "phases": [
+          {
+            "evidence": {
+              "confidence": 0.9200000166893005,
+              "method": "fk",
+              "provenance": "derived",
+              "sigma": null,
+              "sigma_basis": null,
+              "sources": [
+                "SIM-CAM1",
+                "SIM-CAM2"
+              ],
+              "t_obs_us": 303816666
+            },
+            "phase": "chamber",
+            "t_end_us": 302731000,
+            "t_start_us": 302710000
+          },
+          {
+            "evidence": {
+              "confidence": 0.9200000166893005,
+              "method": "fk",
+              "provenance": "derived",
+              "sigma": null,
+              "sigma_basis": null,
+              "sources": [
+                "SIM-CAM1",
+                "SIM-CAM2"
+              ],
+              "t_obs_us": 303816666
+            },
+            "phase": "extension",
+            "t_end_us": 302930000,
+            "t_start_us": 302731000
+          }
+        ],
+        "recognition_confidence": 0.86,
+        "rep_index": 7,
+        "side": "right",
+        "stance": "orthodox",
+        "strike_t_us": 302780000,
+        "t_end_us": 303825000,
+        "t_start_us": 302500000,
+        "technique": "taekwondo.dollyeo_chagi@1"
+      },
+      "score": {
+        "comparability_class": "93ab0e1c7f2d5a46",
+        "components": [
+          {
+            "deviation": null,
+            "id": "completion",
+            "measurement": null,
+            "reasons": [],
+            "score": 1.0,
+            "target": null
+          },
+          {
+            "deviation": null,
+            "id": "height",
+            "measurement": {
+              "comparability_class": "0d4e8a2f61b3c975",
+              "evidence": {
+                "confidence": 0.9200000166893005,
+                "method": "fk",
+                "provenance": "derived",
+                "sigma": null,
+                "sigma_basis": null,
+                "sources": [
+                  "SIM-CAM1",
+                  "SIM-CAM2"
+                ],
+                "t_obs_us": 303816666
+              },
+              "grade": "X",
+              "metric": "kick.peak_ankle_height@1",
+              "norm": null,
+              "reasons": [
+                {
+                  "code": "calibration_missing",
+                  "message": "A calibration this measurement needs is not valid.",
+                  "subject": "floor_plane"
+                }
+              ],
+              "unit": "m",
+              "value": null
+            },
+            "reasons": [
+              {
+                "code": "measurement_quality",
+                "message": "The measurement is not reliable enough to score.",
+                "subject": "height"
+              }
+            ],
+            "score": null,
+            "target": null
+          }
+        ],
+        "coverage": 0.0,
+        "model": "scoring.kick.basic@1",
+        "reference_match": null
+      },
+      "scored": true,
+      "targets": []
+    }
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "id": "ana",
+  "display_name": "Ana",
+  "created_utc": "2026-11-17T10:00:00Z",
+  "height_m": 1.68,
+  "dominant_side": "right",
+  "default_stance": "orthodox",
+  "disciplines": [
+    {
+      "id": "taekwondo",
+      "style": "kukkiwon",
+      "experience": "intermediate"
+    }
+  ],
+  "preferred_discipline": "taekwondo",
+  "goals": [],
+  "coaching": {
+    "level": "standard",
+    "tolerance_scale": 1.0
+  },
+  "enabled_techniques": [],
+  "tracking": {
+    "profile_override": null,
+    "record_defaults": {
+      "inputs": true,
+      "motion": true,
+      "video": false
+    }
+  },
+  "consent": {
+    "motion_data_utc": "2026-11-17T10:01:00Z",
+    "video_utc": null
+  },
+  "retention": null,
+  "safety_ack": {
+    "taekwondo.dollyeo_chagi@1": "2026-11-17T10:02:00Z"
+  }
+}

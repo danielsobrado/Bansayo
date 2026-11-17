@@ -240,24 +240,59 @@ pub fn report(
             }
         }
     }
+    let (tracking_body, calibration_body) = identity_bodies(&devices, reg, store, config);
+    let tracking_config_id = canonical_id(&tracking_body);
+    CapabilityReport {
+        profile,
+        profile_override: config.tracking.profile_override,
+        tracking_config_id,
+        calibration_set_id: canonical_id(&calibration_body),
+        inputs,
+        observables,
+    }
+}
+
+/// The bodies whose hashes are `tracking_config_id` and `calibration_set_id` (12 §4, 32 §3).
+pub fn identity_bodies(
+    devices: &[DeviceStatus],
+    reg: &Registry,
+    store: &Store,
+    config: &Config,
+) -> (serde_json::Value, serde_json::Value) {
     let device_config:Vec<_>=devices.iter().map(|d|json!({"id":d.descriptor.id,"kind":d.descriptor.kind,"model":d.descriptor.model,"resolution":d.descriptor.camera.as_ref().map(|c|c.resolution_px),"nominal_rate":d.descriptor.nominal_rate_hz})).collect();
-    let detectors:Vec<_>=devices.iter().filter_map(|d|d.descriptor.camera.as_ref().map(|c|json!({"device":d.descriptor.id,"schema":c.landmark_schema.as_ref().map(|s|&s.id),"detector":if d.descriptor.origin==Origin::Simulated {"simulated-projection"}else{crate::sources::camera::pose::DETECTOR_NAME}}))).collect();
+    let detectors:Vec<_>=devices.iter().filter_map(|d|d.descriptor.camera.as_ref().map(|c|json!({"device":d.descriptor.id,"schema":c.landmark_schema.as_ref().map(|s|&s.id),"detector":detector_id(config,&d.descriptor)}))).collect();
     let camera_processing:Vec<_>=config.sources.iter().filter_map(|s|match s {crate::config::SourceConfig::Camera(c) if c.enabled=>Some(json!({"id":c.id,"model":crate::sources::camera::pose::DETECTOR_NAME,"execution":c.execution,"min_person_score":c.min_person_score,"min_keypoint_score":c.min_keypoint_score,"smoothing":{"filter":crate::sources::camera::pose::SMOOTHING_IDENTITY,"parameters":crate::sources::camera::pose::SMOOTHING_PARAMETERS},"latencies":c.cameras.iter().map(|c|json!({"id":c.id,"latency_ms":c.latency_ms})).collect::<Vec<_>>()})),_=>None}).collect();
     let version = env!("CARGO_PKG_VERSION")
         .split('.')
         .take(2)
         .collect::<Vec<_>>()
         .join(".");
-    let tracking_config_id = canonical_id(
-        &json!({"devices":device_config,"detectors":detectors,"camera_processing":camera_processing,"assignments":reg.assignments,"triangulation":config.triangulation,"gates":null,"fusion":null,"analysis":null,"observable_catalogue":"bansayo.observables.v1","engine_version":version}),
-    );
+    let tracking = json!({"devices":device_config,"detectors":detectors,"camera_processing":camera_processing,"assignments":reg.assignments,"triangulation":config.triangulation,"gates":null,"fusion":null,"analysis":config.analysis(),"recognition":config.recognition(),"observable_catalogue":"bansayo.observables.v1","engine_version":version});
     let profiles:Vec<_>=store.profiles.values().filter(|p|valid_profile(p)&&!store.stale.contains(&p.id)&&p.subject.device_id.as_ref().is_some_and(|id|reg.entries.contains_key(id)&& (p.kind!=CalibrationKind::Mounting||p.subject.segment_id.as_ref()==reg.assignments.get(id)))).map(|p|json!({"id":p.id,"hash":sha256(serde_json::to_value(p).expect("profile JSON").to_string().as_bytes())})).collect();
-    CapabilityReport {
-        profile,
-        profile_override: config.tracking.profile_override,
-        tracking_config_id,
-        calibration_set_id: canonical_id(&json!(profiles)),
-        inputs,
-        observables,
-    }
+    (tracking, json!(profiles))
 }
+
+/// Pose-model identity of a camera device (12 §5.3 `detector_id`).
+pub fn detector_id(config: &Config, d: &DeviceDescriptor) -> String {
+    if d.origin != Origin::Simulated {
+        return crate::sources::camera::pose::DETECTOR_NAME.into();
+    }
+    config
+        .sources
+        .iter()
+        .find_map(|s| match s {
+            crate::config::SourceConfig::Simulated(s)
+                if s.cameras.iter().any(|c| c.id == d.id.as_str()) =>
+            {
+                Some(
+                    s.detector_id
+                        .clone()
+                        .unwrap_or_else(|| SIMULATED_DETECTOR.into()),
+                )
+            }
+            _ => None,
+        })
+        .unwrap_or_else(|| SIMULATED_DETECTOR.into())
+}
+
+pub const SIMULATED_DETECTOR: &str = "simulated-projection";

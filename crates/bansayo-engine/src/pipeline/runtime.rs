@@ -36,6 +36,9 @@ pub(super) struct Runtime {
     pub storage_unavailable: bool,
     pub reported_damage: std::collections::BTreeSet<String>,
     pub last_landmarks_3d_us: Option<u64>,
+    pub training: Option<mpsc::Sender<super::command::TrainingSample>>,
+    /// Time of the first sample dropped since the last one delivered to training.
+    pub training_gap_from: Option<u64>,
 }
 impl Runtime {
     pub fn new(
@@ -69,6 +72,8 @@ impl Runtime {
             storage_unavailable: false,
             reported_damage: Default::default(),
             last_landmarks_3d_us: None,
+            training: None,
+            training_gap_from: None,
         }
     }
     pub fn context(engine: &Runner) -> Context {
@@ -185,7 +190,22 @@ impl Runtime {
                 if let Some(b) = sample.body.as_mut() {
                     b.skeleton_rev = self.skeleton.borrow().rev;
                 }
-                self.motion.send_replace(Arc::new(sample));
+                let sample = Arc::new(sample);
+                if self.replay.is_none()
+                    && let Some(tx) = &self.training
+                {
+                    let gap = self
+                        .training_gap_from
+                        .map_or(0, |g| sample.t_us.saturating_sub(g));
+                    match tx.try_send((sample.clone(), gap)) {
+                        Ok(()) => self.training_gap_from = None,
+                        // Drop newest; the next delivered sample carries the gap (14 §3).
+                        Err(_) => {
+                            self.training_gap_from.get_or_insert(sample.t_us);
+                        }
+                    }
+                }
+                self.motion.send_replace(sample);
             }
         }
         self.frame.send_replace(Encoded::new(&message, self.seq));
@@ -220,6 +240,7 @@ impl Runtime {
         let mut last_tick = engine.clock.now_us();
         let mut last_state = 0;
         let mut events_open = true;
+        let mut training_status = engine.training_status.clone();
         loop {
             // An inline event avoids allocating every accepted source observation.
             #[allow(clippy::large_enum_variant)]
@@ -227,8 +248,9 @@ impl Runtime {
                 Input(Option<crate::sources::Ingest>),
                 Command(Option<Command>),
                 Tick,
+                TrainingStatus,
             }
-            let event = tokio::select! { _=cancel.cancelled()=>break,input=engine.events.recv(),if events_open=>Event::Input(input),command=commands.recv()=>Event::Command(command),_=timer.recv()=>Event::Tick };
+            let event = tokio::select! { _=cancel.cancelled()=>break,input=engine.events.recv(),if events_open=>Event::Input(input),command=commands.recv()=>Event::Command(command),_=timer.recv()=>Event::Tick,Ok(())=async{match training_status.as_mut(){Some(s)=>s.changed().await,None=>std::future::pending().await}}=>Event::TrainingStatus };
             match event {
                 Event::Input(Some(crate::sources::Ingest::Failure { devices, message })) => {
                     for id in devices {
@@ -251,6 +273,7 @@ impl Runtime {
                     self.accept(&mut engine, event);
                 }
                 Event::Input(None) => events_open = false,
+                Event::TrainingStatus => self.publish_state(&engine),
                 Event::Command(Some(Command::Simulation(request, reply))) => {
                     let result = if self.replay.is_some() {
                         Err(ControlError::new(
@@ -329,6 +352,9 @@ impl Runtime {
                 }
                 Event::Command(Some(Command::Control(request, reply))) => {
                     self.control(&mut engine, request, reply)
+                }
+                Event::Command(Some(Command::TrainingContext(reply))) => {
+                    let _ = reply.send(engine.training_context(self.replay.is_some()));
                 }
                 Event::Command(Some(Command::Complete(result, reply))) => {
                     self.complete(&mut engine, result, reply)
@@ -421,6 +447,9 @@ impl Runtime {
                     let changed = {
                         let old = self.state.borrow();
                         old.engine.state != next.engine.state
+                            || old.training != next.training
+                            || old.athlete != next.athlete
+                            || old.storage != next.storage
                             || old
                                 .devices
                                 .iter()
@@ -476,6 +505,7 @@ impl Runtime {
                         "Engine is shutting down.",
                     )));
                 }
+                Command::TrainingContext(_) => {}
             }
         }
         if let Some(c) = self.capture.take() {

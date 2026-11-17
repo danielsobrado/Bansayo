@@ -715,8 +715,126 @@ pub fn all() -> Vec<Example> {
         ex("recording_session", state::recording_session()),
     ];
     out.extend(movement_examples());
+    out.extend(training_examples());
     out.extend(observations());
     out.extend(source_events());
     out.extend(api());
     out
+}
+
+fn typed<T: DeserializeOwned>(v: Value) -> T {
+    serde_json::from_value(v).expect("example matches its type")
+}
+
+fn evidence_json(method: &str) -> Value {
+    serde_json::json!({ "provenance": "derived", "method": method, "confidence": 0.92, "sigma": null,
+                        "sigma_basis": null, "t_obs_us": 303_816_666u64, "sources": ["SIM-CAM1", "SIM-CAM2"] })
+}
+
+/// Training examples required by martial-arts 14 §9 that exist in this phase.
+fn training_examples() -> Vec<Example> {
+    use serde_json::json;
+    let measured = json!({ "metric": "kick.total_time@1", "value": 1325.0, "norm": null, "unit": "ms", "grade": "B",
+        "evidence": evidence_json("fk"), "comparability_class": "6c1f0a9e2b7d4c3a",
+        "reasons": [{ "code": "origin_not_live", "subject": null, "message": "Simulated or recorded inputs are not graded A." }] });
+    let suppressed = json!({ "metric": "kick.peak_ankle_height@1", "value": null, "norm": null, "unit": "m", "grade": "X",
+        "evidence": evidence_json("fk"), "comparability_class": "0d4e8a2f61b3c975",
+        "reasons": [{ "code": "calibration_missing", "subject": "floor_plane", "message": "A calibration this measurement needs is not valid." }] });
+    let rep = json!({
+        "repetition": { "rep_index": 7, "technique": "taekwondo.dollyeo_chagi@1", "side": "right", "stance": "orthodox",
+            "outcome": "completed", "t_start_us": 302_500_000u64, "t_end_us": 303_825_000u64,
+            "phases": [
+                { "phase": "chamber", "t_start_us": 302_710_000u64, "t_end_us": 302_731_000u64, "evidence": evidence_json("fk") },
+                { "phase": "extension", "t_start_us": 302_731_000u64, "t_end_us": 302_930_000u64, "evidence": evidence_json("fk") }
+            ],
+            "strike_t_us": 302_780_000u64, "recognition_confidence": 0.86, "capability_profile": "multi_view" },
+        "measurements": [measured, suppressed],
+        "score": { "model": "scoring.kick.basic@1", "components": [
+            { "id": "completion", "score": 1.0, "measurement": null, "target": null, "deviation": null, "reasons": [] },
+            { "id": "height", "score": null, "measurement": suppressed, "target": null, "deviation": null,
+              "reasons": [{ "code": "measurement_quality", "subject": "height", "message": "The measurement is not reliable enough to score." }] }
+          ], "reference_match": null, "coverage": 0.0, "comparability_class": "93ab0e1c7f2d5a46" },
+        "cue": null, "targets": [], "scored": true, "excluded": false
+    });
+    let result: RepetitionResult = typed(rep.clone());
+    let state: TrainingState = typed(json!({
+        "session_id": "20261117T120000Z-k3b9", "athlete_id": "ana", "rev": 214, "last_event_seq": 88, "phase": "active",
+        "plan": { "kind": "technique", "ref": null, "title": "Roundhouse kick", "level": null },
+        "readiness": [
+            { "gate": "athlete_selected", "state": "pass", "blocking": true, "reasons": [] },
+            { "gate": "metrics_available", "state": "warn", "blocking": false,
+              "reasons": [{ "code": "metric_unavailable", "subject": "kick.peak_ankle_height", "message": "This measurement will not be taken." }] }
+        ],
+        "metric_availability": [
+            { "metric": "kick.total_time", "best_grade": "B", "reasons": [{ "code": "origin_not_live", "subject": null, "message": "Simulated or recorded inputs are not graded A." }] },
+            { "metric": "kick.peak_ankle_height", "best_grade": "X", "reasons": [{ "code": "calibration_missing", "subject": "floor_plane", "message": "A calibration this measurement needs is not valid." }] }
+        ],
+        "position": { "block": 0, "item": 0, "set": 2, "round": null, "step": null },
+        "current": { "item_id": "main", "title": "Roundhouse kick",
+            "exercise": { "kind": "technique", "ref": "taekwondo.dollyeo_chagi@1", "side": "right", "stage": "normal", "stance": "orthodox" },
+            "sub_state": "in_rep", "phase_id": "extension", "counts": { "done": 6, "target": 10, "unit": "reps" },
+            "sets": { "done": 1, "target": 3 },
+            "timer": { "kind": "item", "started_t_us": 290_000_000u64, "duration_ms": null, "elapsed_ms": 13_833 },
+            "beat": null, "targets": [], "expected_steps": [], "reference_id": null,
+            "instructions": [{ "key": "instr.kick.clear_space", "params": {} }] },
+        "totals": { "reps_completed": 16, "reps_other": 1, "sets_completed": 1, "elapsed_ms": 98_000, "active_ms": 51_000 },
+        "live_observables": ["knee_height.right", "ankle_height.right", "ankle_speed.right"],
+        "last_rep": rep, "capability_profile": "multi_view",
+        "recording": { "inputs": true, "motion": true, "video": false }, "storage": "ok"
+    }));
+    let event = TrainingEvent {
+        event_seq: 88,
+        t_us: 303_825_000,
+        event_type: "rep_completed".into(),
+        position: PlanPosition {
+            block: Some(0),
+            item: Some(0),
+            set: Some(2),
+            round: None,
+            step: None,
+        },
+        data: serde_json::to_value(&result).expect("result"),
+    };
+    let observables = ServerMessage::Observables {
+        seq: 18_230,
+        t_us: T_US,
+        values: vec![
+            typed(
+                json!({ "id": "ankle_speed.right", "value": 6.42, "norm": 7.47, "evidence": evidence_json("fk"), "fresh": true, "reasons": [] }),
+            ),
+            typed(json!({ "id": "foot_yaw.left", "value": null, "norm": null,
+                "evidence": { "provenance": "unavailable", "method": "rest_fill", "confidence": null, "sigma": null, "sigma_basis": null, "t_obs_us": null, "sources": [] },
+                "fresh": false, "reasons": [{ "code": "input_not_observed", "subject": "left_heel", "message": "A required body point or segment is not observed." }] })),
+        ],
+    };
+    let athlete: AthleteProfile = typed(json!({
+        "schema_version": 1, "id": "ana", "display_name": "Ana", "created_utc": "2026-11-17T10:00:00Z", "height_m": 1.68,
+        "dominant_side": "right", "default_stance": "orthodox",
+        "disciplines": [{ "id": "taekwondo", "style": "kukkiwon", "experience": "intermediate" }],
+        "preferred_discipline": "taekwondo", "goals": [],
+        "coaching": { "level": "standard", "tolerance_scale": 1.0 }, "enabled_techniques": [],
+        "tracking": { "profile_override": null, "record_defaults": { "inputs": true, "motion": true, "video": false } },
+        "consent": { "motion_data_utc": "2026-11-17T10:01:00Z", "video_utc": null }, "retention": null,
+        "safety_ack": { "taekwondo.dollyeo_chagi@1": "2026-11-17T10:02:00Z" }
+    }));
+    vec![
+        ex(
+            "training_state",
+            ServerMessage::TrainingState { state: Some(state) },
+        ),
+        ex(
+            "training_event_rep_completed",
+            ServerMessage::TrainingEvent {
+                session_id: SessionId::new("20261117T120000Z-k3b9").expect("id"),
+                event,
+            },
+        ),
+        ex("observables", observables),
+        ex("repetition_result", result),
+        ex(
+            "metric_measurement_suppressed",
+            typed::<MetricMeasurement>(suppressed),
+        ),
+        ex("athlete_profile", athlete),
+    ]
 }

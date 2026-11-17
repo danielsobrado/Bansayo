@@ -1,0 +1,27 @@
+{
+  "metric": "kick.peak_ankle_height@1",
+  "value": null,
+  "norm": null,
+  "unit": "m",
+  "grade": "X",
+  "evidence": {
+    "provenance": "derived",
+    "method": "fk",
+    "confidence": 0.92,
+    "sigma": null,
+    "sigma_basis": null,
+    "t_obs_us": 303816666,
+    "sources": [
+      "SIM-CAM1",
+      "SIM-CAM2"
+    ]
+  },
+  "comparability_class": "0d4e8a2f61b3c975",
+  "reasons": [
+    {
+      "code": "calibration_missing",
+      "subject": "floor_plane",
+      "message": "A calibration this measurement needs is not valid."
+    }
+  ]
+}

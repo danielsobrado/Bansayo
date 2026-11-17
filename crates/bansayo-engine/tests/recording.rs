@@ -93,6 +93,8 @@ async fn duplicate_reordered_and_delayed_packets_never_reach_the_recording() {
         controls: vec![],
         faults: watch::channel(BTreeMap::new()).0,
         placements: watch::channel(BTreeMap::new()).0,
+        training: None,
+        training_status: None,
     };
     let cancel = CancellationToken::new();
     let (client, _streams, task) = runner.spawn(cancel.clone());

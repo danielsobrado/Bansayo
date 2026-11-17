@@ -2,13 +2,17 @@
 import type { Conventions } from "./Conventions";
 import type { JointMeasurement } from "./JointMeasurement";
 import type { NoticeLevel } from "./NoticeLevel";
+import type { ObservableValue } from "./ObservableValue";
 import type { Origin } from "./Origin";
 import type { PoseLandmarks2D } from "./PoseLandmarks2D";
 import type { PoseLandmarks3D } from "./PoseLandmarks3D";
+import type { SessionId } from "./SessionId";
 import type { SkeletonDefinition } from "./SkeletonDefinition";
 import type { SkeletonPose } from "./SkeletonPose";
 import type { SystemState } from "./SystemState";
 import type { TrackingQuality } from "./TrackingQuality";
+import type { TrainingEvent } from "./TrainingEvent";
+import type { TrainingState } from "./TrainingState";
 
 /**
  * One WebSocket text frame. `hello` is always first.
@@ -17,7 +21,15 @@ export type ServerMessage = { "type": "hello", protocol_version: number, engine_
 /**
  * RFC 3339 UTC instant of session time zero.
  */
-session_epoch_utc: string, conventions: Conventions, skeleton: SkeletonDefinition, state: SystemState, } | { "type": "skeleton", skeleton: SkeletonDefinition, } | { "type": "state", state: SystemState, } | { "type": "frame", seq: number, t_us: number,
+session_epoch_utc: string, conventions: Conventions, skeleton: SkeletonDefinition, state: SystemState,
+/**
+ * Engine feature flags, e.g. `training`, `content`, `athletes`, `progress`. Additive.
+ */
+capabilities?: Array<string> | null,
+/**
+ * Observable catalogue revision. Additive.
+ */
+observables_rev?: number | null, } | { "type": "skeleton", skeleton: SkeletonDefinition, } | { "type": "state", state: SystemState, } | { "type": "frame", seq: number, t_us: number,
 /**
  * Origins of every contributing source.
  */
@@ -25,4 +37,4 @@ origins: Array<Origin>, pose: SkeletonPose | null,
 /**
  * Index-aligned with `SkeletonDefinition.joints`.
  */
-joints: Array<JointMeasurement>, quality: TrackingQuality, } | { "type": "landmarks_2d", landmarks: PoseLandmarks2D, } | { "type": "landmarks_3d", landmarks: PoseLandmarks3D, } | { "type": "notice", level: NoticeLevel, code: string, message: string, };
+joints: Array<JointMeasurement>, quality: TrackingQuality, } | { "type": "landmarks_2d", landmarks: PoseLandmarks2D, } | { "type": "landmarks_3d", landmarks: PoseLandmarks3D, } | { "type": "notice", level: NoticeLevel, code: string, message: string, } | { "type": "training_state", state: TrainingState | null, } | { "type": "training_event", session_id: SessionId, event: TrainingEvent, } | { "type": "observables", seq: number, t_us: number, values: Array<ObservableValue>, };

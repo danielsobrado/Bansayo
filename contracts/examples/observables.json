@@ -1,0 +1,48 @@
+{
+  "type": "observables",
+  "seq": 18230,
+  "t_us": 303833333,
+  "values": [
+    {
+      "id": "ankle_speed.right",
+      "value": 6.42,
+      "norm": 7.47,
+      "evidence": {
+        "provenance": "derived",
+        "method": "fk",
+        "confidence": 0.92,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303816666,
+        "sources": [
+          "SIM-CAM1",
+          "SIM-CAM2"
+        ]
+      },
+      "fresh": true,
+      "reasons": []
+    },
+    {
+      "id": "foot_yaw.left",
+      "value": null,
+      "norm": null,
+      "evidence": {
+        "provenance": "unavailable",
+        "method": "rest_fill",
+        "confidence": null,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": null,
+        "sources": []
+      },
+      "fresh": false,
+      "reasons": [
+        {
+          "code": "input_not_observed",
+          "subject": "left_heel",
+          "message": "A required body point or segment is not observed."
+        }
+      ]
+    }
+  ]
+}

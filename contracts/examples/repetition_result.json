@@ -1,0 +1,166 @@
+{
+  "repetition": {
+    "rep_index": 7,
+    "technique": "taekwondo.dollyeo_chagi@1",
+    "side": "right",
+    "stance": "orthodox",
+    "outcome": "completed",
+    "t_start_us": 302500000,
+    "t_end_us": 303825000,
+    "phases": [
+      {
+        "phase": "chamber",
+        "t_start_us": 302710000,
+        "t_end_us": 302731000,
+        "evidence": {
+          "provenance": "derived",
+          "method": "fk",
+          "confidence": 0.92,
+          "sigma": null,
+          "sigma_basis": null,
+          "t_obs_us": 303816666,
+          "sources": [
+            "SIM-CAM1",
+            "SIM-CAM2"
+          ]
+        }
+      },
+      {
+        "phase": "extension",
+        "t_start_us": 302731000,
+        "t_end_us": 302930000,
+        "evidence": {
+          "provenance": "derived",
+          "method": "fk",
+          "confidence": 0.92,
+          "sigma": null,
+          "sigma_basis": null,
+          "t_obs_us": 303816666,
+          "sources": [
+            "SIM-CAM1",
+            "SIM-CAM2"
+          ]
+        }
+      }
+    ],
+    "strike_t_us": 302780000,
+    "recognition_confidence": 0.86,
+    "capability_profile": "multi_view"
+  },
+  "measurements": [
+    {
+      "metric": "kick.total_time@1",
+      "value": 1325.0,
+      "norm": null,
+      "unit": "ms",
+      "grade": "B",
+      "evidence": {
+        "provenance": "derived",
+        "method": "fk",
+        "confidence": 0.92,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303816666,
+        "sources": [
+          "SIM-CAM1",
+          "SIM-CAM2"
+        ]
+      },
+      "comparability_class": "6c1f0a9e2b7d4c3a",
+      "reasons": [
+        {
+          "code": "origin_not_live",
+          "subject": null,
+          "message": "Simulated or recorded inputs are not graded A."
+        }
+      ]
+    },
+    {
+      "metric": "kick.peak_ankle_height@1",
+      "value": null,
+      "norm": null,
+      "unit": "m",
+      "grade": "X",
+      "evidence": {
+        "provenance": "derived",
+        "method": "fk",
+        "confidence": 0.92,
+        "sigma": null,
+        "sigma_basis": null,
+        "t_obs_us": 303816666,
+        "sources": [
+          "SIM-CAM1",
+          "SIM-CAM2"
+        ]
+      },
+      "comparability_class": "0d4e8a2f61b3c975",
+      "reasons": [
+        {
+          "code": "calibration_missing",
+          "subject": "floor_plane",
+          "message": "A calibration this measurement needs is not valid."
+        }
+      ]
+    }
+  ],
+  "score": {
+    "model": "scoring.kick.basic@1",
+    "components": [
+      {
+        "id": "completion",
+        "score": 1.0,
+        "measurement": null,
+        "target": null,
+        "deviation": null,
+        "reasons": []
+      },
+      {
+        "id": "height",
+        "score": null,
+        "measurement": {
+          "metric": "kick.peak_ankle_height@1",
+          "value": null,
+          "norm": null,
+          "unit": "m",
+          "grade": "X",
+          "evidence": {
+            "provenance": "derived",
+            "method": "fk",
+            "confidence": 0.92,
+            "sigma": null,
+            "sigma_basis": null,
+            "t_obs_us": 303816666,
+            "sources": [
+              "SIM-CAM1",
+              "SIM-CAM2"
+            ]
+          },
+          "comparability_class": "0d4e8a2f61b3c975",
+          "reasons": [
+            {
+              "code": "calibration_missing",
+              "subject": "floor_plane",
+              "message": "A calibration this measurement needs is not valid."
+            }
+          ]
+        },
+        "target": null,
+        "deviation": null,
+        "reasons": [
+          {
+            "code": "measurement_quality",
+            "subject": "height",
+            "message": "The measurement is not reliable enough to score."
+          }
+        ]
+      }
+    ],
+    "reference_match": null,
+    "coverage": 0.0,
+    "comparability_class": "93ab0e1c7f2d5a46"
+  },
+  "cue": null,
+  "targets": [],
+  "scored": true,
+  "excluded": false
+}

@@ -77,6 +77,19 @@ pub fn typescript() -> BTreeMap<String, String> {
     c.visit::<RecordingStartRequest>();
     c.visit::<PlaybackStartRequest>();
     c.visit::<PlaybackUpdateRequest>();
+    c.visit::<AthleteProfile>();
+    c.visit::<CreateAthleteRequest>();
+    c.visit::<ConsentRequest>();
+    c.visit::<ActiveAthleteRequest>();
+    c.visit::<CreateSessionRequest>();
+    c.visit::<TrainingCommandRequest>();
+    c.visit::<TrainingSessionSummary>();
+    c.visit::<TrainingSessionDetail>();
+    c.visit::<SessionProvenance>();
+    c.visit::<RpeRequest>();
+    c.visit::<ContentIndex>();
+    c.visit::<SeriesResponse>();
+    c.visit::<ProgressSummary>();
     let mut files = c.files;
     let index: String = files
         .keys()

@@ -1,0 +1,54 @@
+# Training on the simulator (martial-arts roadmap Phase 1): three simulated cameras with the
+# feet-capable keypoint schema and no trackers. The skeleton comes from the camera-only fit.
+# Floor calibration does not exist yet, so height metrics are reported as suppressed.
+# Detector noise is 0.2 px: at 1.5 px the camera-only fit and differentiation put standing
+# speeds above the default segmenter thresholds (martial-arts 07 §2), so activity never ends.
+# Those thresholds are defaults pending validation; roadmap Phase 2 measures real noise.
+schema_version: 2
+engine:
+  publish_rate_hz: 60
+  stale_after_ms: 250
+  data_dir: ./data
+api:
+  bind: 127.0.0.1:7700
+triangulation:
+  max_skew_ms: 20
+  max_reprojection_error_px: 15.0
+  min_views: 2
+  min_ray_angle_deg: 3.0
+content:
+  dirs: [./content]
+training:
+  countdown_s: 3
+sources:
+  - id: sim
+    kind: simulated
+    enabled: true
+    seed: 42
+    motion: standing
+    speed: 1.0
+    landmark_schema: bansayo.body.v1.points
+    detector_id: simulated-projection
+    trackers: []
+    cameras:
+      - id: SIM-CAM1                  # front, chest height
+        rate_hz: 60
+        resolution_px: [1280, 720]
+        fov_y_deg: 50
+        position_m: [0.0, 1.2, 3.2]
+        look_at_m: [0.0, 1.0, 0.0]
+        noise_px: 0.2
+      - id: SIM-CAM2                  # right side, raised
+        rate_hz: 60
+        resolution_px: [1280, 720]
+        fov_y_deg: 50
+        position_m: [3.0, 1.6, 0.4]
+        look_at_m: [0.0, 1.0, 0.0]
+        noise_px: 0.2
+      - id: SIM-CAM3                  # left side, high, behind
+        rate_hz: 60
+        resolution_px: [1280, 720]
+        fov_y_deg: 50
+        position_m: [-3.1, 2.0, -0.8]
+        look_at_m: [0.0, 1.0, 0.0]
+        noise_px: 0.2

@@ -392,7 +392,8 @@ pub fn personal_targets(
          WHERE s.athlete_id = ?1 AND m.technique_id = ?2 AND m.side = ?3 AND m.grade = 'A' AND s.origin = 'live' AND s.status = 'completed'
          ORDER BY s.started_utc",
     )?;
-    let rows: Vec<(String, String, String, Option<f64>, Option<f64>)> = q
+    type TargetRow = (String, String, String, Option<f64>, Option<f64>);
+    let rows: Vec<TargetRow> = q
         .query_map(params![athlete, technique, side], |r| {
             Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
         })?

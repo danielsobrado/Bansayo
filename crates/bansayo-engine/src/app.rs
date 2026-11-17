@@ -108,7 +108,34 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
         sources.push(ConfiguredSource::Camera(source));
     }
     let registry = Registry::new(descriptors, assignments, drops.clone());
+    let data_dir = config.config.engine.data_dir.clone();
+    let content_dirs = config.config.content().dirs;
+    let user_dir = data_dir.join("content/user");
+    let content = Arc::new(
+        tokio::task::spawn_blocking(move || {
+            crate::content_store::ContentStore::load(&content_dirs, &user_dir, 1)
+        })
+        .await?,
+    );
+    for e in content.index.iter().filter(|e| !e.valid) {
+        tracing::warn!(kind=%e.kind, id=%e.id, problems=?e.problems, "content definition is invalid and not offered");
+    }
+    let db = data_dir.join("db/bansayo.sqlite");
+    let writer = match tokio::task::spawn_blocking(move || crate::store::Writer::spawn(db)).await? {
+        Ok(w) => Some(w),
+        Err(e) => {
+            tracing::error!(%e, "analytics store unavailable; training sessions cannot be started");
+            None
+        }
+    };
+    let (status_tx, status_rx) = watch::channel(crate::training::Runner::initial_status(
+        content.rev,
+        writer.is_some(),
+    ));
+    let (samples_tx, samples_rx) = mpsc::channel(crate::pipeline::command::TRAINING_CAPACITY);
     let runner = Runner {
+        training: Some(samples_tx),
+        training_status: Some(status_rx),
         config: config.clone(),
         registry,
         store,
@@ -120,10 +147,28 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
         placements,
     };
     let (client, streams, runner_task) = runner.spawn(cancel.clone());
-    let mut tasks: Vec<JoinHandle<Result<(), EngineError>>> = vec![tokio::spawn(async move {
-        runner_task.await?;
-        Ok(())
-    })];
+    let training = crate::training::Runner {
+        config: config.config.clone(),
+        content: content.clone(),
+        writer: writer.clone(),
+        athletes: crate::training::athletes::Athletes::new(&data_dir),
+        pipeline: client.clone(),
+        clock: clock.clone(),
+        samples: samples_rx,
+        system: streams.state.clone(),
+    };
+    let (training_client, training_streams, training_task) =
+        training.spawn(status_tx, cancel.clone());
+    let mut tasks: Vec<JoinHandle<Result<(), EngineError>>> = vec![
+        tokio::spawn(async move {
+            runner_task.await?;
+            Ok(())
+        }),
+        tokio::spawn(async move {
+            training_task.await?;
+            Ok(())
+        }),
+    ];
     for source in sources {
         let common = SourceContext {
             events: events_tx.clone(),
@@ -140,6 +185,12 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
         publish_rate: config.config.engine.publish_rate_hz,
         cancel: cancel.clone(),
         previews,
+        training: training_client,
+        training_streams,
+        content,
+        store: writer,
+        data_dir: data_dir.clone(),
+        progress: config.config.progress(),
     };
     let router = api::router(api);
     let stop = cancel.clone();

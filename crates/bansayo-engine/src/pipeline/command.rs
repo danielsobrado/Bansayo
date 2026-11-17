@@ -38,8 +38,30 @@ pub enum Completion {
     Sessions(Vec<RecordingSession>, Vec<String>),
     PlaybackLoaded(Box<crate::recording::reader::Recording>, f32, bool),
 }
+/// What a training session records about tracking when it is created (32 §3).
+#[derive(Debug, Clone)]
+pub struct TrainingContext {
+    /// `(id, capability profile, body)`.
+    pub tracking: (String, String, serde_json::Value),
+    /// `(id, QA, body)`; no calibration check exists yet, so QA is `not_run`.
+    pub calibration: (String, String, serde_json::Value),
+    pub calibration_states: std::collections::BTreeMap<CalibrationKind, CalibrationState>,
+    pub detector_id: String,
+    pub origin: Origin,
+    pub skeleton: SkeletonDefinition,
+    pub replay: bool,
+    pub capability: CapabilityReport,
+}
+
+/// One solver tick for training, with the span of samples dropped just before it.
+pub type TrainingSample = (std::sync::Arc<MotionSample>, u64);
+
+/// Capacity of the pipeline → training channel (14 §3).
+pub const TRAINING_CAPACITY: usize = 512;
+
 pub enum Command {
     Control(ControlRequest, Reply),
+    TrainingContext(oneshot::Sender<TrainingContext>),
     Complete(Result<Completion, ControlError>, Reply),
     Simulation(
         SimulationUpdateRequest,
@@ -111,6 +133,16 @@ impl Client {
             .await
             .map_err(|_| unavailable())?;
         rx.await.map_err(|_| unavailable())?
+    }
+}
+impl Client {
+    pub async fn training_context(&self) -> Result<TrainingContext, ControlError> {
+        let (tx, rx) = oneshot::channel();
+        self.commands
+            .send(Command::TrainingContext(tx))
+            .await
+            .map_err(|_| unavailable())?;
+        rx.await.map_err(|_| unavailable())
     }
 }
 fn unavailable() -> ControlError {

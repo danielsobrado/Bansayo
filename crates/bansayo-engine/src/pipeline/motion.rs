@@ -189,7 +189,9 @@ pub fn sample(
         keypoints[0] = Some(root.clone());
         for i in 1..sk.len().min(19) {
             let parent = sk.segments[i].parent.and_then(|i| keypoints[i].as_ref());
-            let mut e = segments[i].axis.clone();
+            // A segment's origin is placed by its parent's rotation, not by its own axis.
+            let placing = sk.segments[i].parent.unwrap_or(i);
+            let mut e = segments[placing].axis.clone();
             e.method = MethodId::Fk;
             e.sigma = None;
             e.sigma_basis = None;
@@ -220,15 +222,30 @@ pub fn sample(
             (24, 15, Some(0)),
             (25, 18, Some(0)),
         ] {
-            if let (Some(p), Some(def)) = (pose.segments.get(segment), sk.segments.get(segment)) {
+            if let (Some(p), Some(def), Some(seg)) = (
+                pose.segments.get(segment),
+                sk.segments.get(segment),
+                segments.get(segment),
+            ) {
                 let offset = contact
                     .and_then(|i| def.contact_points.get(i))
                     .unwrap_or(&def.tail);
                 if let Some(rotation) = rot_from_wire(p.rotation) {
                     let position = v3_from_wire(p.position_m) + rotation * offset;
-                    keypoints[target] = keypoints[segment].as_ref().map(|p| KeypointState {
-                        position_m: v3_to_wire(&position),
-                        evidence: p.evidence.clone(),
+                    // Distal points are placed by the segment's own rotation on top of its origin.
+                    keypoints[target] = keypoints[segment].as_ref().map(|p| {
+                        let mut e = p.evidence.clone();
+                        if !matches!(
+                            seg.axis.provenance,
+                            Provenance::Measured | Provenance::Derived
+                        ) {
+                            e.provenance = Provenance::Inferred;
+                            e.method = MethodId::RestFill;
+                        }
+                        KeypointState {
+                            position_m: v3_to_wire(&position),
+                            evidence: e,
+                        }
                     });
                 }
             }

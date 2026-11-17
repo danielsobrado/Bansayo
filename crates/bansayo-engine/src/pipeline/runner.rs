@@ -38,6 +38,10 @@ pub struct Runner {
     pub faults: watch::Sender<BTreeMap<DeviceId, crate::sources::simulated::FaultSetting>>,
     /// Where simulated trackers are strapped; mirrors `registry.assignments`.
     pub placements: watch::Sender<BTreeMap<DeviceId, SegmentId>>,
+    /// Training runner input; `None` when training is not available.
+    pub training: Option<mpsc::Sender<super::command::TrainingSample>>,
+    /// Athlete, session, content and storage status published by the training runner.
+    pub training_status: Option<watch::Receiver<crate::training::TrainingStatus>>,
 }
 impl Runner {
     pub fn spawn(
@@ -88,18 +92,18 @@ impl Runner {
         let client = Client {
             commands: tx.clone(),
         };
-        let task = tokio::spawn(
-            super::runtime::Runtime::new(
-                tx,
-                state_tx,
-                (frame_tx, motion_tx),
-                landmarks,
-                notices,
-                skeleton_tx,
-                state_wire_tx,
-            )
-            .run(self, rx, cancel),
+        let mut runtime = super::runtime::Runtime::new(
+            tx,
+            state_tx,
+            (frame_tx, motion_tx),
+            landmarks,
+            notices,
+            skeleton_tx,
+            state_wire_tx,
         );
+        let mut engine = self;
+        runtime.training = engine.training.take();
+        let task = tokio::spawn(runtime.run(engine, rx, cancel));
         (client, streams, task)
     }
     pub(super) fn simulation(&self) -> Option<SimulationState> {
@@ -133,10 +137,22 @@ impl Runner {
         );
         let features = features(&devices, &solved);
         SystemState {
-            athlete: None,
-            training: None,
-            content_rev: None,
-            storage: None,
+            athlete: self
+                .training_status
+                .as_ref()
+                .and_then(|t| t.borrow().athlete.clone()),
+            training: self
+                .training_status
+                .as_ref()
+                .and_then(|t| t.borrow().training.clone()),
+            content_rev: self
+                .training_status
+                .as_ref()
+                .map(|t| t.borrow().content_rev),
+            storage: self
+                .training_status
+                .as_ref()
+                .map(|t| t.borrow().storage.clone()),
             capability_report: Some(super::features::capability_report(
                 &self.skeleton,
                 &self.registry,
@@ -159,6 +175,104 @@ impl Runner {
             recording: None,
             playback: None,
             simulation: self.simulation(),
+        }
+    }
+    pub(super) fn training_context(&self, replay: bool) -> super::command::TrainingContext {
+        let now = self.clock.now_us();
+        let devices = self
+            .registry
+            .status(now, &self.config.config.quality, &self.store);
+        let solved = solve(
+            &self.skeleton,
+            &self.registry,
+            &self.store,
+            now,
+            &self.config.config,
+        );
+        let capability = super::features::capability_report(
+            &self.skeleton,
+            &self.registry,
+            &self.store,
+            &solved,
+            &self.config.config,
+            now,
+        );
+        let (tracking, calibration) = super::capability::identity_bodies(
+            &devices,
+            &self.registry,
+            &self.store,
+            &self.config.config,
+        );
+        let cameras: Vec<&DeviceStatus> = devices
+            .iter()
+            .filter(|d| d.descriptor.kind == DeviceKind::Camera)
+            .collect();
+        let mut calibration_states = BTreeMap::new();
+        for kind in [
+            CalibrationKind::CameraIntrinsics,
+            CalibrationKind::CameraExtrinsics,
+        ] {
+            let all = !cameras.is_empty()
+                && cameras.iter().all(|c| {
+                    self.store.camera_ref(kind, &c.descriptor.id).state == CalibrationState::Valid
+                });
+            calibration_states.insert(
+                kind,
+                if all {
+                    CalibrationState::Valid
+                } else {
+                    CalibrationState::Missing
+                },
+            );
+        }
+        for kind in [
+            CalibrationKind::FloorPlane,
+            CalibrationKind::TimeSync,
+            CalibrationKind::BodyProportions,
+        ] {
+            let valid = self.store.profiles.values().any(|p| {
+                p.kind == kind
+                    && !self.store.stale.contains(&p.id)
+                    && crate::calibration::valid_profile(p)
+            });
+            calibration_states.insert(
+                kind,
+                if valid {
+                    CalibrationState::Valid
+                } else {
+                    CalibrationState::Missing
+                },
+            );
+        }
+        let origins: Vec<Origin> = devices.iter().map(|d| d.descriptor.origin).collect();
+        let origin = if !origins.is_empty() && origins.iter().all(|o| *o == Origin::Live) {
+            Origin::Live
+        } else if origins.contains(&Origin::Fixture) {
+            Origin::Fixture
+        } else {
+            Origin::Simulated
+        };
+        let detector_id = cameras
+            .first()
+            .map(|c| super::capability::detector_id(&self.config.config, &c.descriptor))
+            .unwrap_or_else(|| "-".into());
+        let profile = serde_json::to_value(capability.profile)
+            .ok()
+            .and_then(|v| v.as_str().map(String::from))
+            .unwrap_or_default();
+        super::command::TrainingContext {
+            tracking: (capability.tracking_config_id.clone(), profile, tracking),
+            calibration: (
+                capability.calibration_set_id.clone(),
+                "not_run".into(),
+                calibration,
+            ),
+            calibration_states,
+            detector_id,
+            origin,
+            skeleton: self.skeleton.definition.clone(),
+            replay,
+            capability,
         }
     }
     pub(super) fn snapshot_with(

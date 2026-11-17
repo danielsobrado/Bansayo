@@ -1048,5 +1048,12 @@
       "speed": 1.0,
       "paused": false
     }
-  }
+  },
+  "capabilities": [
+    "training",
+    "content",
+    "athletes",
+    "progress"
+  ],
+  "observables_rev": 1
 }
