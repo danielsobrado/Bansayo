@@ -102,3 +102,40 @@ fn kicks_expose_scripted_phases_and_known_peaks() {
         assert!(body_pose(&sk, motion, truth.strike_t_s).positions[18].y > 0.3);
     }
 }
+
+#[test]
+fn changing_script_does_not_invent_a_gyro_peak() {
+    let cfg=config::parse("schema_version: 1\nassignments: {T1: right_thigh}\nsources: [{id: sim, kind: simulated, trackers: [{id: T1, rate_hz: 100}]}]").unwrap();
+    let sk = Skeleton::builtin("bansayo.body.v1", 1.75).unwrap();
+    let control = Control {
+        motion: Motion::FrontKick,
+        speed: 1.0,
+        paused: false,
+        generation: 0,
+        suspended: false,
+    };
+    let mut scheduler = Scheduler::new(cfg.simulated[0].clone(), sk, 0, control);
+    scheduler.step(500_000, &cfg.assignments, &BTreeMap::new(), |_, _| {});
+    scheduler.on_control(
+        510_000,
+        Control {
+            motion: Motion::ReferencePose,
+            generation: 1,
+            ..control
+        },
+    );
+    let mut gyro = None;
+    scheduler.step(510_000, &cfg.assignments, &BTreeMap::new(), |_, e| {
+        if let SourceEvent::Observation {
+            observation:
+                SensorObservation {
+                    data: ObservationData::AngularVelocity { rad_s, .. },
+                    ..
+                },
+        } = e
+        {
+            gyro = Some(rad_s)
+        }
+    });
+    assert_eq!(gyro, Some([0.0; 3]));
+}
