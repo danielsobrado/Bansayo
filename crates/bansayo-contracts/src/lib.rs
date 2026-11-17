@@ -12,6 +12,7 @@
 pub mod api;
 pub mod calibration;
 pub mod capability;
+pub mod content;
 pub mod device;
 pub mod frames;
 pub mod ids;
@@ -24,11 +25,13 @@ pub mod session;
 pub mod skeleton;
 pub mod state;
 pub mod time;
+pub mod training;
 pub mod wire;
 
 pub use api::*;
 pub use calibration::*;
 pub use capability::*;
+pub use content::*;
 pub use device::*;
 pub use frames::*;
 pub use ids::*;
@@ -41,4 +44,5 @@ pub use session::*;
 pub use skeleton::*;
 pub use state::*;
 pub use time::*;
+pub use training::*;
 pub use wire::*;

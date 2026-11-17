@@ -147,6 +147,24 @@ identifier!(
     is_profile
 );
 
+identifier!(
+    /// Athlete identifier chosen at creation, e.g. `daniel`. Pattern `^[a-z0-9][a-z0-9_-]{0,31}$`;
+    /// immutable and used as a directory name.
+    AthleteId,
+    "athlete id",
+    "1-32 characters from a-z 0-9 _ -, starting with a letter or digit",
+    is_athlete
+);
+
+fn is_athlete(s: &str) -> bool {
+    let b = s.as_bytes();
+    !b.is_empty()
+        && b.len() <= 32
+        && (b[0].is_ascii_lowercase() || b[0].is_ascii_digit())
+        && b.iter()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, b'_' | b'-'))
+}
+
 fn is_file_safe(s: &str, max_len: usize) -> bool {
     let b = s.as_bytes();
     !b.is_empty()
@@ -219,6 +237,25 @@ mod tests {
         ] {
             assert!(DeviceId::new(bad).is_err(), "{bad:?}");
             assert!(SourceId::new(bad).is_err(), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn athlete_ids() {
+        for ok in ["daniel", "a", "0", "a_b-c", &"a".repeat(32)] {
+            assert!(AthleteId::new(ok).is_ok(), "{ok}");
+        }
+        for bad in [
+            "",
+            "Daniel",
+            "-a",
+            "_a",
+            "a b",
+            "../a",
+            "a.b",
+            &"a".repeat(33),
+        ] {
+            assert!(AthleteId::new(bad).is_err(), "{bad:?}");
         }
     }
 
