@@ -24,6 +24,10 @@ pub struct EngineInfo {
 pub struct SystemState {
     /// Increments on every change.
     pub rev: u64,
+    /// Additive under protocol version 1; absent in older recordings and engines.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub capability_report: Option<crate::CapabilityReport>,
     pub engine: EngineInfo,
     pub devices: Vec<DeviceStatus>,
     pub calibration: Vec<CalibrationProfileSummary>,

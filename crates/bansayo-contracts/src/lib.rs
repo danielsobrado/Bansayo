@@ -11,10 +11,12 @@
 
 pub mod api;
 pub mod calibration;
+pub mod capability;
 pub mod device;
 pub mod frames;
 pub mod ids;
 pub mod landmarks;
+pub mod motion;
 pub mod observation;
 pub mod pose;
 pub mod quality;
@@ -26,10 +28,12 @@ pub mod wire;
 
 pub use api::*;
 pub use calibration::*;
+pub use capability::*;
 pub use device::*;
 pub use frames::*;
 pub use ids::*;
 pub use landmarks::*;
+pub use motion::*;
 pub use observation::*;
 pub use pose::*;
 pub use quality::*;

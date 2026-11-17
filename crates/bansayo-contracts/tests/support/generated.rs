@@ -51,6 +51,7 @@ pub fn typescript() -> BTreeMap<String, String> {
         files: BTreeMap::new(),
     };
     c.visit::<ServerMessage>();
+    c.visit::<MotionSample>();
     c.visit::<SourceEvent>();
     c.visit::<CalibrationProfile>();
     c.visit::<MountingData>();

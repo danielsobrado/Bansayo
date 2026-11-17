@@ -128,6 +128,7 @@ impl Runner {
         );
         let features = features(&devices, &solved);
         SystemState {
+            capability_report: None,
             rev,
             engine: EngineInfo {
                 version: env!("CARGO_PKG_VERSION").into(),

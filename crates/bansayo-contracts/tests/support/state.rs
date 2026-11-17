@@ -391,6 +391,7 @@ pub fn recording_session() -> RecordingSession {
 
 pub fn system_state() -> SystemState {
     SystemState {
+        capability_report: None,
         rev: 412,
         engine: EngineInfo {
             version: ENGINE_VERSION.into(),
@@ -410,6 +411,7 @@ pub fn system_state() -> SystemState {
 
 pub fn system_state_replay() -> SystemState {
     SystemState {
+        capability_report: None,
         rev: 431,
         engine: EngineInfo {
             mode: EngineMode::Replay,
