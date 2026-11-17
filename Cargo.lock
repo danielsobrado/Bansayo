@@ -213,6 +213,10 @@ version = "0.1.0"
 dependencies = [
  "bansayo-contracts",
  "nalgebra",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]

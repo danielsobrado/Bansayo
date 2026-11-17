@@ -9,3 +9,11 @@ rust-version.workspace = true
 [dependencies]
 bansayo-contracts.workspace = true
 nalgebra.workspace = true
+serde.workspace = true
+# Event payloads and canonical content JSON; pure, no I/O.
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+# Parses the shipped content in tests; never a runtime dependency.
+serde-saphyr.workspace = true
