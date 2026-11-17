@@ -5,26 +5,34 @@ const BodyRoot = preload("res://scripts/body_root.gd")
 const DebugSkeleton = preload("res://scripts/debug_skeleton.gd")
 const DevRig = preload("res://scripts/dev_rig.gd")
 const StatusPanel = preload("res://scripts/status_panel.gd")
+const EngineActions = preload("res://scripts/engine_actions.gd")
+const ALIGNMENT_FILE := "user://xr_alignment.cfg"
 var _buffer := PoseBuffer.new()
 var _body := DebugSkeleton.new()
 var _dev := DevRig.new()
 var _panel := StatusPanel.new()
+var _actions := EngineActions.new()
+var _root: Node3D
 var _xr_interface: XRInterface
 var _xr_camera: XRCamera3D
+var _right_hand: XRController3D
 
 func _ready() -> void:
 	_build_room()
-	var root := BodyRoot.new()
-	root.name = "BodyRoot"
-	add_child(root)
-	root.add_child(_body)
+	_root = BodyRoot.new()
+	_root.name = "BodyRoot"
+	add_child(_root)
+	_root.add_child(_body)
+	_load_alignment()
 	add_child(_dev)
 	add_child(_panel)
-	_panel.position = Vector3(-1.55, 1.6, -0.25)
+	_panel.position = Vector3(-2.3, 1.7, -0.6)
 	var client := EngineClient.new()
 	client.hello_received.connect(func(_message: Dictionary): _buffer.clear())
 	client.skeleton_changed.connect(_body.build)
+	client.skeleton_changed.connect(_panel.skeleton_changed)
 	client.state_changed.connect(_panel.state_changed)
+	client.state_changed.connect(_actions.set_state)
 	client.frame_received.connect(func(frame: Dictionary):
 		_buffer.push(frame)
 		_panel.frame_received(frame)
@@ -35,7 +43,56 @@ func _ready() -> void:
 			_buffer.clear()
 	)
 	add_child(client)
+	_actions.engine_url = client.engine_url
+	_actions.message.connect(_panel.set_action)
+	add_child(_actions)
 	_initialise_xr()
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		match event.keycode:
+			KEY_R: _actions.toggle_recording()
+			KEY_P: _actions.toggle_replay()
+			KEY_C: _reset_counts()
+
+func _on_button(name: String, controller: XRController3D) -> void:
+	match name:
+		"ax_button": _actions.toggle_recording()
+		"by_button": _actions.toggle_replay()
+		"primary_click":
+			if controller == _right_hand:
+				_align_to(controller)
+			else:
+				_reset_counts()
+
+func _reset_counts() -> void:
+	_panel.counter.reset()
+	_panel.set_action("Counts reset")
+
+## The calibrated camera world is the floor board's frame. With the right controller resting on
+## the board origin and pointing along the board's +X, engine world (0, 0, 0) and +X map onto
+## it; the headset's floor height is kept, so only position on the floor and yaw are taken.
+func _align_to(controller: XRController3D) -> void:
+	var forward := -controller.global_transform.basis.z
+	forward.y = 0.0
+	if forward.length() < 0.1:
+		_panel.set_action("Alignment needs the controller held level")
+		return
+	forward = forward.normalized()
+	var yaw := atan2(-forward.z, forward.x)
+	var position := controller.global_position
+	_root.transform = Transform3D(Basis(Vector3.UP, yaw), Vector3(position.x, 0.0, position.z))
+	var config := ConfigFile.new()
+	config.set_value("alignment", "transform", _root.transform)
+	config.save(ALIGNMENT_FILE)
+	_panel.alignment_text = "XR alignment: controller on board origin (saved)"
+	_panel.set_action("Room aligned to the calibration board")
+
+func _load_alignment() -> void:
+	var config := ConfigFile.new()
+	if config.load(ALIGNMENT_FILE) == OK and not OS.get_cmdline_user_args().has("--desktop"):
+		_root.transform = config.get_value("alignment", "transform", Transform3D.IDENTITY)
+		_panel.alignment_text = "XR alignment: controller on board origin (loaded)"
 
 func _process(_delta: float) -> void:
 	var pose := _buffer.sample()
@@ -108,6 +165,9 @@ func _initialise_xr() -> void:
 		var controller := XRController3D.new()
 		controller.tracker = StringName(hand)
 		origin.add_child(controller)
+		controller.button_pressed.connect(_on_button.bind(controller))
+		if hand == "right_hand":
+			_right_hand = controller
 	get_viewport().use_xr = true
 	_dev.enabled = false
 	if _xr_interface.has_signal("session_stopping"):
@@ -115,6 +175,8 @@ func _initialise_xr() -> void:
 
 func _return_to_desktop() -> void:
 	get_viewport().use_xr = false
+	_root.transform = Transform3D.IDENTITY # Alignment maps the headset stage, not the desktop view.
+	_panel.alignment_text = "XR alignment: assumed identity"
 	_dev.enabled = true
 	_dev.camera.current = true
 	_xr_interface = null
