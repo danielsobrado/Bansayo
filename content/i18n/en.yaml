@@ -23,3 +23,15 @@ status.estimated: Estimated
 status.indicative: Indicative
 status.not_assessed: Not assessed
 status.unavailable: Unavailable
+cue.positive.improved: "This set scored {change_percent} higher than the previous set on:"
+component.completion: Completion
+component.height: Height
+component.chamber: Chamber
+component.pivot: Pivot
+component.retraction: Retraction
+component.recovery: Recovery
+component.guard: Guard
+component.reference_match: Match with the selected reference
+safety.reps_capped: "Repetitions per set are limited to {limit}; the set was shortened."
+safety.session_duration: "You have trained for {minutes} minutes. Consider a break."
+safety.strike_limit: "{count} kicks this session. Consider ending the session."
