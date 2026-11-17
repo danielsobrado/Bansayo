@@ -7,11 +7,12 @@ Start the engine from the repository root, then run:
 
 ```sh
 cargo run -p bansayo-engine -- --config config/sim-full-body.yaml
-godot --path apps/vr -- --desktop
+godot --path apps/vr --xr-mode off -- --desktop
 ```
 
 With the simulator, capture a reference pose in Studio before selecting a moving motion. Drag the
-left mouse button to orbit and use the wheel to zoom. Without `--desktop`, the client attempts
+left mouse button to orbit and use the wheel to zoom. `--xr-mode off` stops Godot from starting OpenXR at boot (otherwise
+it shows an alert when no headset is connected). Without `--desktop`, the client attempts
 OpenXR and falls back to the desktop rig. The engine's head bone never drives the user's camera.
 The supplied skeleton is a separate figure; XR world alignment is labelled assumed identity.
 
@@ -27,11 +28,12 @@ godot --headless --path apps/vr --editor --quit
 godot --headless --path apps/vr --script tests/contract_smoke.gd
 ```
 
-**Validation remains unverified:** Godot is absent on this machine, and the owner chose to leave
-Godot validation unverified. No engine was downloaded or installed. Headless import, script
-parsing, development-mode rendering and XR/headset behaviour have not been run. Windows and
-OpenXR runtime checks need the target machine and headset.
+**Validated on Windows 11 with Godot 4.5.1 (17 November 2026):** headless import, the contract
+smoke script, and desktop-mode rendering against a live simulated engine (`sim-full-body.yaml`,
+front kick, 12/19 observed segments) captured with `--write-movie`. The OpenXR runtime
+(Virtual Desktop) was found but no headset was connected, so in-headset rendering, scale and floor
+height are still unverified.
 
-Next: validate the scripts with Godot, confirm room scale/floor, add calibrated XR alignment,
+Next: confirm in a headset room scale/floor, add calibrated XR alignment,
 then avatar retargeting and native tracker roles. Current bones and joint measurements are
 simulated and not clinically validated.

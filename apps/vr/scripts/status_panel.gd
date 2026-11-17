@@ -44,7 +44,7 @@ func _refresh() -> void:
 			origin_text = "REPLAY · " + origin_text
 		var quality: Dictionary = _frame.get("quality", {})
 		lines.append(origin_text)
-		lines.append("%s · %s/%s segments" % [str(quality.get("state", "unavailable")), str(quality.get("observed_segments", "—")), str(quality.get("total_segments", "—"))])
+		lines.append("%s · %d/%d segments" % [str(quality.get("state", "unavailable")), int(quality.get("observed_segments", 0)), int(quality.get("total_segments", 0))])
 		if _gap:
 			lines.append("No pose data · stream gap or pose unavailable")
 	lines.append("XR alignment: assumed identity")
