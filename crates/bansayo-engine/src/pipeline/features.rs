@@ -76,7 +76,7 @@ pub fn features(devices: &[DeviceStatus], solved: &Solved) -> Vec<FeatureStatus>
             ),
             Landmarks2d if cameras > 0 => (Available, "", ""),
             Landmarks2d => (Unavailable, "no_cameras", "No camera is configured."),
-            RootPosition | GroundContact => (
+            RootPosition => (
                 Unavailable,
                 "no_positional_reference",
                 "No calibrated positional reference is available.",
@@ -126,4 +126,23 @@ pub fn features(devices: &[DeviceStatus], solved: &Solved) -> Vec<FeatureStatus>
         }
     })
     .collect()
+}
+
+/// A declaration is not evidence that a solver consumes the stream. Keep this table explicit.
+pub fn unconsumed(capability: SensorCapability) -> Option<Reason> {
+    matches!(
+        capability,
+        SensorCapability::Position
+            | SensorCapability::Distance
+            | SensorCapability::Contact
+            | SensorCapability::Acceleration
+            | SensorCapability::AngularVelocity
+    )
+    .then(|| {
+        reason(
+            "not_implemented",
+            None,
+            "This observation is validated and recorded but is not consumed by a solver stage.",
+        )
+    })
 }
