@@ -11,7 +11,7 @@ import type { TimeQuality } from "./TimeQuality";
  */
 export type SensorObservation = { device_id: DeviceId, source_id: SourceId, origin: Origin, 
 /**
- * Per-device sequence number; gaps count as loss.
+ * Sequence number per (device, observation kind); gaps count as loss.
  */
 seq: number, 
 /**

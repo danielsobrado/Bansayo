@@ -14,7 +14,7 @@ pub struct SensorObservation {
     pub device_id: DeviceId,
     pub source_id: SourceId,
     pub origin: Origin,
-    /// Per-device sequence number; gaps count as loss.
+    /// Sequence number per (device, observation kind); gaps count as loss.
     pub seq: u64,
     /// Capture instant, session clock.
     pub t_us: TimeUs,

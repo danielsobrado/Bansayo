@@ -175,7 +175,11 @@ pub fn sample(
         };
         root_evidence.sources.sort();
         root_evidence.sources.dedup();
-        root_evidence.sigma = measured[0].as_ref().and_then(|p| p.sigma_m);
+        root_evidence.sigma = if pose.root_position_provenance == Provenance::Measured {
+            measured[0].as_ref().and_then(|p| p.sigma_m)
+        } else {
+            None
+        };
         root_evidence.sigma_basis = root_evidence.sigma.map(|_| SigmaBasis::Propagated);
         let root = KeypointState {
             position_m: pose.root_position_m,
