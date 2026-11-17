@@ -12,7 +12,7 @@ import { calibrationReadiness, nonLiveOrigins } from "../engine/selectors";
 import { announcementStore } from "../lib/announcer";
 import { formatDurationUs } from "../lib/format";
 import { useShortcuts } from "../lib/shortcuts";
-import { useRoute } from "../lib/hashRoute";
+import { useHashRoute } from "../lib/hashRoute";
 import { OriginBadge } from "../ui/OriginBadge";
 import { StatePill } from "../ui/StatePill";
 import { ReferencePoseFlow } from "../calibration/ReferencePoseFlow";
@@ -21,15 +21,23 @@ import { Overview } from "../workspaces/overview/Overview";
 import { Devices } from "../workspaces/devices/Devices";
 import { Cameras } from "../workspaces/cameras/Cameras";
 import { Sessions } from "../workspaces/sessions/Sessions";
+import { Train } from "../workspaces/train/Train";
+import { Technique } from "../workspaces/technique/Technique";
+import { Progress } from "../workspaces/progress/Progress";
+import { CapabilityBadge } from "../ui/CapabilityBadge";
 import { TransportBar } from "./TransportBar";
 import { RecordingDialog } from "./RecordingDialog";
 
+// Keys follow martial-arts 10 §2; Workouts (3) and Calibration (9) appear once implemented.
 const NAV = [
-  { id: "overview", label: "Overview", icon: "▣", key: "1" },
-  { id: "studio", label: "Studio", icon: "◇", key: "2" },
-  { id: "devices", label: "Devices", icon: "⌬", key: "3" },
-  { id: "cameras", label: "Cameras", icon: "◉", key: "4" },
-  { id: "sessions", label: "Sessions", icon: "▤", key: "5" },
+  { id: "train", label: "Train", icon: "▶", key: "1" },
+  { id: "technique", label: "Technique", icon: "◎", key: "2" },
+  { id: "progress", label: "Progress", icon: "↗", key: "4" },
+  { id: "overview", label: "Overview", icon: "▣", key: "5" },
+  { id: "studio", label: "Studio", icon: "◇", key: "6" },
+  { id: "devices", label: "Devices", icon: "⌬", key: "7" },
+  { id: "cameras", label: "Cameras", icon: "◉", key: "8" },
+  { id: "sessions", label: "Sessions", icon: "▤", key: "0" },
 ];
 const WORKSPACES = NAV.map((item) => item.id);
 export function App() {
@@ -43,9 +51,9 @@ export function App() {
   );
   const [calibrating, setCalibrating] = useState(false);
   const [recording, setRecording] = useState(false);
-  const route = useRoute(WORKSPACES, "overview");
+  const { workspace: route, rest } = useHashRoute(WORKSPACES, "train");
   useEffect(() => {
-    if (!location.hash) location.hash = "#/overview";
+    if (!location.hash) location.hash = "#/train";
     engineConnection.start();
     return () => engineConnection.stop();
   }, []);
@@ -146,6 +154,12 @@ export function App() {
             )}
           </span>
         )}
+        {state?.athlete && (
+          <a className="mono" href="#/train" title="Active athlete">
+            {state.athlete.display_name}
+          </a>
+        )}
+        <CapabilityBadge report={state?.capability_report} />
         <span className="status-protocol mono">
           v{connection.kind === "open" ? connection.engineVersion : "0.1.0"}
         </span>
@@ -176,6 +190,9 @@ export function App() {
                 )}
               </div>
             )}
+            {route === "train" && <Train state={state} rest={rest} />}
+            {route === "technique" && <Technique state={state} rest={rest} />}
+            {route === "progress" && <Progress state={state} rest={rest} />}
             {route === "overview" && (
               <Overview
                 state={state}

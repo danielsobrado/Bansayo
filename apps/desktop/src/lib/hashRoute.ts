@@ -24,6 +24,15 @@ export function useRoute(known: readonly string[], fallback: string): string {
   );
 }
 
+/** Workspace and sub-segments of the current hash; re-renders on change. */
+export function useHashRoute(
+  known: readonly string[],
+  fallback: string,
+): { workspace: string; rest: string[] } {
+  const hash = useSyncExternalStore(subscribe, () => window.location.hash);
+  return parseHash(hash, known, fallback);
+}
+
 export function navigate(id: string): void {
   window.location.hash = `#/${id}`;
 }
