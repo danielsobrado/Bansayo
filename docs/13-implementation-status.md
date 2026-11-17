@@ -1,8 +1,112 @@
 # 13 — Implementation and validation record
 
-This record includes Phase 0, delivered on **17 November 2026**, followed by the historical
-Stage 1–3 and camera/VR record. Phase 0 began at `b61c6b7`; the owner authorised local commits.
-Nothing was pushed.
+This record includes Phase 1 and Phase 0, both delivered on **17 November 2026**, followed by the
+historical Stage 1–3 and camera/VR record. Phase 0 began at `b61c6b7`. Phase 1 is on `main`.
+
+## Phase 1 — Roundhouse-kick slice on the simulator (17 November 2026)
+
+Implements martial-arts [18 §3 Phase 1](architecture/martial-arts/18-implementation-roadmap.md)
+and the slice of 18 §4. `protocol_version` remains **1**; every wire change is additive. Scope
+limits of 18 §3 were kept: plan
+kind `technique` only; no sequences, workouts, holds, assessments, free mode, references, DTW,
+annotations, new sources, calibration procedures, smoothing changes, export, LAN or VR change.
+New dependency: `rusqlite` 0.37 (bundled), building in the workspace and in
+`apps/desktop/src-tauri`. Content hashes use an in-crate SHA-256 (`bansayo-training::hash`), so no
+hashing crate was added. `bansayo-training` additionally depends on `serde_json` for event payloads
+and canonical content JSON, beyond the four dependencies the Phase 0 boundary lists; it is pure
+(no I/O) and is recorded here as a deviation for the owner.
+
+### Deliverables per milestone
+
+| Milestone | Delivered |
+|---|---|
+| M1 `bansayo-training` | Pure crate (no Tokio, I/O or clock). Observable catalogue for the kick definitions, metric pack and segmenter, with suppression reasons, live low-pass, backward differences and zero-phase re-filter (04 §6); evidence combination (04 §3); segmenter (07 §2); stage-1 phase machines compiled from definitions, recognition confidence, closed-set arbiter (05 §6, 07 §3); metric kinds `extremum`, `value_at`, `range`, `duration`, grade rule and comparability class (05 §8–9, 12 §5.3); scoring with `personal`/`definition` targets and null components (07 §7); cue gate and `after_rep`/`after_set` scheduler (07 §8.2); `ExerciseEngine` running a technique plan as a one-block, one-item workout (03 §1, 06 §2–9); content types, path-qualified validation and predicate compilation (13 §11); progress functions (12 §6). |
+| M2 Content | `content/` with `taekwondo.dollyeo_chagi`, `taekwondo.ap_chagi`, the kick metric pack, `scoring.kick.basic` and English texts, all `status: draft`; engine `content_store` (scan, parse, resolve, compile, index, `content_rev`, snapshots by hash); configuration `schema_version: 2`, version 1 still loads. |
+| M3 Runner, store, API | Training runner actor with the 14 §3 channel policies; SQLite store (WAL, foreign keys, `secure_delete`, one writer thread, numbered migrations); athletes, active athlete and the motion-data consent rule; provenance records; `training` and `observables` topics and `hello.capabilities`; content, athlete, training-session and progress routes of 14 §5.1–5.4; wire types with generated TypeScript and golden examples; `TrainingState.metric_availability`. |
+| M4 Recording, re-analysis, golden | `motion.mcap` with indexed range reads for `/trace` and `/motion`; pinned re-analysis writing a linked session; `bansayo-engine regress <manifest>`; three synthetic golden sessions in `golden/synthetic/` (`bansayo.golden/v1`) checked in the normal test run. |
+| M5 Desktop | Stores `trainingStore`, `trainingEvents` (ring of 256 with gap refill), `observablesStore` (outside React), `contentCache` (dropped on `content_rev` change) and `queryCache`; `MeasurementValue`, `ScoreBars`, `CapabilityBadge`, `CueBanner`, `PhaseTimeline`, SVG chart primitives, `ClipPlayer`; Train dashboard (athlete with consent, plan picker, recent sessions), live session (readiness and safety notes, counts, phase, live gauges, last repetition, cue, transport), session summary; Technique attempt browser and attempt view (clip, phase timeline, traces, metric table, scores); Progress with one line per comparability class, grade-B points secondary, break markers and per-class tables. Navigation keys follow 10 §2 and the default route is `#/train`. The UI computes no kinematics, metrics, scores or recognition. |
+
+### Acceptance evidence (18 §3 Phase 1)
+
+Windows 11, Rust 1.92, Node 24, `CARGO_TARGET_DIR=F:\drusniel-cache\cargo-target`. Workspace
+test builds use `-j 4`: at full parallelism the linker intermittently reports missing or invalid
+rlibs for the ~460 MB engine library on this machine.
+
+| # | Criterion | Command and result |
+|---|---|---|
+| 1 | Scripted 3 × 10 roundhouse: exact count, phase boundaries within two sample periods, scripted metric values within tolerance | `cargo test -p bansayo-training three_by_ten_roundhouse_session_counts_exactly phase_boundaries_within_two_sample_periods_and_metric_values_within_tolerance`: **pass** (pure session on the simulator's scripted kinematics and ground-truth phase times). |
+| 2 | Two re-analyses give identical event logs | `cargo test -p bansayo-engine --test training recorded_session_is_reviewable_and_reanalyses_are_identical`: **pass** (two pinned re-analyses of a recorded session, compared event by event; linked `reanalysis_of`, `analysis_rev` 2). |
+| 3 | One camera disabled mid-set lowers grades or suppresses metrics per repetition; session completes | **Partly met.** Golden session `20261117T090905Z-ni9h` (SIM-CAM2 disconnected after repetition 1) completes with three counted repetitions and each repetition's evidence records the loss (sources drop SIM-CAM2), but no grade changes and no metric is newly suppressed. See "Contradictions" below. |
+| 4 | A second session appears beside the first in Progress; a different pose-model id is a separate series | `cargo test -p bansayo-engine --test training a_second_session_and_a_different_pose_model_appear_in_progress`: **pass** (two sessions → two points in one class; restart with `detector_id: simulated-projection-b` → a second class with one point). Pure: `progress::tests::classes_stay_separate_and_b_points_are_secondary`. |
+| 5 | At most one cue per repetition (scheduler replay test) | `regress` check `cues.max_per_rep ≤ 1` on all golden sessions and masks; `coaching::tests::at_most_one_cue_ordered_by_category_priority_then_deviation`; engine journey asserts it on live state: **pass**. |
+| 6 | Playwright journey pick → set → summary → attempt → progress | `npx playwright test` (from `apps/desktop`): **4 pass** — the new `training` project on `config/sim-training.yaml` (create athlete with consent, pick roundhouse 1 × 3, acknowledge safety notes, start, kicks counted, summary with three attempts, attempt view with phase timeline, metric table and playing clip, Progress with one simulated series class, 1440/1024/800 px without horizontal scroll) and the unchanged tracking journey and primitives tests. |
+| 7 | Session/item machine tables; any command sequence leaves a defined state | `exercise::tests::{session_machine_table, item_machine_table, property_any_command_sequence_leaves_a_defined_state}`: **pass**. |
+| 8 | Observable tests incl. every suppression rule; rigid-transform and mirror properties | `observables::tests::{every_suppression_rule_reports_its_reason, property_rigid_transform_invariance, property_mirror_swaps_sides_and_negates_signed_observables}` and the Phase 0 angle tests: **pass**. |
+| 9 | Store: migration round trip; invariants I1, I3, I4, I6, I9; deleted session leaves no row | `store::tests::{migration_round_trip_and_settings, invariants_and_deletion}` and the engine journey's delete check (session, re-analyses and files removed): **pass**. |
+| 10 | Three synthetic golden sessions pass `regress` in the normal run | `cargo test -p bansayo-engine --test golden`: **pass** (≥ 20 checks over three sessions and two masks). |
+| 11 | fmt, clippy, tests (workspace and Tauri), gate scripts, desktop tests and build | See "Final checks" below. |
+| 12 | Generated TypeScript and golden examples current | `cargo test -p bansayo-contracts generated_contracts_are_current`: **pass** after regenerating the eight review and re-analysis types the WIP commit had added without TypeScript. |
+
+### Final checks (criterion 11)
+
+| Check | Result |
+|---|---|
+| `cargo fmt --all --check`; `cargo clippy --workspace --all-targets -j 4 -- -D warnings` | **pass** |
+| `cargo test --workspace -j 4 --no-fail-fast` | **pass**: 30 test binaries, 178 passed, 0 failed, 2 ignored (the existing photo-detector test without local models; the on-purpose golden generator) |
+| Tauri crate: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` | **pass** (1 test); `rusqlite` resolves and builds there |
+| `node scripts/verify-gate1.mjs`; `node scripts/verify-gate2.mjs` | **pass**: 8 and 5 real-process checks; scripts unchanged |
+| Desktop `npx vitest run`; `npm run build`; `npx playwright test` | **pass**: 54 unit tests; build (existing large-chunk advisory); 4 Playwright tests |
+| `crates/bansayo-engine/tests/training.rs` repeated 8 times, partly under extra load | **pass** 8/8 after the re-analysis fix |
+
+### Fixes made while completing the phase
+
+- Generated TypeScript was stale for `RepTrace`, `MotionClip`, `ReanalyseRequest` and related types.
+- `GET /training/reps/{s}/{i}/motion` filled `positions_m` with keypoints indexed by segment; it now
+  carries segment origins from the engine's forward kinematics, so clients draw without any.
+- Re-analysis of a session whose stored row was still `active` could replay a partial event log
+  (missing the `start` command) and produce an empty aborted session under load; the route now
+  answers `conflict` until the row is closed, and tests wait for the stored status.
+- Configuration validation's write probe collided between parallel validations on Windows
+  ("Access is denied" for a name being deleted); probes now have unique names.
+- English texts were missing for `cue.positive.improved`, `component.*` and three safety notices.
+
+### Contradictions found in the documents
+
+- **18 §3 criterion 3 vs 05 §8 and 04 §8.** On the simulator, origin `simulated` caps every grade
+  at B (grade A requires origin `live`); grade B depends only on method and minimum confidence;
+  camera-fit skeleton values have `null` sigma while `body_proportions` is `assumed` (04 §8 "FK
+  position"). Removing one of three cameras leaves two good views, so method, confidence and
+  sigma are unchanged and the specified rule yields the same grades. Removing a camera from a
+  two-camera rig instead leaves no triangulation, so tracking is lost and the session pauses
+  rather than completing. Criterion 3 therefore cannot be met as written on a simulated rig
+  without a new grading input. Not redesigned; candidates for the owner: propagate keypoint sigma
+  through the skeleton fit (04 §8 "segment long axis") and let grade B use it, or restate the
+  criterion as "records the loss in each repetition's evidence".
+- 18 §4 shows `/content/index` and `/capability`; the capability report is in `SystemState`
+  (Phase 0), so the desktop reads it there.
+
+### Defaults chosen
+
+- Desktop navigation keys follow 10 §2 (Train 1, Technique 2, Progress 4, Overview 5, Studio 6,
+  Devices 7, Cameras 8, Sessions 0); the default route is `#/train`.
+- The Progress chart's x axis is session time (UTC); grade-B points are drawn dashed and hollow.
+- Live gauges infer a display unit from the observable's id, because `ObservableValue` carries
+  no unit (marked as a shortcut in the code).
+- The attempt clip uses the current skeleton definition for forward kinematics (shortcut until
+  skeleton definitions are stored per session).
+- The training journey runs a second engine and dev server (ports 17701 and 15174) on
+  `config/sim-training.yaml`, leaving the existing tracking journey unchanged.
+
+### Notes for Phase 2
+
+- On the camera-only engine path the chamber, pivot and extension phases of the golden sessions
+  start at the same instant (zero-length chamber and pivot) and recovery is long (~0.9 s); the pure
+  3 × 10 test on scripted kinematics does meet the two-sample bound. Real-camera tuning should
+  start from these recordings.
+- Grade lowering on view loss needs propagated sigma through the skeleton fit (see above).
+- `ObservableValue` should carry its unit (or the content index should list observable units).
+- Store the skeleton definition with each session so clips survive skeleton changes.
+- Re-analysis with `content: current` answers `400` (not in Phase 1 scope).
 
 ## Phase 0 — Engine fit (17 November 2026)
 
