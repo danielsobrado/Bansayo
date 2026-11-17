@@ -501,6 +501,10 @@ impl Source for SimulatedSource {
         let mut faults_open = true;
         loop {
             let now_us = context.clock.now_us();
+            // Timestamp before reading controls: any sample from an earlier generation then
+            // predates a later capture request, even if it was queued during the change.
+            let current_control = *context.control.borrow_and_update();
+            scheduler.on_control(now_us, current_control);
             {
                 let assignments = self.assignments.borrow();
                 let faults = context.faults.borrow();

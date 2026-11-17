@@ -10,7 +10,6 @@ use super::{
 use crate::{
     calibration,
     calibration::mounting::CAPTURE_WINDOW_US,
-    math::rot_from_wire,
     recording::{Context, Item, Recorder, replay::Replay},
     registry::persistence::{remove_legacy_profile_file, save_runtime_snapshot},
 };
@@ -524,13 +523,8 @@ impl Runtime {
             return;
         }
         if let SourceEvent::Observation { observation } = &event {
-            if let Some(c) = self.capture.as_mut()
-                && let Some((_, samples)) = c.targets.get_mut(&observation.device_id)
-                && let ObservationData::Orientation { q, .. } = observation.data
-                && samples.len() < 2000
-                && let Some(q) = rot_from_wire(q)
-            {
-                samples.push(q);
+            if let Some(c) = self.capture.as_mut() {
+                c.observe(observation);
             }
             if let ObservationData::Landmarks2d { landmarks } = &observation.data {
                 let _ = self.landmarks.send(Encoded::new(

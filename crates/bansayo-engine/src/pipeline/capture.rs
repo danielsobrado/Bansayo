@@ -1,7 +1,7 @@
 use crate::{
     calibration::mounting::{MAX_SPREAD_RAD, mean_and_spread},
     clock::utc_now_rfc3339,
-    math::{Rot, rot_to_wire},
+    math::{Rot, rot_from_wire, rot_to_wire},
     pipeline::{Runner, command::ControlError},
 };
 use bansayo_contracts::*;
@@ -11,6 +11,24 @@ pub(super) struct Capture {
     pub until: u64,
     pub targets: BTreeMap<DeviceId, (SegmentId, Vec<Rot>)>,
     pub reply: oneshot::Sender<Result<Vec<CalibrationProfileSummary>, ControlError>>,
+}
+impl Capture {
+    /// A queued sample may arrive after the request while describing the previous motion.
+    pub(super) fn observe(&mut self, observation: &SensorObservation) {
+        let start = self
+            .until
+            .saturating_sub(crate::calibration::mounting::CAPTURE_WINDOW_US);
+        if observation.t_us < start || observation.t_us > self.until {
+            return;
+        }
+        if let Some((_, samples)) = self.targets.get_mut(&observation.device_id)
+            && let ObservationData::Orientation { q, .. } = observation.data
+            && samples.len() < 2000
+            && let Some(q) = rot_from_wire(q)
+        {
+            samples.push(q);
+        }
+    }
 }
 impl Runner {
     pub(super) fn targets(
