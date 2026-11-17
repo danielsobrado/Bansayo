@@ -320,7 +320,11 @@ fn check_engine(c: &mut Check, e: &EngineConfig) {
 
 fn check_data_dir(dir: &PathBuf) -> Result<(), String> {
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    for index in 0..64 {
+    // Unique per call: on Windows, creating a name another thread is deleting fails with
+    // "Access is denied" rather than `AlreadyExists`.
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    for _ in 0..64 {
+        let index = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let probe = dir.join(format!(
             ".bansayo-write-probe-{}-{index}",
             std::process::id()
