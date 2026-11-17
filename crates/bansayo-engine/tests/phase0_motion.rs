@@ -181,3 +181,16 @@ fn overrides_cannot_raise_profiles_and_only_valid_profiles_in_use_change_calibra
     assert_ne!(report.calibration_set_id, original.calibration_set_id);
     assert_eq!(report.tracking_config_id, original.tracking_config_id);
 }
+
+#[test]
+fn floor_contact_root_has_no_uncertainty_from_an_unused_triangulated_point() {
+    let (cfg, sk, reg, store) = rig(include_str!("../../../config/sim-full-body.yaml"));
+    let mut solved = solve(&sk, &reg, &store, 1_000_000, &cfg.config);
+    solved.pose.as_mut().unwrap().root_position_provenance = Provenance::Inferred;
+    let root = sample(&sk, &reg, &solved, 1, 1_000_000, vec![Origin::Simulated])
+        .body
+        .unwrap()
+        .root;
+    assert_eq!(root.evidence.method, MethodId::FloorContact);
+    assert!(root.evidence.sigma.is_none());
+}
