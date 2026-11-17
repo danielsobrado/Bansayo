@@ -701,3 +701,66 @@ pub struct SessionProvenance {
 pub struct RpeRequest {
     pub rpe: u8,
 }
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct TraceSeries {
+    pub id: String,
+    pub values: Vec<Option<f64>>,
+    pub method: Vec<Option<crate::MethodId>>,
+}
+
+/// `GET /training/reps/{s}/{i}/trace`: observables over one repetition, from `motion.mcap`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct RepTrace {
+    pub t_us: Vec<TimeUs>,
+    pub series: Vec<TraceSeries>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct ClipSample {
+    pub t_us: TimeUs,
+    pub root_m: Vec3,
+    /// Index-aligned with the skeleton's segments.
+    pub rotations: Vec<crate::Quat>,
+    pub positions_m: Vec<Vec3>,
+    pub inferred: Vec<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct KeypointPath {
+    pub keypoint: String,
+    pub points_m: Vec<Vec3>,
+}
+
+/// `GET /training/reps/{s}/{i}/motion` (14 §5.4): stored positions and rotations to play locally.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct MotionClip {
+    pub rate_hz: u32,
+    pub duration_us: u64,
+    pub skeleton_rev: u32,
+    pub samples: Vec<ClipSample>,
+    pub phases: Vec<PhaseInterval>,
+    pub strike_t_us: Option<TimeUs>,
+    pub paths: Vec<KeypointPath>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum ReanalyseContent {
+    Pinned,
+    Current,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct ReanalyseRequest {
+    pub content: ReanalyseContent,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub source_mask: Option<Vec<crate::DeviceId>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct ReanalyseResponse {
+    /// The new session's id; its row appears when the job finishes.
+    pub job_id: SessionId,
+}

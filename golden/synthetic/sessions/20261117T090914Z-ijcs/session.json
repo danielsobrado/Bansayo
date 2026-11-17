@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "20261117T090914Z-ijcs",
+  "name": "Training 20261117T090914Z-ijcs",
+  "created_utc": "2026-11-17T09:09:14Z",
+  "duration_us": 9239302,
+  "size_bytes": 3226410,
+  "origins": [
+    "simulated"
+  ],
+  "device_count": 3,
+  "engine_version": "0.1.0",
+  "protocol_version": 1
+}

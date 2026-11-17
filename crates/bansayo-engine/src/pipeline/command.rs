@@ -22,6 +22,10 @@ pub enum ControlRequest {
     Sessions,
     RecordStart(RecordingStartRequest),
     RecordStop,
+    /// Input recording of a training session, under its id.
+    RecordTraining(SessionId),
+    /// Stops the input recording only if it belongs to this training session.
+    RecordStopTraining(SessionId),
     PlaybackStart(PlaybackStartRequest),
     PlaybackUpdate(PlaybackUpdateRequest),
     PlaybackStop,

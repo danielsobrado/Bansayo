@@ -1,5 +1,5 @@
 use bansayo_engine::{config, run};
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use tracing_subscriber::EnvFilter;
 #[derive(Parser)]
@@ -17,10 +17,26 @@ struct Args {
     /// Print the system cameras with the indices a `camera` source's `device` takes, and exit.
     #[arg(long)]
     list_cameras: bool,
+    #[command(subcommand)]
+    command: Option<Cmd>,
+}
+
+#[derive(Subcommand)]
+enum Cmd {
+    /// Re-analyse every golden session of a `bansayo.golden/v1` manifest and check expectations.
+    Regress {
+        manifest: PathBuf,
+        /// Write the measured values into the manifest instead of failing on differences.
+        #[arg(long)]
+        bless: bool,
+    },
 }
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let args = Args::parse();
+    if let Some(Cmd::Regress { manifest, bless }) = &args.command {
+        std::process::exit(bansayo_engine::regress::main(manifest, *bless));
+    }
     if args.list_cameras {
         match bansayo_engine::sources::camera::capture::list_devices() {
             Ok(cameras) if cameras.is_empty() => println!("No cameras found"),

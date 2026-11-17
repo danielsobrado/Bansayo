@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "20261117T090856Z-w8b4",
+  "name": "Training 20261117T090856Z-w8b4",
+  "created_utc": "2026-11-17T09:08:56Z",
+  "duration_us": 9188608,
+  "size_bytes": 3186303,
+  "origins": [
+    "simulated"
+  ],
+  "device_count": 3,
+  "engine_version": "0.1.0",
+  "protocol_version": 1
+}

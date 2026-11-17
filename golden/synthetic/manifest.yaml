@@ -1,0 +1,206 @@
+# Expected values are written by `regress --bless`; review the diff.
+schema: bansayo.golden/v1
+id: golden.synthetic.roundhouse
+sessions:
+- session: 20261117T090856Z-w8b4
+  origin: simulated
+  rig: sim-training
+  tags:
+  - roundhouse
+  - right
+  - three-cameras
+  expect:
+    content: pinned
+    reps:
+      completed: 3
+      tolerance: 0
+    outcomes:
+    - completed
+    - completed
+    - completed
+    phases:
+      max_abs_ms: 34.0
+      starts_us:
+      - - 2197107
+        - 2197107
+        - 2197107
+        - 2394753
+        - 2530454
+      - - 4991183
+        - 4991183
+        - 4991183
+        - 5182995
+        - 5324857
+      - - 7789265
+        - 7789265
+        - 7789265
+        - 7979015
+        - 8126115
+    metrics:
+    - metric: kick.total_time
+      stat: session_median
+      value: 1676.497
+      tolerance: 34.0
+      grade: B
+    - metric: kick.extension_time
+      stat: session_median
+      value: 62.542
+      tolerance: 34.0
+      grade: B
+    - metric: kick.retraction_time
+      stat: session_median
+      value: 274.308
+      tolerance: 34.0
+      grade: B
+    - metric: kick.peak_ankle_speed
+      stat: session_median
+      value: 4.318953465970763
+      tolerance: 0.2
+      grade: B
+    - metric: kick.support_knee_range
+      stat: session_median
+      value: 0.0045761857757704956
+      tolerance: 0.02
+      grade: B
+    - metric: kick.peak_ankle_height
+      stat: session_median
+      value: null
+      tolerance: 0.0
+      grade: X
+    - metric: kick.hip_rotation_range
+      stat: session_median
+      value: null
+      tolerance: 0.0
+      grade: X
+    cues:
+      max_per_rep: 1
+    ends: completed
+  masks:
+  - name: two-cameras
+    disable:
+    - SIM-CAM3
+    expect:
+      content: pinned
+      reps:
+        completed: 3
+        tolerance: 0
+      outcomes:
+      - completed
+      - completed
+      - completed
+      phases: null
+      metrics: []
+      cues:
+        max_per_rep: 1
+      ends: completed
+  - name: one-camera
+    disable:
+    - SIM-CAM2
+    - SIM-CAM3
+    expect:
+      content: pinned
+      reps:
+        completed: 0
+        tolerance: 0
+      outcomes: []
+      phases: null
+      metrics: []
+      cues:
+        max_per_rep: 1
+      ends: aborted
+- session: 20261117T090905Z-ni9h
+  origin: simulated
+  rig: sim-training
+  tags:
+  - roundhouse
+  - right
+  - camera-lost-mid-set
+  expect:
+    content: pinned
+    reps:
+      completed: 3
+      tolerance: 0
+    outcomes:
+    - completed
+    - completed
+    - completed
+    phases:
+      max_abs_ms: 34.0
+      starts_us:
+      - - 11420754
+        - 11420754
+        - 11420754
+        - 11608706
+        - 11754191
+      - - 14220205
+        - 14220205
+        - 14220205
+        - 14410301
+        - 14554036
+      - - 17019984
+        - 17019984
+        - 17019984
+        - 17211253
+        - 17354059
+    metrics:
+    - metric: kick.total_time
+      stat: session_median
+      value: 1666.464
+      tolerance: 34.0
+      grade: B
+    - metric: kick.extension_time
+      stat: session_median
+      value: 55.313
+      tolerance: 34.0
+      grade: B
+    - metric: kick.retraction_time
+      stat: session_median
+      value: 278.518
+      tolerance: 34.0
+      grade: B
+    - metric: kick.peak_ankle_speed
+      stat: session_median
+      value: 3.9535554171259313
+      tolerance: 0.2
+      grade: B
+    - metric: kick.support_knee_range
+      stat: session_median
+      value: 0.004798621820361602
+      tolerance: 0.02
+      grade: B
+    - metric: kick.peak_ankle_height
+      stat: session_median
+      value: null
+      tolerance: 0.0
+      grade: X
+    - metric: kick.hip_rotation_range
+      stat: session_median
+      value: null
+      tolerance: 0.0
+      grade: X
+    cues:
+      max_per_rep: 1
+    ends: completed
+  masks: []
+- session: 20261117T090914Z-ijcs
+  origin: simulated
+  rig: sim-training
+  tags:
+  - roundhouse
+  - wrong-side
+  - ended-by-athlete
+  expect:
+    content: pinned
+    reps:
+      completed: 0
+      tolerance: 0
+    outcomes:
+    - wrong_side
+    - wrong_side
+    - wrong_side
+    phases: null
+    metrics: []
+    cues:
+      max_per_rep: 1
+    ends: completed
+  masks: []

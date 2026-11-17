@@ -1,0 +1,140 @@
+{
+  "original": {
+    "plan": {
+      "technique": "taekwondo.dollyeo_chagi",
+      "side": "left",
+      "sets": 1,
+      "reps": 3,
+      "rest_s": 0
+    },
+    "created_t_us": 18572507,
+    "commands": [
+      {
+        "t_us": 18577999,
+        "command": "start",
+        "args": {}
+      },
+      {
+        "t_us": 27797724,
+        "command": "end",
+        "args": {}
+      }
+    ],
+    "athlete": {
+      "id": "ana",
+      "stance": "orthodox",
+      "coaching": "standard",
+      "tolerance_scale": 1.5
+    },
+    "safety_acked": [
+      "taekwondo.dollyeo_chagi@1"
+    ]
+  },
+  "snapshots": [
+    {
+      "hash": "02b8900e3296eef5b79240fc6ab1c06a1269ff217e965f4def17259ce5392e60",
+      "kind": "metrics",
+      "id": "kick.guard_at_strike",
+      "version": 1,
+      "body_json": "{\"at\":\"strike\",\"direction\":\"lower_is_more\",\"gates\":{\"grade_a_methods\":[\"triangulated\",\"xr_device\"],\"grade_b_methods\":[\"fk\"],\"min_rate_hz\":25},\"id\":\"kick.guard_at_strike\",\"kind\":\"value_at\",\"label\":\"Guard at strike\",\"norm\":{\"by\":\"arm_length\"},\"obs\":\"guard_distance.lead\",\"unit\":\"m\",\"version\":1}"
+    },
+    {
+      "hash": "0a77cf6f98a4cf62b6f883f78e1fdb4740d4487c6e55e3d995f4394aa8849c85",
+      "kind": "scoring",
+      "id": "scoring.kick.basic",
+      "version": 1,
+      "body_json": "{\"applies_to\":{\"families\":[\"kick.front\",\"kick.roundhouse\",\"kick.side\"]},\"components\":[{\"id\":\"completion\",\"label\":\"Movement completion\",\"required\":true,\"source\":{\"kind\":\"outcome\"},\"weight\":0},{\"direction\":\"at_least\",\"id\":\"height\",\"label\":\"Height\",\"min_grade\":\"B\",\"source\":{\"metric\":\"kick.peak_ankle_height\",\"use\":\"norm\"},\"target\":{\"from\":\"personal\",\"stat\":\"median\",\"window_sessions\":5},\"tolerance\":{\"inner\":0.03,\"outer\":0.15},\"weight\":2},{\"direction\":\"at_least\",\"id\":\"chamber\",\"label\":\"Chamber height\",\"min_grade\":\"B\",\"source\":{\"metric\":\"kick.peak_knee_height\",\"use\":\"norm\"},\"target\":{\"from\":\"reference\"},\"tolerance\":{\"inner\":0.04,\"outer\":0.2},\"weight\":1},{\"direction\":\"at_least\",\"id\":\"pivot\",\"label\":\"Support-foot pivot\",\"min_grade\":\"B\",\"source\":{\"metric\":\"kick.support_pivot\",\"use\":\"value\"},\"target\":{\"from\":\"reference\"},\"tolerance\":{\"inner\":0.17,\"outer\":0.7},\"weight\":2},{\"direction\":\"at_most\",\"id\":\"retraction\",\"label\":\"Retraction timing\",\"min_grade\":\"B\",\"source\":{\"metric\":\"kick.retraction_time\",\"use\":\"value\"},\"target\":{\"from\":\"personal\",\"stat\":\"median\",\"window_sessions\":5},\"tolerance\":{\"inner\":40,\"outer\":200},\"weight\":1},{\"direction\":\"at_most\",\"id\":\"recovery\",\"label\":\"Recovery\",\"min_grade\":\"A\",\"source\":{\"metric\":\"kick.recovery_settle_time\",\"use\":\"value\"},\"target\":{\"from\":\"personal\",\"stat\":\"median\",\"window_sessions\":5},\"tolerance\":{\"inner\":100,\"outer\":500},\"weight\":1},{\"direction\":\"at_most\",\"id\":\"guard\",\"label\":\"Guard position\",\"min_grade\":\"A\",\"source\":{\"metric\":\"kick.guard_at_strike\",\"use\":\"norm\"},\"target\":{\"from\":\"definition\",\"rationale\":\"Structural, not stylistic: the lead hand stays within 0.6 arm lengths of the head. Chosen as the same bound the fighting-stance predicate uses; adjust per style by extending the model.\",\"value\":0.6},\"tolerance\":{\"inner\":0.05,\"outer\":0.4},\"weight\":1}],\"composite\":{\"id\":\"reference_match\",\"min_coverage\":0.7},\"id\":\"scoring.kick.basic\",\"names\":{\"display\":\"Kick — basic components\"},\"schema\":\"bansayo.scoring/v1\",\"status\":\"draft\",\"version\":1}"
+    },
+    {
+      "hash": "27cf7b3fd4363c27a9d72064ea7fc690445c974b2e46a77ed0761d259e6a80bb",
+      "kind": "disciplines",
+      "id": "taekwondo",
+      "version": 1,
+      "body_json": "{\"default_style\":\"kukkiwon\",\"id\":\"taekwondo\",\"names\":{\"display\":\"Taekwondo\"},\"schema\":\"bansayo.discipline/v1\",\"status\":\"draft\",\"styles\":[{\"display\":\"Kukkiwon\",\"id\":\"kukkiwon\"}],\"uses_lead_rear\":true,\"version\":1}"
+    },
+    {
+      "hash": "379aa954989fc969a8dafbe1f0521f1c4e3db94b501c0a6191d9629af980be48",
+      "kind": "metrics",
+      "id": "kick.retraction_time",
+      "version": 1,
+      "body_json": "{\"direction\":\"lower_is_more\",\"from\":\"strike\",\"gates\":{\"grade_a_methods\":[\"imu_gyro\",\"imu_optical_fused\",\"triangulated\",\"skeleton_fit_axis\"],\"grade_b_methods\":[\"imu_mounted\",\"fk\",\"skeleton_fit_plane\",\"image_plane\"],\"min_rate_hz\":30,\"rate_for_a_hz\":100},\"id\":\"kick.retraction_time\",\"kind\":\"duration\",\"label\":\"Retraction time\",\"to\":\"phase_end:retraction\",\"unit\":\"ms\",\"version\":1}"
+    },
+    {
+      "hash": "52f1e52f36e83365ab95c452cbda9ba88c4cc4ab2c90f79126a881d9a0cbaeaa",
+      "kind": "metrics",
+      "id": "kick.support_pivot",
+      "version": 1,
+      "body_json": "{\"direction\":\"neutral\",\"gates\":{\"grade_a_methods\":[\"triangulated\",\"marker_cluster\",\"imu_optical_fused\",\"skeleton_fit_axis\"],\"grade_b_methods\":[\"imu_mounted\"],\"min_rate_hz\":25,\"suppress_when\":[{\"hold_ms\":150,\"obs\":\"heel_height.support\",\"op\":\"gt\",\"unit\":\"m\",\"value\":0.08}]},\"id\":\"kick.support_pivot\",\"kind\":\"range\",\"label\":\"Support-foot pivot\",\"obs\":\"foot_yaw.support\",\"unit\":\"rad\",\"unwrap\":true,\"version\":1,\"window\":\"rep\"}"
+    },
+    {
+      "hash": "54a7e04b34838a76bb9c6cae77283917b63ab025978da57e294ed5c160e1d7c9",
+      "kind": "techniques",
+      "id": "taekwondo.dollyeo_chagi",
+      "version": 1,
+      "body_json": "{\"active_limb\":\"leg\",\"complete\":{\"all\":[{\"hold_ms\":100,\"obs\":\"ankle_height.active\",\"op\":\"lt\",\"ref\":\"rest\",\"unit\":\"leg_length\",\"value\":0.1},{\"obs\":\"ankle_speed.active\",\"op\":\"lt\",\"unit\":\"leg_length_s\",\"value\":0.5}]},\"confusable_with\":[\"taekwondo.ap_chagi\"],\"cues\":[{\"basis\":\"reference\",\"category\":\"technique\",\"drill\":{\"stage\":\"slow\"},\"focus\":\"external\",\"id\":\"pivot_more\",\"min_grade\":\"B\",\"observed\":\"cue.kick.pivot.observed\",\"priority\":1,\"suggestion\":\"cue.kick.pivot.suggestion\",\"when\":{\"below\":0.5,\"component\":\"pivot\"}},{\"basis\":\"history\",\"category\":\"timing\",\"focus\":\"external\",\"id\":\"retraction_slowing\",\"min_grade\":\"B\",\"observed\":\"cue.kick.retraction.observed\",\"priority\":2,\"suggestion\":\"cue.kick.retraction.suggestion\",\"when\":{\"trend\":{\"metric\":\"kick.retraction_time\",\"over_reps\":3,\"worse_by\":0.15}}},{\"basis\":\"measurement\",\"category\":\"guard\",\"focus\":\"external\",\"id\":\"guard_dropped\",\"min_grade\":\"A\",\"observed\":\"cue.kick.guard.observed\",\"priority\":1,\"suggestion\":\"cue.kick.guard.suggestion\",\"when\":{\"below\":0.5,\"component\":\"guard\"}},{\"basis\":\"history\",\"category\":\"balance\",\"focus\":\"external\",\"id\":\"unsettled_recovery\",\"min_grade\":\"A\",\"observed\":\"cue.kick.recovery.observed\",\"priority\":1,\"suggestion\":\"cue.kick.recovery.suggestion\",\"when\":{\"below\":0.5,\"component\":\"recovery\"}}],\"discipline\":\"taekwondo\",\"family\":\"kick.roundhouse\",\"id\":\"taekwondo.dollyeo_chagi\",\"instructions\":[\"instr.kick.clear_space\",\"instr.taekwondo.fighting_stance\",\"instr.kick.rear_leg_kicks\"],\"kind\":\"dynamic\",\"max_gap_ms\":80,\"metrics\":[{\"use\":\"kick.total_time\"},{\"use\":\"kick.extension_time\"},{\"use\":\"kick.retraction_time\"},{\"use\":\"kick.peak_knee_height\"},{\"use\":\"kick.peak_ankle_height\"},{\"use\":\"kick.peak_ankle_speed\"},{\"use\":\"kick.hip_rotation_range\"},{\"use\":\"kick.support_pivot\"},{\"use\":\"kick.support_knee_range\"},{\"use\":\"kick.recovery_settle_time\"},{\"use\":\"kick.guard_at_strike\"}],\"mirror_signed\":true,\"names\":{\"aliases\":[\"turning kick\",\"round kick\"],\"display\":\"Roundhouse kick\",\"native\":\"Dollyeo chagi\"},\"optional_observables\":[\"foot_yaw.support\",\"pelvis_yaw\",\"thigh_azimuth.active\",\"knee_flexion.support\",\"guard_distance.lead\",\"guard_distance.rear\",\"root_speed\",\"com_proxy_offset.support\"],\"phases\":[{\"enter\":{\"all\":[{\"obs\":\"knee_height.active\",\"op\":\"rises_above\",\"ref\":\"rest\",\"unit\":\"leg_length\",\"value\":0.2}]},\"id\":\"chamber\",\"label\":\"Chamber\",\"max_ms\":900},{\"enter\":{\"any\":[{\"obs\":\"foot_yaw.support\",\"op\":\"changed_by\",\"ref\":\"rep_start\",\"unit\":\"rad\",\"value\":0.35},{\"obs\":\"pelvis_yaw\",\"op\":\"changed_by\",\"ref\":\"rep_start\",\"unit\":\"rad\",\"value\":0.5}]},\"id\":\"pivot\",\"label\":\"Pivot and hip rotation\",\"max_ms\":600,\"optional\":true},{\"enter\":{\"all\":[{\"hold_ms\":20,\"obs\":\"knee_extension_rate.active\",\"op\":\"gt\",\"unit\":\"rad_s\",\"value\":3.0},{\"obs\":\"thigh_elevation.active\",\"op\":\"gt\",\"unit\":\"rad\",\"value\":0.9}]},\"id\":\"extension\",\"label\":\"Extension\",\"max_ms\":500},{\"enter\":{\"all\":[{\"hold_ms\":20,\"obs\":\"knee_extension_rate.active\",\"op\":\"lt\",\"unit\":\"rad_s\",\"value\":-2.0}]},\"id\":\"retraction\",\"label\":\"Retraction\",\"max_ms\":700},{\"enter\":{\"all\":[{\"obs\":\"ankle_height.active\",\"op\":\"falls_below\",\"ref\":\"rest\",\"unit\":\"leg_length\",\"value\":0.15}]},\"id\":\"recovery\",\"label\":\"Recovery\",\"max_ms\":1200}],\"progression\":[{\"constraints\":{\"stage\":\"slow\",\"target_level\":\"low\"},\"description\":\"prog.kick.low_slow\",\"label\":\"Low and slow\",\"level\":1},{\"constraints\":{\"stage\":\"normal\",\"target_level\":\"middle\"},\"description\":\"prog.kick.middle\",\"label\":\"Middle, normal speed\",\"level\":2},{\"constraints\":{\"stage\":\"normal\",\"target_level\":\"high\"},\"description\":\"prog.kick.high\",\"label\":\"High, controlled retraction\",\"level\":3}],\"required_observables\":[\"knee_height.active\",\"ankle_height.active\",\"ankle_speed.active\",\"knee_flexion.active\",\"knee_extension_rate.active\",\"thigh_elevation.active\"],\"safety\":{\"max_reps_per_set\":20,\"max_sets_per_session\":8,\"min_clear_radius_m\":2.0,\"notes\":[\"safety.kick.warm_up_first\",\"safety.kick.no_physical_target\",\"safety.kick.control_extension\"],\"warmup_required\":true},\"schema\":\"bansayo.technique/v1\",\"scoring\":\"scoring.kick.basic\",\"segmentation\":{\"driver\":\"ankle_speed.active\",\"end_below\":0.5,\"max_ms\":2500,\"min_ms\":250,\"start_above\":1.2,\"unit\":\"leg_length_s\"},\"sides\":[\"left\",\"right\"],\"status\":\"draft\",\"strike\":{\"in_phase\":\"extension\",\"keypoint\":\"ankle.active\",\"obs\":\"ankle_speed.active\",\"op\":\"local_max\",\"prominence\":1.0,\"unit\":\"leg_length_s\"},\"style\":\"kukkiwon\",\"target\":{\"distance\":0.95,\"level\":\"middle\",\"radius_m\":0.15,\"unit\":\"leg_length\"},\"tempo\":{\"slow_scale\":0.5},\"version\":1}"
+    },
+    {
+      "hash": "7b4413bdec03d11d28f719e8c3041a7ea8add33d348dcc0956cdb2e447cd6c80",
+      "kind": "metrics",
+      "id": "kick.total_time",
+      "version": 1,
+      "body_json": "{\"direction\":\"neutral\",\"from\":\"rep_start\",\"gates\":{\"grade_a_methods\":[\"triangulated\",\"marker_cluster\",\"imu_optical_fused\",\"imu_mounted\",\"imu_gyro\",\"skeleton_fit_axis\"],\"grade_b_methods\":[\"fk\",\"skeleton_fit_plane\",\"image_plane\"]},\"id\":\"kick.total_time\",\"kind\":\"duration\",\"label\":\"Total time\",\"to\":\"rep_end\",\"unit\":\"ms\",\"version\":1}"
+    },
+    {
+      "hash": "8e26e7c938a75b59d84aafdf3521e1f528f441d4637dada5ddf40db8c76bc134",
+      "kind": "metrics",
+      "id": "kick.support_knee_range",
+      "version": 1,
+      "body_json": "{\"direction\":\"lower_is_more\",\"gates\":{\"grade_a_methods\":[\"skeleton_fit_axis\",\"imu_mounted\",\"imu_optical_fused\",\"marker_cluster\"],\"grade_b_methods\":[\"fk\"],\"image_plane\":{\"use\":\"value\",\"views\":[\"frontal\",\"lateral\"]},\"min_rate_hz\":25},\"id\":\"kick.support_knee_range\",\"kind\":\"range\",\"label\":\"Support-knee movement\",\"obs\":\"knee_flexion.support\",\"unit\":\"rad\",\"version\":1,\"window\":\"rep\"}"
+    },
+    {
+      "hash": "98c242f770efd2b5c4167e51b0ca90ac355549ac1dc1a3bf418574b1f7b6ad33",
+      "kind": "metrics",
+      "id": "kick.peak_ankle_height",
+      "version": 1,
+      "body_json": "{\"agg\":\"max\",\"direction\":\"higher_is_more\",\"gates\":{\"calibration\":[\"camera_intrinsics\",\"camera_extrinsics\",\"floor_plane\"],\"grade_a\":{\"max_sigma\":0.04,\"min_confidence\":0.7},\"grade_a_methods\":[\"triangulated\",\"marker_cluster\"],\"grade_b\":{\"min_confidence\":0.4},\"grade_b_methods\":[\"fk\"],\"image_plane\":{\"use\":\"norm\",\"views\":[\"frontal\",\"lateral\",\"oblique\"]},\"min_rate_hz\":25},\"id\":\"kick.peak_ankle_height\",\"kind\":\"extremum\",\"label\":\"Peak foot height\",\"norm\":{\"by\":\"leg_length\"},\"obs\":\"ankle_height.active\",\"unit\":\"m\",\"version\":1,\"window\":\"rep\"}"
+    },
+    {
+      "hash": "9c434b418bbdecff7ddfb7eec46e75f0bcb8679869e8fd70ea5759476f371bc5",
+      "kind": "metrics",
+      "id": "kick.hip_rotation_range",
+      "version": 1,
+      "body_json": "{\"direction\":\"neutral\",\"gates\":{\"grade_a_methods\":[\"triangulated\",\"marker_cluster\",\"imu_optical_fused\",\"skeleton_fit_axis\"],\"grade_b_methods\":[\"imu_mounted\"],\"min_rate_hz\":25},\"id\":\"kick.hip_rotation_range\",\"kind\":\"range\",\"label\":\"Hip rotation\",\"obs\":\"pelvis_yaw\",\"unit\":\"rad\",\"unwrap\":true,\"version\":1,\"window\":{\"from_phase\":\"chamber\",\"to_phase\":\"extension\"}}"
+    },
+    {
+      "hash": "bf56f7b8d8411f5c5dbc16dc63ef7e85aafabe260f2d0d607d37a6b94658d0c2",
+      "kind": "metrics",
+      "id": "kick.peak_ankle_speed",
+      "version": 1,
+      "body_json": "{\"agg\":\"max\",\"direction\":\"higher_is_more\",\"gates\":{\"calibration\":[\"camera_intrinsics\",\"camera_extrinsics\"],\"grade_a\":{\"min_confidence\":0.7},\"grade_a_methods\":[\"triangulated\"],\"grade_b_methods\":[\"fk\"],\"min_rate_hz\":50,\"rate_for_a_hz\":100},\"id\":\"kick.peak_ankle_speed\",\"kind\":\"extremum\",\"label\":\"Peak foot speed\",\"obs\":\"ankle_speed.active\",\"unit\":\"m_s\",\"version\":1,\"window\":\"rep\"}"
+    },
+    {
+      "hash": "ccfebfbdc335e246e2fb64f96d8d7cc92243bf34d834a967aaba404a1375ae26",
+      "kind": "techniques",
+      "id": "taekwondo.ap_chagi",
+      "version": 1,
+      "body_json": "{\"active_limb\":\"leg\",\"complete\":{\"all\":[{\"hold_ms\":100,\"obs\":\"ankle_height.active\",\"op\":\"lt\",\"ref\":\"rest\",\"unit\":\"leg_length\",\"value\":0.1},{\"obs\":\"ankle_speed.active\",\"op\":\"lt\",\"unit\":\"leg_length_s\",\"value\":0.5}]},\"confusable_with\":[\"taekwondo.dollyeo_chagi\"],\"cues\":[{\"basis\":\"measurement\",\"category\":\"guard\",\"focus\":\"external\",\"id\":\"guard_dropped\",\"min_grade\":\"A\",\"observed\":\"cue.kick.guard.observed\",\"priority\":1,\"suggestion\":\"cue.kick.guard.suggestion\",\"when\":{\"below\":0.5,\"component\":\"guard\"}}],\"discipline\":\"taekwondo\",\"family\":\"kick.front\",\"id\":\"taekwondo.ap_chagi\",\"instructions\":[\"instr.kick.clear_space\",\"instr.taekwondo.fighting_stance\",\"instr.kick.rear_leg_kicks\"],\"kind\":\"dynamic\",\"max_gap_ms\":80,\"metrics\":[{\"use\":\"kick.total_time\"},{\"use\":\"kick.extension_time\"},{\"use\":\"kick.retraction_time\"},{\"use\":\"kick.peak_knee_height\"},{\"use\":\"kick.peak_ankle_height\"},{\"use\":\"kick.peak_ankle_speed\"},{\"use\":\"kick.support_knee_range\"},{\"use\":\"kick.guard_at_strike\"}],\"mirror_signed\":true,\"names\":{\"aliases\":[\"front snap kick\"],\"display\":\"Front kick\",\"native\":\"Ap chagi\"},\"optional_observables\":[\"knee_flexion.support\",\"guard_distance.lead\",\"guard_distance.rear\"],\"phases\":[{\"enter\":{\"all\":[{\"obs\":\"knee_height.active\",\"op\":\"rises_above\",\"ref\":\"rest\",\"unit\":\"leg_length\",\"value\":0.2}]},\"id\":\"chamber\",\"label\":\"Chamber\",\"max_ms\":900},{\"enter\":{\"all\":[{\"hold_ms\":20,\"obs\":\"knee_extension_rate.active\",\"op\":\"gt\",\"unit\":\"rad_s\",\"value\":3.0},{\"obs\":\"thigh_elevation.active\",\"op\":\"gt\",\"unit\":\"rad\",\"value\":0.9},{\"obs\":\"thigh_azimuth.active\",\"op\":\"lt\",\"unit\":\"rad\",\"value\":0.6}]},\"id\":\"extension\",\"label\":\"Extension\",\"max_ms\":700},{\"enter\":{\"all\":[{\"hold_ms\":20,\"obs\":\"knee_extension_rate.active\",\"op\":\"lt\",\"unit\":\"rad_s\",\"value\":-2.0}]},\"id\":\"retraction\",\"label\":\"Retraction\",\"max_ms\":700},{\"enter\":{\"all\":[{\"obs\":\"ankle_height.active\",\"op\":\"falls_below\",\"ref\":\"rest\",\"unit\":\"leg_length\",\"value\":0.15}]},\"id\":\"recovery\",\"label\":\"Recovery\",\"max_ms\":1200}],\"required_observables\":[\"knee_height.active\",\"ankle_height.active\",\"ankle_speed.active\",\"knee_flexion.active\",\"knee_extension_rate.active\",\"thigh_elevation.active\",\"thigh_azimuth.active\"],\"safety\":{\"max_reps_per_set\":20,\"max_sets_per_session\":8,\"min_clear_radius_m\":2.0,\"notes\":[\"safety.kick.warm_up_first\",\"safety.kick.no_physical_target\",\"safety.kick.control_extension\"],\"warmup_required\":true},\"schema\":\"bansayo.technique/v1\",\"scoring\":\"scoring.kick.basic\",\"segmentation\":{\"driver\":\"ankle_speed.active\",\"end_below\":0.5,\"max_ms\":2500,\"min_ms\":250,\"start_above\":1.2,\"unit\":\"leg_length_s\"},\"sides\":[\"left\",\"right\"],\"status\":\"draft\",\"strike\":{\"in_phase\":\"extension\",\"keypoint\":\"ankle.active\",\"obs\":\"ankle_speed.active\",\"op\":\"local_max\",\"prominence\":1.0,\"unit\":\"leg_length_s\"},\"style\":\"kukkiwon\",\"target\":{\"distance\":0.95,\"level\":\"middle\",\"radius_m\":0.15,\"unit\":\"leg_length\"},\"tempo\":{\"slow_scale\":0.5},\"version\":1}"
+    },
+    {
+      "hash": "e7cda3883686dedc8ba0f8802131f3aef96ac5a5906e23f323170aef2af614a3",
+      "kind": "metrics",
+      "id": "kick.extension_time",
+      "version": 1,
+      "body_json": "{\"direction\":\"lower_is_more\",\"from\":\"phase_start:extension\",\"gates\":{\"grade_a_methods\":[\"imu_gyro\",\"imu_optical_fused\",\"triangulated\",\"skeleton_fit_axis\"],\"grade_b_methods\":[\"imu_mounted\",\"fk\",\"skeleton_fit_plane\",\"image_plane\"],\"min_rate_hz\":30,\"rate_for_a_hz\":100},\"id\":\"kick.extension_time\",\"kind\":\"duration\",\"label\":\"Extension time\",\"to\":\"strike\",\"unit\":\"ms\",\"version\":1}"
+    },
+    {
+      "hash": "f64a3fb9412d582022cbc3fb6d68387f8e02b2c63d7392865416d5c7d6dde7a2",
+      "kind": "metrics",
+      "id": "kick.recovery_settle_time",
+      "version": 1,
+      "body_json": "{\"below\":0.15,\"direction\":\"lower_is_more\",\"for_ms\":300,\"from\":\"phase_start:recovery\",\"gates\":{\"calibration\":[\"camera_intrinsics\",\"camera_extrinsics\"],\"grade_a_methods\":[\"triangulated\",\"marker_cluster\"],\"grade_b_methods\":[],\"min_rate_hz\":25},\"id\":\"kick.recovery_settle_time\",\"kind\":\"settle_time\",\"label\":\"Time to settle\",\"obs\":\"root_speed\",\"unit\":\"ms\",\"version\":1}"
+    },
+    {
+      "hash": "fae1851dc354e8410a12898dc628db80b49461325a4a6a9d3458ea6f7f82a0ba",
+      "kind": "metrics",
+      "id": "kick.peak_knee_height",
+      "version": 1,
+      "body_json": "{\"agg\":\"max\",\"direction\":\"higher_is_more\",\"gates\":{\"calibration\":[\"camera_intrinsics\",\"camera_extrinsics\",\"floor_plane\"],\"grade_a\":{\"max_sigma\":0.03,\"min_confidence\":0.7},\"grade_a_methods\":[\"triangulated\",\"marker_cluster\"],\"grade_b\":{\"min_confidence\":0.4},\"grade_b_methods\":[\"fk\"],\"image_plane\":{\"use\":\"norm\",\"views\":[\"frontal\",\"lateral\",\"oblique\"]},\"min_rate_hz\":25},\"id\":\"kick.peak_knee_height\",\"kind\":\"extremum\",\"label\":\"Chamber knee height\",\"norm\":{\"by\":\"leg_length\"},\"obs\":\"knee_height.active\",\"unit\":\"m\",\"version\":1,\"window\":{\"phase\":\"chamber\"}}"
+    }
+  ]
+}

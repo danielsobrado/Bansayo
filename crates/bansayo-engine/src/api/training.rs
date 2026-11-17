@@ -560,3 +560,259 @@ pub async fn progress_summary(State(api): State<Api>, Query(p): Query<SummaryPar
         Err(r) => r,
     }
 }
+
+// ---- review (motion.mcap, indexed) ------------------------------------------
+
+async fn rep_window(api: &Api, id: &SessionId, rep: u32) -> Result<RepetitionResult, Response> {
+    let sid = id.clone();
+    let reps = query(api, move |c| read::reps(c, &sid)).await?;
+    reps.into_iter()
+        .find(|r| r.repetition.rep_index == rep)
+        .ok_or_else(|| not_found("No repetition with this index."))
+}
+
+#[derive(Deserialize)]
+pub struct TraceQuery {
+    observables: Option<String>,
+}
+
+pub async fn rep_trace(
+    State(api): State<Api>,
+    Path((id, rep)): Path<(String, u32)>,
+    Query(q): Query<TraceQuery>,
+) -> Response {
+    let id = match session_id(&id) {
+        Ok(id) => id,
+        Err(r) => return *r,
+    };
+    let r = match rep_window(&api, &id, rep).await {
+        Ok(r) => r,
+        Err(r) => return r,
+    };
+    let side = if r.repetition.side == Side::Left {
+        "left"
+    } else {
+        "right"
+    };
+    let ids: Vec<String> = match q.observables {
+        Some(list) => list
+            .split(',')
+            .filter(|s| !s.is_empty())
+            .take(32)
+            .map(String::from)
+            .collect(),
+        None => [
+            "knee_height",
+            "ankle_height",
+            "ankle_speed",
+            "knee_flexion",
+            "knee_extension_rate",
+            "thigh_elevation",
+        ]
+        .iter()
+        .map(|n| format!("{n}.{side}"))
+        .collect(),
+    };
+    let path = api
+        .data_dir
+        .join("sessions")
+        .join(id.as_str())
+        .join("motion.mcap");
+    let (t0, t1) = (r.repetition.t_start_us, r.repetition.t_end_us);
+    let rows = tokio::task::spawn_blocking(move || {
+        crate::recording::motion::read_range(&path, crate::recording::motion::OBSERVABLES, t0, t1)
+    })
+    .await;
+    let rows = match rows {
+        Ok(Ok(rows)) => rows,
+        _ => return not_found("Motion was not recorded for this session or has expired."),
+    };
+    let mut trace = RepTrace {
+        t_us: vec![],
+        series: ids
+            .iter()
+            .map(|i| TraceSeries {
+                id: i.clone(),
+                values: vec![],
+                method: vec![],
+            })
+            .collect(),
+    };
+    for (t, bytes) in rows {
+        let Ok(v) = serde_json::from_slice::<Value>(&bytes) else {
+            continue;
+        };
+        let values: Vec<ObservableValue> =
+            serde_json::from_value(v["values"].clone()).unwrap_or_default();
+        trace.t_us.push(t);
+        for s in &mut trace.series {
+            let o = values.iter().find(|x| x.id == s.id);
+            s.values.push(o.and_then(|o| o.value));
+            s.method
+                .push(o.filter(|o| o.value.is_some()).map(|o| o.evidence.method));
+        }
+    }
+    ok(trace)
+}
+
+pub async fn rep_motion(State(api): State<Api>, Path((id, rep)): Path<(String, u32)>) -> Response {
+    let id = match session_id(&id) {
+        Ok(id) => id,
+        Err(r) => return *r,
+    };
+    let r = match rep_window(&api, &id, rep).await {
+        Ok(r) => r,
+        Err(r) => return r,
+    };
+    let path = api
+        .data_dir
+        .join("sessions")
+        .join(id.as_str())
+        .join("motion.mcap");
+    let (t0, t1) = (r.repetition.t_start_us, r.repetition.t_end_us);
+    let rows = tokio::task::spawn_blocking(move || {
+        crate::recording::motion::read_range(&path, crate::recording::motion::FRAME, t0, t1)
+    })
+    .await;
+    let rows = match rows {
+        Ok(Ok(rows)) => rows,
+        _ => return not_found("Motion was not recorded for this session or has expired."),
+    };
+    let ankle = BODY_KEYPOINT_NAMES
+        .iter()
+        .position(|n| {
+            *n == if r.repetition.side == Side::Left {
+                "left_ankle"
+            } else {
+                "right_ankle"
+            }
+        })
+        .unwrap_or(0);
+    let mut clip = MotionClip {
+        rate_hz: 60,
+        duration_us: t1 - t0,
+        skeleton_rev: 0,
+        samples: vec![],
+        phases: r.repetition.phases.clone(),
+        strike_t_us: r.repetition.strike_t_us,
+        paths: vec![KeypointPath {
+            keypoint: BODY_KEYPOINT_NAMES[ankle].into(),
+            points_m: vec![],
+        }],
+    };
+    for (_, bytes) in rows {
+        let Ok(s) = serde_json::from_slice::<MotionSample>(&bytes) else {
+            continue;
+        };
+        let Some(b) = s.body else { continue };
+        clip.skeleton_rev = b.skeleton_rev;
+        let n = b.segments.len();
+        clip.samples.push(ClipSample {
+            t_us: s.t_us,
+            root_m: b.root.position_m,
+            rotations: b.segments.iter().map(|g| g.rotation).collect(),
+            positions_m: (0..n)
+                .map(|i| {
+                    b.keypoints
+                        .get(i)
+                        .and_then(|k| k.as_ref())
+                        .map_or([0.0; 3], |k| k.position_m)
+                })
+                .collect(),
+            inferred: b
+                .segments
+                .iter()
+                .map(|g| {
+                    !matches!(
+                        g.axis.provenance,
+                        Provenance::Measured | Provenance::Derived
+                    )
+                })
+                .collect(),
+        });
+        if let Some(Some(k)) = b.keypoints.get(ankle) {
+            clip.paths[0].points_m.push(k.position_m);
+        }
+    }
+    ok(clip)
+}
+
+// ---- re-analysis ---------------------------------------------------------------
+
+/// Starts a re-analysis of a stored session (12 §7.2) on the blocking pool; the result is a new
+/// session row linked by `reanalysis_of`, whose id is the job id.
+pub async fn session_reanalyse(State(api): State<Api>, Path(id): Path<String>, body: Result<Json<ReanalyseRequest>, JsonRejection>) -> Response {
+    let (Ok(id), Ok(Json(r))) = (session_id(&id), body) else {
+        return bad("Provide { \"content\": \"pinned\", \"source_mask\": [device ids] }.");
+    };
+    if r.content == ReanalyseContent::Current {
+        return bad("Re-analysis with current content is not available yet; use pinned.");
+    }
+    let sid = id.clone();
+    let loaded = query(&api, move |c| {
+        Ok((read::session(c, &sid)?, read::events(c, &sid, 0, 1_000_000)?, read::snapshots(c, &sid)?))
+    })
+    .await;
+    let (detail, events, snapshots) = match loaded {
+        Ok((Some(d), e, s)) => (d, e, s),
+        Ok((None, ..)) => return not_found("No stored session with this id."),
+        Err(r) => return r,
+    };
+    if !detail.session.has_inputs {
+        return failure(ApiErrorCode::Conflict, "This session has no input recording to re-analyse.");
+    }
+    let library = match crate::content_store::ContentStore::library_from_snapshots(&snapshots) {
+        Ok(l) => l,
+        Err(_) => return failure(ApiErrorCode::Conflict, "The session's content snapshots could not be read."),
+    };
+    let profile = crate::training::athletes::Athletes::new(&api.data_dir).get(&detail.session.athlete_id).ok();
+    let athlete = crate::training::reanalyse::AthleteSettings {
+        id: detail.session.athlete_id.clone(),
+        stance: profile.as_ref().and_then(|p| p.default_stance),
+        coaching: profile.as_ref().map_or(CoachingLevel::Standard, |p| p.coaching.level),
+        tolerance_scale: profile.as_ref().map_or(1.0, |p| p.coaching.tolerance_scale),
+    };
+    let Plan::Technique(plan) = detail.plan.clone();
+    let original = crate::training::reanalyse::Original::from_events(plan, athlete, &events);
+    let Some(writer) = api.store.clone() else { return no_store() };
+    let job = crate::training::new_session_id();
+    let job_id = job.clone();
+    let (data_dir, mask) = (api.data_dir.clone(), r.source_mask.unwrap_or_default());
+    tokio::task::spawn_blocking(move || {
+        let result = (|| -> Result<(), String> {
+            let recording = crate::recording::reader::load(&data_dir, &id)?;
+            let recording = crate::training::reanalyse::mask(recording, &mask);
+            let out = crate::training::reanalyse::run(recording, &original, &library, job.clone())?;
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            let begin = crate::store::SessionBegin {
+                session_id: job.clone(),
+                athlete_id: detail.session.athlete_id.clone(),
+                started_utc: crate::clock::utc_now_rfc3339(),
+                plan: detail.plan.clone(),
+                plan_ref: detail.session.plan_ref.clone(),
+                origin: detail.session.origin,
+                capability_profile: out.context.capability.profile,
+                tracking_config: out.context.tracking.clone(),
+                calibration_set: out.context.calibration.clone(),
+                snapshots,
+                has_inputs: false,
+                has_motion: false,
+                reanalysis_of: Some(id.clone()),
+                analysis_rev: detail.session.analysis_rev + 1,
+                source_mask: (!mask.is_empty()).then_some(mask),
+            };
+            if !writer.send(Write::Begin(Box::new(begin), tx)) {
+                return Err("store stopped".into());
+            }
+            rx.blocking_recv().map_err(|e| e.to_string())??;
+            for e in out.events {
+                writer.send(Write::Event(job.clone(), Box::new(e), detail.session.title.clone()));
+            }
+            Ok(())
+        })();
+        if let Err(e) = result {
+            tracing::error!(session=%id, %e, "re-analysis failed");
+        }
+    });
+    ok(ReanalyseResponse { job_id })
+}

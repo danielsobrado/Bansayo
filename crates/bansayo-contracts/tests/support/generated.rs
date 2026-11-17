@@ -90,6 +90,10 @@ pub fn typescript() -> BTreeMap<String, String> {
     c.visit::<ContentIndex>();
     c.visit::<SeriesResponse>();
     c.visit::<ProgressSummary>();
+    c.visit::<RepTrace>();
+    c.visit::<MotionClip>();
+    c.visit::<ReanalyseRequest>();
+    c.visit::<ReanalyseResponse>();
     let mut files = c.files;
     let index: String = files
         .keys()

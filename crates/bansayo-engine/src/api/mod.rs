@@ -99,7 +99,16 @@ pub fn router(api: Api) -> Router {
             "/api/v1/training/sessions/{id}/rpe",
             post(training::session_rpe),
         )
+        .route("/api/v1/training/sessions/{id}/reanalyse", post(training::session_reanalyse))
         .route("/api/v1/training/reps/{id}/{rep}", get(training::rep_get))
+        .route(
+            "/api/v1/training/reps/{id}/{rep}/trace",
+            get(training::rep_trace),
+        )
+        .route(
+            "/api/v1/training/reps/{id}/{rep}/motion",
+            get(training::rep_motion),
+        )
         .route("/api/v1/progress/series", get(training::progress_series))
         .route("/api/v1/progress/summary", get(training::progress_summary))
         .fallback(|| async {

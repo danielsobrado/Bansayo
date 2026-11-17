@@ -1,4 +1,5 @@
 //! Input recordings: bounded writer thread, versioned context and deterministic replay clock.
+pub mod motion;
 pub mod reader;
 pub mod replay;
 mod writer;
@@ -189,4 +190,36 @@ pub struct SessionFile {
     pub schema_version: u32,
     #[serde(flatten)]
     pub session: RecordingSession,
+}
+
+/// Rewrites an input recording with zstd chunks (golden sessions kept in the repository); the
+/// messages, topics and times are unchanged and the loader reads both forms.
+pub fn recompress(src: &std::path::Path, dst: &std::path::Path) -> Result<(), String> {
+    let bytes = std::fs::read(src).map_err(|e| e.to_string())?;
+    let file = std::fs::File::create(dst).map_err(|e| e.to_string())?;
+    let mut w = mcap::WriteOptions::new()
+        .compression(Some(mcap::Compression::Zstd))
+        .create(std::io::BufWriter::new(file))
+        .map_err(|e| e.to_string())?;
+    let mut channels: BTreeMap<String, u16> = BTreeMap::new();
+    for m in mcap::MessageStream::new(&bytes).map_err(|e| e.to_string())? {
+        let m = m.map_err(|e| e.to_string())?;
+        let id = match channels.get(&m.channel.topic) {
+            Some(id) => *id,
+            None => {
+                let id = w
+                    .add_channel(0, &m.channel.topic, &m.channel.message_encoding, &BTreeMap::new())
+                    .map_err(|e| e.to_string())?;
+                channels.insert(m.channel.topic.clone(), id);
+                id
+            }
+        };
+        w.write_to_known_channel(
+            &mcap::records::MessageHeader { channel_id: id, sequence: m.sequence, log_time: m.log_time, publish_time: m.publish_time },
+            &m.data,
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    w.finish().map_err(|e| e.to_string())?;
+    Ok(())
 }

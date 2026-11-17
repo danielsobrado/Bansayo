@@ -92,6 +92,8 @@ pub enum Write {
         tokio::sync::oneshot::Sender<Result<(), String>>,
     ),
     Event(SessionId, Box<TrainingEvent>, String),
+    /// Which artefacts the session keeps: `(inputs, motion)`.
+    Artefacts(SessionId, bool, bool),
     Rpe(
         SessionId,
         u8,
@@ -166,6 +168,14 @@ fn run(mut conn: Connection, rx: Receiver<Write>) {
             }
             Write::Delete(id, reply) => {
                 let _ = reply.send(delete(&mut conn, &id).map_err(|e| e.to_string()));
+            }
+            Write::Artefacts(id, inputs, motion) => {
+                if let Err(err) = conn.execute(
+                    "UPDATE training_sessions SET has_inputs = ?2, has_motion = ?3 WHERE id = ?1",
+                    params![id.as_str(), inputs, motion],
+                ) {
+                    tracing::error!(%err, "artefact flags could not be written");
+                }
             }
             Write::Interrupt => {
                 if let Err(err) = conn.execute(

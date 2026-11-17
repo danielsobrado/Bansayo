@@ -178,102 +178,14 @@ impl Runner {
         }
     }
     pub(super) fn training_context(&self, replay: bool) -> super::command::TrainingContext {
-        let now = self.clock.now_us();
-        let devices = self
-            .registry
-            .status(now, &self.config.config.quality, &self.store);
-        let solved = solve(
+        training_context_of(
             &self.skeleton,
             &self.registry,
             &self.store,
-            now,
             &self.config.config,
-        );
-        let capability = super::features::capability_report(
-            &self.skeleton,
-            &self.registry,
-            &self.store,
-            &solved,
-            &self.config.config,
-            now,
-        );
-        let (tracking, calibration) = super::capability::identity_bodies(
-            &devices,
-            &self.registry,
-            &self.store,
-            &self.config.config,
-        );
-        let cameras: Vec<&DeviceStatus> = devices
-            .iter()
-            .filter(|d| d.descriptor.kind == DeviceKind::Camera)
-            .collect();
-        let mut calibration_states = BTreeMap::new();
-        for kind in [
-            CalibrationKind::CameraIntrinsics,
-            CalibrationKind::CameraExtrinsics,
-        ] {
-            let all = !cameras.is_empty()
-                && cameras.iter().all(|c| {
-                    self.store.camera_ref(kind, &c.descriptor.id).state == CalibrationState::Valid
-                });
-            calibration_states.insert(
-                kind,
-                if all {
-                    CalibrationState::Valid
-                } else {
-                    CalibrationState::Missing
-                },
-            );
-        }
-        for kind in [
-            CalibrationKind::FloorPlane,
-            CalibrationKind::TimeSync,
-            CalibrationKind::BodyProportions,
-        ] {
-            let valid = self.store.profiles.values().any(|p| {
-                p.kind == kind
-                    && !self.store.stale.contains(&p.id)
-                    && crate::calibration::valid_profile(p)
-            });
-            calibration_states.insert(
-                kind,
-                if valid {
-                    CalibrationState::Valid
-                } else {
-                    CalibrationState::Missing
-                },
-            );
-        }
-        let origins: Vec<Origin> = devices.iter().map(|d| d.descriptor.origin).collect();
-        let origin = if !origins.is_empty() && origins.iter().all(|o| *o == Origin::Live) {
-            Origin::Live
-        } else if origins.contains(&Origin::Fixture) {
-            Origin::Fixture
-        } else {
-            Origin::Simulated
-        };
-        let detector_id = cameras
-            .first()
-            .map(|c| super::capability::detector_id(&self.config.config, &c.descriptor))
-            .unwrap_or_else(|| "-".into());
-        let profile = serde_json::to_value(capability.profile)
-            .ok()
-            .and_then(|v| v.as_str().map(String::from))
-            .unwrap_or_default();
-        super::command::TrainingContext {
-            tracking: (capability.tracking_config_id.clone(), profile, tracking),
-            calibration: (
-                capability.calibration_set_id.clone(),
-                "not_run".into(),
-                calibration,
-            ),
-            calibration_states,
-            detector_id,
-            origin,
-            skeleton: self.skeleton.definition.clone(),
+            self.clock.now_us(),
             replay,
-            capability,
-        }
+        )
     }
     pub(super) fn snapshot_with(
         &self,
@@ -328,5 +240,91 @@ impl Runner {
         self.simulation().ok_or_else(|| {
             ControlError::new(ApiErrorCode::NotFound, "No simulated source is configured.")
         })
+    }
+}
+
+/// What a training session records about tracking, from any registry and store (live or replayed).
+pub fn training_context_of(
+    skeleton: &Skeleton,
+    registry: &Registry,
+    store: &Store,
+    config: &crate::config::Config,
+    now: u64,
+    replay: bool,
+) -> super::command::TrainingContext {
+    let devices = registry.status(now, &config.quality, store);
+    let solved = solve(skeleton, registry, store, now, config);
+    let capability =
+        super::features::capability_report(skeleton, registry, store, &solved, config, now);
+    let (tracking, calibration) =
+        super::capability::identity_bodies(&devices, registry, store, config);
+    let cameras: Vec<&DeviceStatus> = devices
+        .iter()
+        .filter(|d| d.descriptor.kind == DeviceKind::Camera)
+        .collect();
+    let mut calibration_states = BTreeMap::new();
+    for kind in [
+        CalibrationKind::CameraIntrinsics,
+        CalibrationKind::CameraExtrinsics,
+    ] {
+        let all = !cameras.is_empty()
+            && cameras
+                .iter()
+                .all(|c| store.camera_ref(kind, &c.descriptor.id).state == CalibrationState::Valid);
+        calibration_states.insert(
+            kind,
+            if all {
+                CalibrationState::Valid
+            } else {
+                CalibrationState::Missing
+            },
+        );
+    }
+    for kind in [
+        CalibrationKind::FloorPlane,
+        CalibrationKind::TimeSync,
+        CalibrationKind::BodyProportions,
+    ] {
+        let valid = store.profiles.values().any(|p| {
+            p.kind == kind && !store.stale.contains(&p.id) && crate::calibration::valid_profile(p)
+        });
+        calibration_states.insert(
+            kind,
+            if valid {
+                CalibrationState::Valid
+            } else {
+                CalibrationState::Missing
+            },
+        );
+    }
+    let origins: Vec<Origin> = devices.iter().map(|d| d.descriptor.origin).collect();
+    let origin = if !origins.is_empty() && origins.iter().all(|o| *o == Origin::Live) {
+        Origin::Live
+    } else if origins.contains(&Origin::Fixture) {
+        Origin::Fixture
+    } else {
+        Origin::Simulated
+    };
+    let detector_id = cameras
+        .first()
+        .map(|c| super::capability::detector_id(config, &c.descriptor))
+        .unwrap_or_else(|| "-".into());
+    let profile = serde_json::to_value(capability.profile)
+        .ok()
+        .and_then(|v| v.as_str().map(String::from))
+        .unwrap_or_default();
+    super::command::TrainingContext {
+        tracking: (capability.tracking_config_id.clone(), profile, tracking),
+        calibration: (
+            capability.calibration_set_id.clone(),
+            "not_run".into(),
+            calibration,
+        ),
+        calibration_states,
+        detector_id,
+        origin,
+        skeleton: skeleton.definition.clone(),
+        replay,
+        capability,
     }
 }

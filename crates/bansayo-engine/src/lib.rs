@@ -8,6 +8,7 @@ pub mod content_store;
 pub mod math;
 pub mod pipeline;
 pub mod recording;
+pub mod regress;
 pub mod registry;
 pub mod skeleton;
 pub mod sources;

@@ -28,7 +28,7 @@ struct Loaded {
 }
 
 /// A definition as stored with sessions: canonical JSON and its SHA-256.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Snapshot {
     pub hash: String,
     pub kind: String,

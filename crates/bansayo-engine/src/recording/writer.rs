@@ -21,10 +21,28 @@ pub struct Recorder {
 impl Recorder {
     /// Called on the blocking pool; the dedicated thread reports open failure before acknowledgement.
     pub fn start(dir: PathBuf, name: Option<String>, context: Context) -> Result<Self, String> {
+        Self::start_as(dir, name, context, None)
+    }
+
+    /// As `start`, under a given session id (a training session's inputs share its id).
+    pub fn start_as(
+        dir: PathBuf,
+        name: Option<String>,
+        context: Context,
+        fixed: Option<SessionId>,
+    ) -> Result<Self, String> {
         std::fs::create_dir_all(dir.join("sessions")).map_err(|e| e.to_string())?;
         let utc = utc_now_rfc3339();
         let stamp = utc.replace(['-', ':'], "");
         let (id, path) = loop {
+            if let Some(id) = fixed.clone() {
+                let path = dir.join("sessions").join(id.as_str());
+                std::fs::create_dir_all(&path).map_err(|e| e.to_string())?;
+                if path.join("recording.mcap").exists() {
+                    return Err("This session already has a recording.".into());
+                }
+                break (id, path);
+            }
             let n = (std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map_or(0, |d| d.subsec_nanos()) as u64
@@ -185,7 +203,10 @@ fn open(
         })?,
     )?;
     let file = std::fs::File::create(path.join("recording.mcap"))?;
-    let mut writer = mcap::Writer::new(std::io::BufWriter::new(file))?;
+    // Input recordings stay uncompressed, as before the zstd feature was enabled for motion.mcap.
+    let mut writer = mcap::WriteOptions::new()
+        .compression(None)
+        .create(std::io::BufWriter::new(file))?;
     writer.attach(&mcap::Attachment {
         log_time: context.started_t_us * 1000,
         create_time: context.started_t_us * 1000,

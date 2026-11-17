@@ -2,6 +2,7 @@
 //! owns the training session, athletes and the analytics writer queue. It shares nothing mutable
 //! with tracking: samples arrive over a bounded channel, state leaves over watch and broadcast.
 pub mod athletes;
+pub mod reanalyse;
 
 use crate::content_store::ContentStore;
 use crate::pipeline::command::{Client, ControlError, TrainingContext, TrainingSample};
@@ -140,6 +141,9 @@ pub fn session_config(c: &crate::config::Config) -> SessionConfig {
 
 /// Everything about one running (or just finished) session.
 struct Current {
+    motion: Option<crate::recording::motion::MotionRecorder>,
+    inputs: bool,
+    closed: bool,
     session: Session,
     profile: AthleteProfile,
     stored: bool,
@@ -349,6 +353,7 @@ impl Actor {
             return;
         };
         let id = c.session.session_id().clone();
+        let mut acked: Option<AthleteProfile> = None;
         for e in events {
             if e.event_type == "command"
                 && e.data["command"] == "ack_safety"
@@ -363,11 +368,19 @@ impl Actor {
                     &refs,
                     &crate::clock::utc_now_rfc3339(),
                 ) {
-                    Ok(p) => c.profile = p,
+                    Ok(p) => {
+                        acked = Some(p.clone());
+                        c.profile = p;
+                    }
                     Err(err) => tracing::warn!(%err, "safety acknowledgement could not be saved"),
                 }
             }
             c.log.push(e.clone());
+            if let Some(m) = c.motion.as_mut() {
+                m.push(crate::recording::motion::MotionItem::Training(Box::new(
+                    e.clone(),
+                )));
+            }
             if c.stored {
                 let w = Write::Event(id.clone(), Box::new(e.clone()), c.title.clone());
                 if !self.spill.is_empty() {
@@ -380,6 +393,46 @@ impl Actor {
                 }
             }
             let _ = self.out.events.send(Arc::new((id.clone(), e)));
+        }
+        if let Some(p) = acked
+            && self.active.as_ref().is_some_and(|a| a.id == p.id)
+        {
+            self.active = Some(p);
+        }
+        self.close_recordings();
+    }
+
+    /// Stops the session's recordings once it has finished.
+    fn close_recordings(&mut self) {
+        let Some(c) = self.current.as_mut() else {
+            return;
+        };
+        if c.closed || !c.session.finished() {
+            return;
+        }
+        c.closed = true;
+        let id = c.session.session_id().clone();
+        if let Some(m) = c.motion.take() {
+            if m.dropped > 0 {
+                tracing::warn!(session=%id, dropped = m.dropped, "motion recorder dropped samples");
+            }
+            let done = m.finish();
+            tokio::spawn(async move {
+                if let Ok(Err(e)) = done.await {
+                    tracing::error!(%e, "motion recording could not be finalised");
+                }
+            });
+        }
+        if c.inputs {
+            let pipeline = self.r.pipeline.clone();
+            tokio::spawn(async move {
+                if let Err(e) = pipeline
+                    .control(crate::pipeline::command::ControlRequest::RecordStopTraining(id))
+                    .await
+                {
+                    tracing::warn!(%e, "input recording could not be stopped");
+                }
+            });
         }
     }
 
@@ -438,6 +491,17 @@ impl Actor {
         let out = c.session.sample(sample);
         events.extend(out.events);
         events.extend(c.session.tick(sample.t_us));
+        if let Some(m) = c.motion.as_mut() {
+            m.push(crate::recording::motion::MotionItem::Frame(Arc::new(
+                sample.clone(),
+            )));
+            if let Some(f) = &out.frame {
+                m.push(crate::recording::motion::MotionItem::Observables(
+                    f.t_us,
+                    f.values.clone(),
+                ));
+            }
+        }
         if let Some(frame) = out.frame {
             self.publish_observables(sample.seq, frame);
         }
@@ -642,15 +706,35 @@ impl Actor {
             capability_profile: ctx.capability.profile,
             tracking_config_id: ctx.tracking.0.clone(),
         };
-        let (session, events) = Session::new(session_config(&self.r.config), setup, self.now())
-            .map_err(|problems| ControlError {
-                code: ApiErrorCode::InvalidRequest,
-                message: problems
-                    .first()
-                    .map_or("The plan is not valid.".into(), |p| {
-                        format!("{}: {}", p.path, p.message)
-                    }),
-            })?;
+        // Inputs are recorded from before the session exists, so a re-analysis sees the same
+        // readiness at the same session times (12 §7.2).
+        let inputs = consent
+            && record.inputs
+            && self
+                .r
+                .pipeline
+                .control(crate::pipeline::command::ControlRequest::RecordTraining(session_id.clone()))
+                .await
+                .inspect_err(|e| tracing::warn!(%e, "input recording unavailable for this session"))
+                .is_ok();
+        let abandon = |pipeline: Client, dir: std::path::PathBuf, id: SessionId| async move {
+            if inputs {
+                let _ = pipeline.control(crate::pipeline::command::ControlRequest::RecordStopTraining(id)).await;
+            }
+            let _ = tokio::task::spawn_blocking(move || std::fs::remove_dir_all(dir)).await;
+        };
+        let session_dir = self.r.config.engine.data_dir.join("sessions").join(session_id.as_str());
+        let created = Session::new(session_config(&self.r.config), setup, self.now());
+        let (session, events) = match created {
+            Ok(x) => x,
+            Err(problems) => {
+                abandon(self.r.pipeline.clone(), session_dir, session_id).await;
+                return Err(ControlError {
+                    code: ApiErrorCode::InvalidRequest,
+                    message: problems.first().map_or("The plan is not valid.".into(), |p| format!("{}: {}", p.path, p.message)),
+                });
+            }
+        };
         if consent {
             // A session does not start unless its provenance is written (ADR-036).
             let begin = SessionBegin {
@@ -677,6 +761,7 @@ impl Actor {
             let sent = writer.try_write(Write::Begin(Box::new(begin), tx)).is_ok();
             let written = if sent { rx.await.ok() } else { None };
             if !matches!(written, Some(Ok(()))) {
+                abandon(self.r.pipeline.clone(), session_dir, session_id).await;
                 return Err(ControlError::new(
                     ApiErrorCode::Unavailable,
                     "The session could not be recorded, so it was not started. Check the data directory.",
@@ -684,7 +769,35 @@ impl Actor {
             }
         }
         let title = def.names.display.clone();
+        let dir = self
+            .r
+            .config
+            .engine
+            .data_dir
+            .join("sessions")
+            .join(session_id.as_str());
+        let motion = if consent && record.motion {
+            match crate::recording::motion::MotionRecorder::start(&dir) {
+                Ok(m) => Some(m),
+                Err(e) => {
+                    tracing::warn!(%e, "motion recording unavailable for this session");
+                    None
+                }
+            }
+        } else {
+            None
+        };
+        if consent {
+            let _ = writer.try_write(Write::Artefacts(
+                session_id.clone(),
+                inputs,
+                motion.is_some(),
+            ));
+        }
         self.current = Some(Current {
+            motion,
+            inputs,
+            closed: false,
             session,
             profile,
             stored: consent,

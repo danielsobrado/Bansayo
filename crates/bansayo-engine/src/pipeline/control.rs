@@ -221,6 +221,37 @@ impl Runtime {
                         .map_err(unavailable)
                 });
             }
+            ControlRequest::RecordTraining(id) => {
+                if self.recorder.is_some() {
+                    return Err((
+                        error(ApiErrorCode::Conflict, "Recording is already running."),
+                        reply,
+                    ));
+                }
+                let context = Self::context(engine);
+                let name = Some(format!("Training {id}"));
+                self.background(reply, move || {
+                    Recorder::start_as(dir, name, context, Some(id))
+                        .map(Completion::RecordingStarted)
+                        .map_err(unavailable)
+                });
+            }
+            ControlRequest::RecordStopTraining(id) => {
+                if self
+                    .recorder
+                    .as_ref()
+                    .is_none_or(|r| r.state.session_id != id)
+                {
+                    return Err((
+                        error(
+                            ApiErrorCode::Conflict,
+                            "This session's recording is not running.",
+                        ),
+                        reply,
+                    ));
+                }
+                return self.dispatch(engine, ControlRequest::RecordStop, reply);
+            }
             ControlRequest::RecordStop => {
                 let Some(recorder) = self.recorder.take() else {
                     return Err((
