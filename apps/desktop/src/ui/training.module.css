@@ -1,0 +1,69 @@
+/* Shared training building blocks (martial-arts 10 §5.1). Grades use shape and text, not colour alone. */
+.measurement {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  font-family: var(--font-mono);
+}
+.measurement[data-grade="C"] .value { color: var(--ink-3); }
+.unit { color: var(--ink-3); font-size: var(--text-small); }
+.grade {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-4);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-tag);
+  font-size: var(--text-label);
+  color: var(--ink-2);
+}
+.grade[data-grade="A"] { border-style: solid; border-color: var(--prov-measured); }
+.grade[data-grade="B"] { border-style: dashed; border-color: var(--prov-derived); }
+.grade[data-grade="C"] { border-style: dotted; border-color: var(--prov-inferred); }
+.grade[data-grade="X"] { border-style: dotted; color: var(--ink-3); }
+.reasons { color: var(--ink-3); font-family: var(--font-sans); font-size: var(--text-small); }
+.sigma { color: var(--ink-3); font-size: var(--text-small); }
+
+.bars { display: grid; gap: var(--space-4); margin: 0; padding: 0; list-style: none; }
+.bar { display: grid; grid-template-columns: 9em minmax(0, 1fr) 3.5em; gap: var(--space-8); align-items: center; font-size: var(--text-small); }
+.track { height: 8px; background: var(--surface-3); border-radius: var(--radius-tag); overflow: hidden; }
+.fill { height: 100%; background: var(--accent); }
+.bar[data-null="true"] { color: var(--ink-3); }
+.bar[data-null="true"] .track { background: repeating-linear-gradient(45deg, var(--surface-2) 0 4px, var(--surface-3) 4px 8px); }
+.barNote { grid-column: 1 / -1; color: var(--ink-3); font-size: var(--text-label); }
+
+.badge {
+  display: inline-flex;
+  gap: var(--space-4);
+  align-items: center;
+  padding: 0 var(--space-8);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-control);
+  font-size: var(--text-small);
+  background: transparent;
+  color: var(--ink-2);
+}
+
+.cue {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-8) var(--space-12);
+  border-left: 3px solid var(--accent);
+  background: var(--surface-2);
+}
+.cueBasis { font-size: var(--text-label); text-transform: uppercase; letter-spacing: var(--tracking-label); color: var(--ink-3); }
+.cueSuggestion { color: var(--ink-2); }
+
+.timeline { width: 100%; height: 40px; display: block; }
+.phase { stroke: var(--surface-0); stroke-width: 1; }
+.phaseLabel { fill: var(--ink-1); font-size: 10px; font-family: var(--font-sans); }
+.strike { stroke: var(--state-degraded); stroke-width: 2; }
+.cursor { stroke: var(--ink-1); stroke-width: 1; }
+
+.chart { width: 100%; display: block; }
+.axis { stroke: var(--line); }
+.tick { fill: var(--ink-3); font-size: 10px; font-family: var(--font-mono); }
+.line { fill: none; stroke-width: 1.5; }
+.break { stroke: var(--state-degraded); stroke-dasharray: 3 3; }
+.legend { display: flex; flex-wrap: wrap; gap: var(--space-12); margin: var(--space-4) 0 0; padding: 0; list-style: none; font-size: var(--text-small); }
+.swatch { display: inline-block; width: 12px; height: 2px; margin-right: var(--space-4); vertical-align: middle; }

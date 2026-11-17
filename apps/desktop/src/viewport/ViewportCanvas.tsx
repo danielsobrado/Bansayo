@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { LandmarkSchema, SkeletonDefinition } from "@contracts";
 import type { CameraPose } from "../engine/cameraCalibration";
-import { MotionViewport, type ViewPreset } from "./MotionViewport";
+import {
+  MotionViewport,
+  type PoseSource,
+  type ViewPreset,
+} from "./MotionViewport";
 interface Props {
   skeleton: SkeletonDefinition | null;
   /** Shows triangulated landmarks; `selected`/`onSelect` then index landmarks. */
@@ -13,6 +17,8 @@ interface Props {
   floorVisible: boolean;
   cameras?: readonly CameraPose[];
   selectedCamera?: string | null;
+  /** Draws this pose instead of the live frame (stored clips). */
+  poseSource?: PoseSource | null;
 }
 export function ViewportCanvas({
   skeleton,
@@ -24,6 +30,7 @@ export function ViewportCanvas({
   floorVisible,
   cameras = [],
   selectedCamera = null,
+  poseSource = null,
 }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const viewport = useRef<MotionViewport | null>(null);
@@ -38,6 +45,7 @@ export function ViewportCanvas({
         skeleton,
         (index) => selectRef.current(index),
         landmarkSchema,
+        poseSource,
       );
       setError(null);
     } catch {
@@ -51,7 +59,7 @@ export function ViewportCanvas({
       viewport.current?.dispose();
       viewport.current = null;
     };
-  }, [skeleton, landmarkSchema]);
+  }, [skeleton, landmarkSchema, poseSource]);
   useEffect(
     () => viewport.current?.setSelected(selected),
     [selected, skeleton, landmarkSchema],

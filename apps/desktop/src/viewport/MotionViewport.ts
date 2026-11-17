@@ -9,7 +9,11 @@ import {
   WebGLRenderer,
 } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import type { LandmarkSchema, SkeletonDefinition } from "@contracts";
+import type {
+  LandmarkSchema,
+  SkeletonDefinition,
+  SkeletonPose,
+} from "@contracts";
 import type { CameraPose } from "../engine/cameraCalibration";
 import { frameStore, STALE_FRAME_MS } from "../engine/stores";
 import { CameraFrustums } from "./CameraFrustums";
@@ -18,6 +22,7 @@ import { readPalette } from "./palette";
 import { SkeletonRig } from "./SkeletonRig";
 
 export type ViewPreset = "Front" | "Side" | "Top" | "3D";
+export type PoseSource = (now: number) => SkeletonPose | null;
 /** Height the views centre on when there is no skeleton, metres. */
 const DEFAULT_HEIGHT_M = 1.8;
 
@@ -48,6 +53,8 @@ export class MotionViewport {
     private readonly definition: SkeletonDefinition | null,
     private readonly select: (index: number) => void,
     landmarkSchema: LandmarkSchema | null = null,
+    /** Replaces the live `frameStore` pose, e.g. a stored clip; called once per animation frame. */
+    private readonly poseSource: PoseSource | null = null,
   ) {
     const palette = readPalette();
     this.scene.background = palette.surface0;
@@ -148,8 +155,10 @@ export class MotionViewport {
     if (document.hidden) return;
     const now = performance.now();
     const frame = frameStore.frame;
-    const pose = frame?.pose;
-    const fresh = frame !== null && now - frameStore.receivedAt <= STALE_FRAME_MS;
+    const pose = this.poseSource ? this.poseSource(now) : frame?.pose;
+    const fresh =
+      this.poseSource !== null ||
+      (frame !== null && now - frameStore.receivedAt <= STALE_FRAME_MS);
     if (this.rig) {
       if (pose && pose.skeleton_rev === this.definition?.rev) {
         this.rig.update(pose);
