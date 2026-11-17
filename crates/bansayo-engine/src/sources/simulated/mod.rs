@@ -140,6 +140,7 @@ struct DeviceSlot {
     rate_hz: f64,
     seq: u64,
     next_due_us: u64,
+    time: crate::clock::SourceTime,
     connected: Option<bool>,
     fault: FaultSetting,
     kind: DeviceKindState,
@@ -168,6 +169,7 @@ impl Scheduler {
                 rate_hz: tracker.rate_hz,
                 seq: 0,
                 next_due_us: 0,
+                time: Default::default(),
                 connected: None,
                 fault: FaultSetting::default(),
                 kind: DeviceKindState::Tracker {
@@ -182,6 +184,7 @@ impl Scheduler {
                 rate_hz: camera.rate_hz,
                 seq: 0,
                 next_due_us: 0,
+                time: Default::default(),
                 connected: None,
                 fault: FaultSetting::default(),
                 kind: DeviceKindState::Camera { spec_index },
@@ -341,6 +344,7 @@ impl Scheduler {
             });
             slot.seq += 1;
             slot.next_due_us = next_due(slot.next_due_us, now_us, slot.rate_hz);
+            let (t_us, time_quality) = slot.time.map(Some(now_us), now_us, 0);
             let event = match slot.kind {
                 DeviceKindState::Tracker {
                     noise_deg,
@@ -364,9 +368,9 @@ impl Scheduler {
                             source_id: self.spec.id.clone(),
                             origin: Origin::Simulated,
                             seq: slot.seq,
-                            t_us: now_us,
+                            t_us,
                             device_time_us: Some(now_us),
-                            time_quality: TimeQuality::Synchronized,
+                            time_quality,
                             calibration_ref: None,
                             confidence: Some(slot.fault.quality),
                             data: ObservationData::Orientation {
@@ -381,16 +385,18 @@ impl Scheduler {
                 DeviceKindState::Camera { spec_index } => {
                     let camera = &self.spec.cameras[spec_index];
                     let landmarks =
-                        camera::project(camera, self.spec.seed, slot.seq, now_us, &pose.positions);
+                        camera::project(camera, self.spec.seed, slot.seq, t_us, &pose.positions);
+                    let mut landmarks = landmarks;
+                    landmarks.frame_meta.time_quality = time_quality;
                     SourceEvent::Observation {
                         observation: SensorObservation {
                             device_id: slot.id.clone(),
                             source_id: self.spec.id.clone(),
                             origin: Origin::Simulated,
                             seq: slot.seq,
-                            t_us: now_us,
+                            t_us,
                             device_time_us: Some(now_us),
-                            time_quality: TimeQuality::Synchronized,
+                            time_quality,
                             calibration_ref: None,
                             confidence: Some(1.0),
                             data: ObservationData::Landmarks2d { landmarks },

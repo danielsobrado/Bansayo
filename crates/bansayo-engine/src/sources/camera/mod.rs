@@ -166,6 +166,7 @@ fn capture_loop(
     context: &SourceContext,
 ) {
     let mut connected = true;
+    let mut time = crate::clock::SourceTime::default();
     while !stop.load(Ordering::Relaxed) {
         let failure = match capture::open(&camera.backend, camera.resolution_px, camera.rate_hz) {
             Ok(mut capture) => {
@@ -190,7 +191,8 @@ fn capture_loop(
                         }
                         Ok(image) => {
                             // Arrival is the closest instant to acquisition this API exposes.
-                            let t_us = context.clock.now_us().saturating_sub(camera.latency_us);
+                            let (t_us, _) =
+                                time.map(None, context.clock.now_us(), camera.latency_us);
                             if !connected {
                                 connected = true;
                                 link(context, &camera.id, true);

@@ -82,6 +82,31 @@ impl OffsetEstimator {
     }
 }
 
+/// Adapter-owned timestamp mapper. Replay already has session timestamps and never remaps them.
+#[derive(Debug, Default)]
+pub struct SourceTime {
+    offset: OffsetEstimator,
+}
+impl SourceTime {
+    pub fn map(
+        &mut self,
+        device_us: Option<u64>,
+        arrival_us: TimeUs,
+        latency_us: u64,
+    ) -> (TimeUs, bansayo_contracts::TimeQuality) {
+        match device_us {
+            Some(t) => (
+                self.offset.observe(t, arrival_us),
+                bansayo_contracts::TimeQuality::Estimated,
+            ),
+            None => (
+                arrival_us.saturating_sub(latency_us),
+                bansayo_contracts::TimeQuality::ReceiveTime,
+            ),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
