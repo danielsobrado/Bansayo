@@ -64,6 +64,10 @@ pub struct ModelLandmark3D {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct TriangulatedLandmark3D {
     pub m: Vec3,
+    /// Propagated position uncertainty in metres; not a validated accuracy.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub sigma_m: Option<f32>,
     /// Number of camera views used; equals `used_views.len()`.
     pub views: u32,
     /// RMS reprojection error over the used views, pixels.

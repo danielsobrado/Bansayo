@@ -6,6 +6,10 @@ import type { DeviceId } from "./DeviceId";
  */
 export type TriangulatedLandmark3D = { m: [number, number, number], 
 /**
+ * Propagated position uncertainty in metres; not a validated accuracy.
+ */
+sigma_m?: number | null, 
+/**
  * Number of camera views used; equals `used_views.len()`.
  */
 views: number, 

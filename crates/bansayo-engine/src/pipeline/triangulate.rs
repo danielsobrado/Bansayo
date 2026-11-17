@@ -91,6 +91,13 @@ pub fn point(
     detections: &[(&DeviceId, &Camera, &Landmark2D)],
     config: &TriangulationConfig,
 ) -> Option<TriangulatedLandmark3D> {
+    point_with_noise_floor(detections, config, 2.0)
+}
+fn point_with_noise_floor(
+    detections: &[(&DeviceId, &Camera, &Landmark2D)],
+    config: &TriangulationConfig,
+    noise_floor_px: f64,
+) -> Option<TriangulatedLandmark3D> {
     let max = config.max_reprojection_error_px;
     let min = config.min_views.max(2) as usize;
     let mut used: Vec<View> = detections
@@ -148,6 +155,21 @@ pub fn point(
         && spread >= config.min_ray_angle_deg.to_radians()
         && m.iter().all(|v| v.is_finite()))
     .then(|| TriangulatedLandmark3D {
+        sigma_m: keypoint_sigma(
+            rms,
+            noise_floor_px,
+            used.iter()
+                .map(|v| (m - v.camera.centre).norm())
+                .sum::<f64>()
+                / used.len() as f64,
+            used.iter()
+                .map(|v| (v.camera.k.fx_px + v.camera.k.fy_px) / 2.0)
+                .sum::<f64>()
+                / used.len() as f64,
+            spread,
+            used.len(),
+        )
+        .map(|s| s as f32),
         m: v3_to_wire(&m),
         views: used.len() as u32,
         reprojection_error_px: rms as f32,
@@ -193,6 +215,16 @@ pub fn triangulate(
     now: u64,
     stale_us: u64,
     config: &TriangulationConfig,
+) -> Option<PoseLandmarks3D> {
+    triangulate_with_noise_floor(registry, store, now, stale_us, config, 2.0)
+}
+pub fn triangulate_with_noise_floor(
+    registry: &Registry,
+    store: &Store,
+    now: u64,
+    stale_us: u64,
+    config: &TriangulationConfig,
+    noise_floor_px: f64,
 ) -> Option<PoseLandmarks3D> {
     let skew_us = config.max_skew_ms * 1000;
     let mut views: Vec<_> = registry
@@ -266,7 +298,7 @@ pub fn triangulate(
                 .iter()
                 .filter_map(|(id, c, points, _, _)| Some((*id, *c, points[i].as_ref()?)))
                 .collect();
-            point(&detections, config)
+            point_with_noise_floor(&detections, config, noise_floor_px)
         })
         .collect();
     Some(PoseLandmarks3D::Triangulated {
@@ -298,4 +330,23 @@ fn interpolate(a: &PoseLandmarks2D, b: &PoseLandmarks2D, t_us: u64) -> Vec<Optio
             })
         })
         .collect()
+}
+
+/// 04 §8: propagation estimate from the accepted views, with a detector noise floor.
+pub fn keypoint_sigma(
+    rms_px: f64,
+    floor_px: f64,
+    distance_m: f64,
+    focal_px: f64,
+    ray_angle: f64,
+    views: usize,
+) -> Option<f64> {
+    if views < 2 || focal_px <= 0.0 || ray_angle.sin().abs() <= f64::EPSILON {
+        return None;
+    }
+    let sigma = rms_px.max(floor_px) * distance_m
+        / focal_px
+        / ray_angle.sin().abs()
+        / ((views - 1) as f64).sqrt();
+    (sigma.is_finite() && sigma >= 0.0).then_some(sigma)
 }

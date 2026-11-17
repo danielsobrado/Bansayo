@@ -150,6 +150,14 @@ pub(super) fn validate(config: Config) -> Result<Validated, Vec<Problem>> {
             ),
         );
     }
+    if !config.evidence.detector_noise_floor_px.is_finite()
+        || config.evidence.detector_noise_floor_px <= 0.0
+    {
+        c.err(
+            "evidence.detector_noise_floor_px",
+            "must be finite and positive",
+        );
+    }
     check_engine(&mut c, &config.engine);
     check_quality(&mut c, &config.quality);
     check_triangulation(&mut c, &config.triangulation);

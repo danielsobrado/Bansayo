@@ -223,6 +223,7 @@ fn triangulated_landmarks() -> PoseLandmarks3D {
     let points = (0..2)
         .map(|i| {
             Some(TriangulatedLandmark3D {
+                sigma_m: None,
                 m: [0.0, 0.9275 + 0.105 * i as f32, 0.0],
                 views: 2,
                 reprojection_error_px: 1.4,

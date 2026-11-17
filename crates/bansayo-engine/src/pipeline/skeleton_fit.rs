@@ -366,6 +366,7 @@ mod tests {
                 .into_iter()
                 .map(|p| {
                     p.map(|m| TriangulatedLandmark3D {
+                        sigma_m: None,
                         m: v3_to_wire(&m),
                         views: 2,
                         reprojection_error_px: 0.0,

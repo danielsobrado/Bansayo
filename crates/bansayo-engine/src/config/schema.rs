@@ -30,6 +30,8 @@ pub struct Config {
     pub sources: Vec<SourceConfig>,
     #[serde(default)]
     pub triangulation: TriangulationConfig,
+    #[serde(default)]
+    pub evidence: EvidenceConfig,
     /// Reserved for camera processing; rejected until the camera milestone.
     #[serde(default)]
     pub processing_profiles: Option<Value>,
@@ -325,4 +327,18 @@ fn camera_rate_default() -> f64 {
 
 fn camera_resolution_default() -> [u32; 2] {
     [1280, 720]
+}
+
+/// Propagated uncertainty defaults; no validated accuracy tables ship.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct EvidenceConfig {
+    pub detector_noise_floor_px: f64,
+}
+impl Default for EvidenceConfig {
+    fn default() -> Self {
+        Self {
+            detector_noise_floor_px: 2.0,
+        }
+    }
 }

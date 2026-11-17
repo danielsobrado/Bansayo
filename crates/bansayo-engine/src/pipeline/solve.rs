@@ -3,7 +3,7 @@ use crate::{
     calibration::Store,
     config::Config,
     math::{Rot, rot_from_wire, rot_to_wire, v3_from_wire, v3_to_wire},
-    pipeline::{skeleton_fit::fit, triangulate::triangulate},
+    pipeline::{skeleton_fit::fit, triangulate::triangulate_with_noise_floor},
     registry::{ObservationKind, Registry, reason},
     skeleton::{Skeleton, floor_contact_root, forward_kinematics, proportions::LANDMARK_SCHEMA_ID},
 };
@@ -81,7 +81,14 @@ pub fn solve(
             rotations[i] = s.parent.map_or(Rot::identity(), |p| rotations[p]);
         }
     }
-    let landmarks_3d = triangulate(registry, store, now, stale_us, &config.triangulation);
+    let landmarks_3d = triangulate_with_noise_floor(
+        registry,
+        store,
+        now,
+        stale_us,
+        &config.triangulation,
+        config.evidence.detector_noise_floor_px,
+    );
     // Camera-only mode: with no orientation trackers configured, the skeleton is fitted to the
     // landmarks. With trackers, uncalibrated ones still give the inferred rest skeleton.
     // shortcut: cameras never fill segments IMUs miss; mixing needs calibrated IMU heading.
