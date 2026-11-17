@@ -75,6 +75,8 @@ impl Context {
             || !(0.5..=2.5).contains(&self.skeleton.height_m)
             || self.schema_version != 1
             || self.protocol_version != PROTOCOL_VERSION
+            || !self.config.evidence.detector_noise_floor_px.is_finite()
+            || self.config.evidence.detector_noise_floor_px <= 0.0
             || !crate::config::triangulation_valid(&self.config.triangulation)
         {
             return Err("Recording uses an unsupported context version.".into());
@@ -116,43 +118,33 @@ impl Context {
                 .ok_or("Recording observation refers to an unknown device.")?;
             crate::sources::validation::observation(observation, device, self.started_t_us)?;
         }
+        let mut profile_ids = BTreeSet::new();
         for profile in &self.profiles {
-            let data = || profile.data.clone().into();
+            if !profile_ids.insert(&profile.id) {
+                return Err("Recording has duplicate calibration profiles.".into());
+            }
+            // Retained opaque/invalid profiles are never consumed. Store reports them as invalid.
+            if !crate::calibration::valid_profile(profile) {
+                continue;
+            }
             let device = profile
                 .subject
                 .device_id
                 .as_ref()
                 .and_then(|id| self.devices.iter().find(|d| &d.id == id));
-            let valid = match profile.kind {
-                CalibrationKind::Mounting => {
-                    profile
-                        .subject
-                        .segment_id
-                        .as_ref()
-                        .is_some_and(|id| skeleton.index_of(id).is_some())
-                        && serde_json::from_value::<MountingData>(data())
-                            .ok()
-                            .is_some_and(|data| {
-                                crate::math::rot_from_wire(data.q_sensor_from_segment).is_some()
-                            })
-                }
-                CalibrationKind::CameraIntrinsics => serde_json::from_value(data())
-                    .ok()
-                    .is_some_and(|k| crate::pipeline::triangulate::intrinsics_valid(&k)),
-                CalibrationKind::CameraExtrinsics => serde_json::from_value(data())
-                    .ok()
-                    .is_some_and(|e| crate::pipeline::triangulate::extrinsics_valid(&e)),
-                _ => true,
-            };
             let camera = matches!(
                 profile.kind,
                 CalibrationKind::CameraIntrinsics | CalibrationKind::CameraExtrinsics
             );
-            if profile.schema_version != CALIBRATION_PROFILE_SCHEMA_VERSION
-                || device.is_none_or(|d| camera != (d.kind == DeviceKind::Camera))
-                || !valid
+            if device.is_none_or(|d| camera != (d.kind == DeviceKind::Camera))
+                || profile.kind == CalibrationKind::Mounting
+                    && profile
+                        .subject
+                        .segment_id
+                        .as_ref()
+                        .is_none_or(|id| skeleton.index_of(id).is_none())
             {
-                return Err("Recording calibration profile is invalid.".into());
+                return Err("Recording calibration subject is invalid.".into());
             }
         }
         let mut registry = Registry::new(
