@@ -1,7 +1,146 @@
 # 13 — Implementation and validation record
 
-Resumed on **16 November 2026** from the interrupted Stage 1 work. Changes remain uncommitted;
-the repository owner retains the commit decision specified in [10](10-poc-plan.md).
+This record includes Phase 0, delivered on **17 November 2026**, followed by the historical
+Stage 1–3 and camera/VR record. Phase 0 began at `b61c6b7`; the owner authorised local commits.
+Nothing was pushed.
+
+## Phase 0 — Engine fit (17 November 2026)
+
+Phase 0 is complete. It adds no training feature, HTTP route, WebSocket topic, workspace or
+screen. `protocol_version` remains **1**. The two wire additions are optional:
+`TriangulatedLandmark3D.sigma_m` and `SystemState.capability_report`.
+The martial-arts architecture documents were not modified.
+
+### Delivered A–E
+
+| Deliverable | Implementation |
+|---|---|
+| A — Engine fit | T-01: storage, ordering and loss per `(device, observation kind)`; existing eight-frame camera history retained; primary-stream rate excludes multiplexed streams. T-02: common context contains events, clock, cancellation and drops; simulation controls live in an extension; static source-spawning match, no `dyn Source`. T-03: all nine declared calibration kinds survive migration, manifest loading, saving and replay contexts; uninterpretable payloads remain intact with state `invalid`. T-05: device times pass through the offset estimator; camera receive timestamps subtract configured latency. T-06: propagated triangulated sigma uses accepted-view RMS, distance, focal length, ray angle and view count, with validated `evidence.detector_noise_floor_px` (default 2.0). T-07: existing reference-frame and rate validation pinned without changing validation behaviour. T-04: unconsumed capabilities remain unavailable with `not_implemented`; no solver stage added. |
+| B — Pure crate | `bansayo-training::observables::angles` is the single joint-angle implementation called by the engine. Direct dependencies are contracts and nalgebra only. Existing frame joint ids and non-trunk arithmetic remain. Trunk lean now uses world up projected into the pelvis sagittal plane, positive forward, suppressing an undefined projection. No further observable catalogue. |
+| C — Contracts and seams | Rust movement/evidence and capability types; normative 26-point `bansayo.body.v1.points`; pose-to-motion conversion with FK endpoints; camera-fit twist inferred and body gyro unavailable. Internal `Streams.motion` watch matches live/replayed frame sequences. Reports extend the feature rules with conservative overrides and SHA-256 identities. TypeScript and all 44 golden JSON examples are current, including ten new movement/schema/report examples. Generated TypeScript whitespace is normalised by its generator. |
+| D — Simulator | Front-kick trajectory reused, with phase/peak metadata. Added scripted roundhouse, sensor-frame gyro streams, and opt-in toe/heel projections via simulated-source `landmark_schema: bansayo.body.v1.points`. Default remains the 19-point schema. Gyro history resets at motion/link discontinuities. |
+| E — Desktop | Button, Field, Select, Dialog, Drawer and Readout use CSS modules and existing tokens. Native controls, accessible labels/help/errors, disabled semantics, modal focus wrapping, Escape and focus restoration. `parseHash` returns `{ workspace, rest }`; existing workspace navigation remains. No screen or navigation entry. |
+
+### Acceptance evidence
+
+Validated in an isolated worktree on **macOS arm64**, Rust **1.92.0**, Node **24.20.0**, installed
+Chrome. `CARGO_TARGET_DIR` was unset: fresh worktree and native targets were built. The supplied
+Windows drive paths and PowerShell workaround did not apply to this host.
+
+| # | Criterion | Command and result |
+|---|---|---|
+| 1 | Workspace/native checks | `cargo fmt --all --check`; `cargo clippy --workspace --all-targets -- -D warnings`; `cargo test --workspace`: **pass, 119 passed, 0 failed, 1 pre-existing ignored**. `cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --check`; `cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings`; `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml`: **pass, 1 test**. |
+| 2 | Unchanged process gates | `node scripts/verify-gate1.mjs`: **8 groups pass**. `node scripts/verify-gate2.mjs`: **5 groups pass**. Both scripts are byte-for-byte unchanged from `b61c6b7`. |
+| 3 | Desktop | From `apps/desktop`: `npm test`: **41 pass**; `npm run build`: **pass**; `npm run test:e2e`: **3 pass**, including the byte-for-byte unchanged original tracking journey. Two old unit expectations were necessarily adapted from a string to the explicitly requested `parseHash` object; their route semantics remain the same. |
+| 4 | Registry regression | `cargo test -p bansayo-engine --test phase0_registry`: **2 pass**. Independent diagnostics sequence does not replace orientation; duplicates/reordering are checked per kind. Includes T-07 validation boundaries. Existing interpolation/triangulation regressions pass. |
+| 5 | Angle properties | `cargo test -p bansayo-training`: **4 pass**. Rotation grids check relative-angle rigid-transform invariance and left/right reflection. World-up trunk lean is checked under heading changes and reflection, with positive-forward and degenerate-plane assertions. LLVM coverage: **100% of the moved angle module's lines, regions and functions**, not a whole-repository coverage claim. |
+| 6 | Recorded frame bits | `cargo test -p bansayo-engine --test phase0_replay`: **pass**. Frozen **7.5 s MCAP, 451 frames**, captured before production edits, lives in `crates/bansayo-engine/tests/fixtures/phase0/`. All eight non-trunk joint channels compare with `f32::to_bits`; frame times and joint counts match. Frozen forward leans change from negative to positive. Reference motions: squat, front kick, standing. Initial capture is preserved in commit `50ed5ab`, never regenerated by normal tests. |
+| 7 | Pure dependency boundary | `cargo build -p bansayo-training`; `cargo tree -p bansayo-training`: **pass**, no Tokio or bansayo-engine in the tree. No clock, filesystem or network operations in the library. No registry dependency added; lockfiles add the local crate. |
+| 8 | Generated output | `cargo test -p bansayo-contracts generated_contracts_are_current`: **pass without blessing**. Full contract tests additionally pass round trips, deterministic generation and old JSON without optional additions. Re-run after generator whitespace normalisation: **all pass**; desktop rebuild also passes. |
+| 9 | Capability state | `node scripts/verify-phase0.mjs`: **4 groups pass**, reports observed in the existing state stream: full-body **hybrid**, six trackers **inertial**, camera-only **basic**, empty **none**. Trackers checked after mounting capture. `cargo test -p bansayo-engine --test phase0_motion`: **5 pass**, also covering multi-camera, camera-fit, stale inputs, overrides, identities and evidence boundaries. |
+
+Additional checks: `npm audit`: **0 vulnerabilities**; `git diff --check b61c6b7..HEAD`: **pass**.
+The existing ignored test is `sources::camera::pose::tests::detects_a_person_in_a_photo`: local
+models and `BANSAYO_POSE_IMAGE` are absent, so it was **not run**. Hardware, accuracy and packaged
+installer checks remain outside Phase 0. The successful desktop build retains its existing
+large-chunk advisory. No debug log, runtime data directory, models or node_modules were committed.
+
+Intermediate failures were investigated, not hidden. Regressions cover diagnostics clobbering
+orientation, calibration loss (including replay contexts), unrelated triangulation sigma leaking
+into an inferred root, gyro spikes on script changes, and modal focus/strict-effect failures.
+Gate 2 intermittently rejected mounting capture with "Movement detected": queued observations
+from the previous simulation motion entered the window. Capture now accepts only samples
+captured inside its window, and the simulator reads current controls before emission. The
+unchanged Gate 2 passed twice consecutively after that fix, including the final complete run.
+Native select tests use the selection API to avoid host popup keyboard differences; modal Tab,
+Escape and focus restoration are tested directly.
+
+### Code/document discrepancies and resolutions
+
+- The requested `Store::load` does not exist. Current code already persists mounting and camera
+  profiles through authoritative `state/runtime.yaml` plus legacy migration. The manifest rejected
+  uninterpretable profiles; legacy loading retained only summaries. Both paths and replay contexts
+  now preserve complete invalid profiles, while consumers refuse to use them.
+- Background docs/03 and ADR-016 still say camera-only poses are null. Source already fits a
+  world skeleton from calibrated triangulated landmarks without trackers, as martial-arts 08 §1.2
+  records. This implementation was retained with inferred twist evidence; no replacement solver.
+- ADR-017's original non-interpolation decision no longer describes current code. Existing
+  eight-frame interpolation was retained and regression tested; no new alignment mode/procedure.
+- O-01 was confirmed by execution: the old trunk formula returned a negative forward lean and
+  ignored the pelvis plane. Only that joint was reconciled; recorded non-trunk values retain bits.
+- Front kick already existed; roundhouse, feet and gyro did not. Front kick was reused.
+- O-20/O-22 inspection confirms capture/inference, camera imports, interpolation and camera-fit
+  code exist. One-Euro smoothing is always active with fixed constants and no config switch.
+  Its behaviour remains unchanged; its actual constants enter the processing identity. Moving
+  smoothing off recorded inputs remains Phase 2 work.
+- The existing parser is `serde-saphyr`, unlike the older ADR-012 `serde_norway` choice. Retained.
+- Literal unchanged string-return assertions conflict with the requested object-returning
+  `parseHash`. Those two assertions were adapted; gate scripts and the original browser journey
+  remain unchanged. No martial-arts architecture document was edited.
+
+### Phase 1 handoff
+
+- Consume `Streams.motion`, or replace its latest-sample delivery with ADR-018's bounded training
+  channel. No training runner, training API, database, motion recording format or training topic was added.
+- `planar` is deliberately empty. A one-camera report can be `basic` while world joints remain
+  unavailable. Planar normalisation and observable realisations are deferred.
+- Camera-fit axis evidence must not be promoted to observed twist. FK positions still depend on
+  assumed geometry and have null sigma. Root sigma exists only for a contributing triangulated
+  measurement, not an inferred floor-contact root.
+- `input.<device>.<capability>` report entries are reason-only declarations of unconsumed streams,
+  not implementations of the future observable catalogue. Gyro is recorded but does not yet
+  provide available body angular velocity.
+- Opt into the feet schema explicitly. `Motion::kick_truth()` supplies later recognition tests
+  with phase times and peaks. Gyro is a sensor-frame finite difference of noise-free truth, with
+  a zero first sample after discontinuities.
+- Triangulation sigma is propagated, not validated accuracy. Sync-motion uncertainty, empirical
+  tables, new fusion stages and filter changes remain deferred.
+- Profiles follow currently usable input facts; future consumers must retain that rule. Overrides
+  cannot raise a profile. No new source adapters, solver stages, VR changes or Phase 1 features
+  were implemented.
+
+### Local commit ledger
+
+RED and GREEN checkpoints are retained. The documentation commit follows this ledger. The work
+is brought onto `main` by fast-forward, with no push.
+
+```text
+50ed5ab engine: capture pre-phase0 simulator frames and failing registry regression
+cbeefa6 engine: retain independent observation streams and pin IMU validation
+1f75b93 engine: specify common source context and simulator extension
+13a064a engine: separate simulator context and statically dispatch source spawning
+35f60cf engine: reproduce unsupported calibration loss on both load paths
+07e97ec engine: retain uninterpreted calibration profiles with invalid state
+1c503a5 engine: specify device and receive timestamp mapping
+c1a1282 engine: map device timestamps and preserve receive-time latency semantics
+a2322ea engine: specify triangulated uncertainty and detector noise defaults
+4177d8c contracts: add propagated triangulated uncertainty and detector noise floor
+db1269d engine: specify reasons for validated but unconsumed inputs
+5776f65 engine: report unconsumed inputs as not implemented
+11b2631 engine: specify pure angle crate with invariance mirror and sign tests
+65a8c8d engine: share angle mathematics through the pure training crate
+235f92d contracts: specify canonical movement schema and additive capability state
+db7efdb contracts: define canonical movement evidence and optional capability report
+7d23cd5 engine: specify movement evidence profiles and configuration identities
+a584c40 engine: build canonical motion and publish evidence-based capability reports
+efa364e simulator: specify feet gyro and kick ground-truth seams
+8ad620d simulator: add feet projections gyro streams and scripted roundhouse metadata
+1b753f4 desktop: specify shared controls and hash subsegments
+f36561d desktop: add shared UI primitives and preserve hash subsegments
+976fca1 desktop: reproduce modal focus wrap and strict effect lifecycle failures
+31e35b4 engine: complete lint checks and lock the native training dependency
+d109ad0 engine: reproduce opaque calibration loss in recording context
+4194df2 engine: preserve invalid calibration payloads through replay contexts
+696f6c6 desktop: contain modal focus and handle strict effect replay
+45194dd engine: strengthen joint bit and degenerate-axis regression evidence
+361b816 simulator: reproduce gyro spike across scripted motion changes
+8d48488 simulator: reset gyro history at discontinuities and fingerprint filter constants
+89d6224 engine: reproduce unrelated root uncertainty in movement evidence
+e14f9c5 engine: keep root uncertainty tied to its contributing method
+7cc41e7 engine: specify mounting capture timestamp boundaries
+8496a16 engine: exclude queued pre-capture samples and apply current simulator controls
+d2907b5 contracts: normalize generated TypeScript trailing whitespace
+```
 
 ## Camera and VR vertical slice (17 November 2026)
 
