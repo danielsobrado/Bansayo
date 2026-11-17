@@ -17,6 +17,7 @@ impl Store {
             .values()
             .find(|p| {
                 p.kind == CalibrationKind::Mounting
+                    && valid_profile(p)
                     && !self.stale.contains(&p.id)
                     && p.subject.device_id.as_ref() == Some(device)
                     && p.subject.segment_id.as_ref() == Some(segment)
@@ -32,6 +33,7 @@ impl Store {
     ) -> Option<(ProfileId, T)> {
         let p = self.profiles.values().find(|p| {
             p.kind == kind
+                && valid_profile(p)
                 && !self.stale.contains(&p.id)
                 && p.subject.device_id.as_ref() == Some(device)
         })?;
@@ -48,6 +50,7 @@ impl Store {
         CalibrationRef {
             kind,
             state: match profile {
+                Some(p) if !valid_profile(p) => CalibrationState::Invalid,
                 Some(p) if self.stale.contains(&p.id) => CalibrationState::Stale,
                 Some(_) => CalibrationState::Valid,
                 None => CalibrationState::Missing,
@@ -58,7 +61,8 @@ impl Store {
     pub fn reference(&self, device: &DeviceId, segment: Option<&SegmentId>) -> CalibrationRef {
         let profile = segment.and_then(|segment| {
             self.profiles.values().find(|p| {
-                p.subject.device_id.as_ref() == Some(device)
+                p.kind == CalibrationKind::Mounting
+                    && p.subject.device_id.as_ref() == Some(device)
                     && p.subject.segment_id.as_ref() == Some(segment)
             })
         });
@@ -68,7 +72,7 @@ impl Store {
                     || p.id.as_str() == format!("mounting-{device}-{segment}")
             })
         });
-        let state = if invalid.is_some() {
+        let state = if invalid.is_some() || profile.is_some_and(|p| !valid_profile(p)) {
             CalibrationState::Invalid
         } else if profile.is_some_and(|p| self.stale.contains(&p.id)) {
             CalibrationState::Stale
@@ -90,7 +94,9 @@ impl Store {
             .values()
             .map(|p| {
                 let mut s = summary(p);
-                if self.stale.contains(&p.id) {
+                if !valid_profile(p) {
+                    s.state = CalibrationState::Invalid;
+                } else if self.stale.contains(&p.id) {
                     s.state = CalibrationState::Stale;
                 }
                 s
@@ -178,7 +184,7 @@ pub(crate) fn scan_legacy_profiles(data_dir: &Path) -> std::io::Result<LegacyPro
             .ok()
             .and_then(|bytes| serde_json::from_slice::<CalibrationProfile>(&bytes).ok());
         match profile {
-            Some(p) if valid_profile(&p) && p.id == id => {
+            Some(p) if p.id == id => {
                 valid.push((path, p));
             }
             other => {
@@ -221,6 +227,7 @@ pub fn summary(p: &CalibrationProfile) -> CalibrationProfileSummary {
         created_utc: Some(p.created_utc.clone()),
         data: match p.kind {
             CalibrationKind::CameraIntrinsics | CalibrationKind::CameraExtrinsics => p.data.clone(),
+            _ if !valid_profile(p) => p.data.clone(),
             _ => Default::default(),
         },
     }

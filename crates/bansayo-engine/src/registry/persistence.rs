@@ -1,8 +1,6 @@
 //! Atomic runtime state persistence (`state/runtime.yaml`) and legacy state migration.
 use crate::{
-    calibration::{Store, valid_profile},
-    skeleton::Skeleton,
-    sources::simulated::camera::DECLARED_BY_SIMULATOR,
+    calibration::Store, skeleton::Skeleton, sources::simulated::camera::DECLARED_BY_SIMULATOR,
 };
 use bansayo_contracts::*;
 use serde::{Deserialize, Serialize};
@@ -172,11 +170,6 @@ fn load_authoritative_runtime(
     let assignments = apply_assignments(initial, &snapshot.assignments, sk)?;
     let mut store = Store::default();
     for profile in snapshot.calibration_profiles {
-        if !valid_profile(&profile) {
-            return Err(std::io::Error::other(
-                "runtime snapshot contains an invalid calibration profile",
-            ));
-        }
         if store.profiles.insert(profile.id.clone(), profile).is_some() {
             return Err(std::io::Error::other(
                 "runtime snapshot contains a duplicate calibration profile",

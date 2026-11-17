@@ -142,7 +142,7 @@ impl Context {
                 CalibrationKind::CameraExtrinsics => serde_json::from_value(data())
                     .ok()
                     .is_some_and(|e| crate::pipeline::triangulate::extrinsics_valid(&e)),
-                _ => false,
+                _ => true,
             };
             let camera = matches!(
                 profile.kind,
