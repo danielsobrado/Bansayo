@@ -3,6 +3,30 @@
 Resumed on **16 November 2026** from the interrupted Stage 1 work. Changes remain uncommitted;
 the repository owner retains the commit decision specified in [10](10-poc-plan.md).
 
+## Camera and VR vertical slice (17 November 2026)
+
+Implements the camera-to-VR PoC plan: physical camera capture, 2D pose inference, camera
+calibration, time alignment, a camera-only skeleton and VR training feedback. Built to accept
+cameras by configuration alone; **no physical camera or headset has been connected yet.**
+
+| Milestone | Delivered | Evidence |
+|---|---|---|
+| M0 Godot | Imports, parses and renders with Godot 4.5.1; desktop mode passes `--xr-mode off` so OpenXR is not started | Contract smoke; desktop render of a live simulated front kick (`--write-movie`). The Virtual Desktop OpenXR runtime was found, no headset connected |
+| M1 Capture | `kind: camera` source: Media Foundation devices (nokhwa, MJPEG decoded in-process) or image folders; one capture thread per camera with a latest-frame slot; reopen every 2 s after failure; declared resolution enforced; JPEG preview endpoint; `--list-cameras` | `tests/camera_source.rs`; an image-folder camera tracked at 12.8/15 Hz in a debug build while an absent device reported `disconnected` and a mis-sized folder reported the `resolution_px` to set |
+| M2 Pose | YOLOX person detection + RTMPose-m (COCO-17, no heel/toe) on ONNX Runtime 1.24 loaded at run time, DirectML on Windows; subject tracking by box overlap, detection every tenth frame; One-Euro smoothing | Matches an onnxruntime/OpenCV reference within 0.01 px on a COCO photo; 3.7 ms per tracked frame in release |
+| M3 Calibration | `POST /calibration/profiles` import with validation and atomic persistence; ChArUco script (capture, intrinsics, floor-board extrinsics, quality gates); registry keeps 8 frames per camera and triangulation interpolates free-running cameras to one instant | Import test (rejections, replacement rule, restart); calibration selftest recovers three synthetic cameras within 1% of range and 0.16°; interpolation cuts the worst kick landmark error from 11.3 mm to 0.6 mm with cameras 16 ms out of phase |
+| M4 Skeleton | `pipeline/skeleton_fit`: pelvis/chest frames, minimal-swing limbs with inherited twist, confidence gating; used when no trackers are configured; unseen segments stay inferred | Knee/hip angles equal the scripted squat/kick/standing angles to 1e-5 rad from simulated landmarks; Studio shows the camera-only skeleton (`sim-cameras-skeleton.yaml`) |
+| M5 VR | Joint readouts with peaks, squat/kick counts, ankle/pelvis heights, camera and feature status, record/replay buttons, controller-based room alignment | Smoke-tested counters; record → replay → live round trip through the Godot client against a live engine; desktop render |
+
+Recordings from image-folder cameras replay with their COCO-17 landmarks; recordings of the
+camera-only skeleton replay with a measured root and changing angles.
+
+Not verified: physical cameras (enumeration, MJPEG negotiation, unplug/replug), real
+calibration and measurement accuracy, headset rendering, controller bindings, room alignment,
+and sensor-to-headset latency. Camera timestamps are arrival times minus an optional configured
+`latency_ms`; per-camera latency has not been measured. Rep counts use fixed thresholds that were
+not tuned on real movement. See the root README, "Attach physical cameras".
+
 ## Implemented scope
 
 - Shared Rust contracts, generated TypeScript and golden JSON examples.

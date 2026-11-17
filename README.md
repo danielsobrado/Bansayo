@@ -6,17 +6,18 @@ VR application share.
 
 ## Status
 
-The local PoC implements a Rust engine, a React/three.js Studio and a Tauri desktop shell. A
-Godot training-room client is included; its import and runtime validation remain unverified
-because Godot is not installed and the owner chose to leave that validation unverified.
+The local PoC implements a Rust engine, a React/three.js Studio, a Tauri desktop shell and a
+Godot training room (validated in desktop mode with Godot 4.5.1; not yet in a headset).
 
-Inputs are **simulated**: virtual IMU trackers and projected camera landmarks. The simulator
-proves the transport, calibration and solver plumbing. It does not establish measurement
-accuracy. Heading and body proportions are assumed, and joint definitions remain
-`validated: false`. With two or more simulated cameras the engine triangulates the 2D landmarks
-into metric 3D landmarks, using camera models the simulator declares (there is no camera
-calibration, capture or pose detector); with trackers as well, the root position is then measured
-from the triangulated pelvis, otherwise it is inferred.
+Two input paths share one pipeline. The **simulator** drives virtual IMU trackers and projected
+camera landmarks. The **camera path** captures USB cameras (Windows Media Foundation) or image
+folders, detects one person per view with YOLOX and RTMPose (COCO-17) on ONNX Runtime, imports
+ChArUco camera calibrations, interpolates free-running cameras to one instant, triangulates, and
+fits the skeleton to the 3D landmarks when no trackers are configured: joint angles then come
+from cameras alone. The camera path is built and tested without hardware (image folders,
+synthetic calibration scenes, simulated geometry); **no physical camera or headset has been
+connected yet**, so nothing here establishes measurement accuracy. Joint definitions remain
+`validated: false`.
 
 See the [implementation and validation record](docs/13-implementation-status.md) and
 [architecture documentation](docs/README.md).
@@ -46,8 +47,8 @@ bar. Select a joint to inspect its changing angle and trace. Derived segments ar
 inferred segments are translucent purple with dashed centre lines.
 
 Devices supports assignments and simulated disconnect/quality faults. Sessions lists MCAP input
-recordings and provides replay, pause, speed, scrubbing and looping. Cameras shows simulated 2D
-landmarks in image coordinates; it does not show camera video. With two or more calibrated
+recordings and provides replay, pause, speed, scrubbing and looping. Cameras shows 2D landmarks
+in image coordinates, over the live image for physical cameras. With two or more calibrated
 cameras it also shows a 3D view of the camera frustums and the triangulated landmarks, and a
 landmark inspector that shows which cameras were used or rejected and why a landmark is missing.
 Try it with `config/sim-multi-camera.yaml`.
@@ -67,6 +68,35 @@ relative to the working directory). Reference-pose capture checks stillness and 
 profiles. Reassigning a tracker makes its previous mounting calibration stale; assigning it back
 still requires recapture.
 
+## Attach physical cameras
+
+1. Put the model files and ONNX Runtime in `models/` as described in
+   [models/README.md](models/README.md) (they are local, git-ignored files).
+2. Plug in two to four USB cameras with overlapping views of the training area (front and side
+   first) and list them: `cargo run -p bansayo-engine -- --list-cameras`.
+3. Copy [config/cameras-two.yaml](config/cameras-two.yaml), set each camera's `device` index and
+   `resolution_px`, and add entries for a third or fourth camera. A camera that negotiates another
+   resolution reports the value to set. `--check` validates the file and the model paths.
+4. Calibrate with a printed ChArUco board (Python 3 with `opencv-python` and `numpy`), with the
+   engine stopped while capturing:
+   ```sh
+   python scripts/calibrate_cameras.py board --out board.png      # print large, measure a square
+   python scripts/calibrate_cameras.py capture --camera CAM-FRONT=0 --camera CAM-SIDE=1 --out calib
+   cargo run --release -p bansayo-engine -- --config my-cameras.yaml
+   python scripts/calibrate_cameras.py solve --dir calib --square-m 0.20 --engine http://127.0.0.1:7700
+   ```
+   Capture 15–30 sets with the board tilted across each view, then a few with it flat on the floor
+   where every camera sees it: that view defines the world origin and floor. `solve` rejects
+   blurred or inconsistent data by reprojection error and imports the profiles, which persist.
+   `python scripts/calibrate_cameras.py selftest` checks the solver on a synthetic scene.
+5. Stand in view: Cameras shows each feed with its landmarks and the 3D reconstruction; Studio
+   shows the camera-only skeleton and knee/hip angles; the Godot room shows the figure, angles,
+   counts and record/replay controls.
+
+Use a release build for live cameras (inference is several times slower in debug). Without
+hardware, `frames_dir:` in place of `device:` plays a folder of images as a camera, and
+`config/sim-cameras-skeleton.yaml` shows the camera-only skeleton from four simulated cameras.
+
 ## Desktop and VR clients
 
 ```sh
@@ -85,7 +115,9 @@ The default endpoint is `http://127.0.0.1:7700/api/v1`. HTTP responses use
 `{ "ok": true, "data": ... }` or `{ "ok": false, "error": ... }`.
 
 - Queries: `GET /health`, `/state`, `/skeleton`, `/sessions`.
-- Controls: simulation, mounting capture, device assignment/faults, recording and playback.
+- Controls: simulation, mounting capture, device assignment/faults, recording and playback,
+  camera calibration import (`POST /calibration/profiles`).
+- Camera previews: `GET /cameras/{id}/preview.jpg` (newest frame, downscaled, physical cameras).
 - Stream: `ws://127.0.0.1:7700/api/v1/stream?topics=frame,state,landmarks_2d,landmarks_3d&max_rate_hz=60`.
   `landmarks_3d` carries the triangulated landmarks, each listing the cameras used and rejected.
 
@@ -121,16 +153,12 @@ browser configuration and native-shell checks. Contract tests verify checked-in 
 golden JSON; regenerate intentionally with `BANSAYO_BLESS=1 cargo test -p bansayo-contracts` and
 review the resulting diff.
 
-Real device adapters, physical camera capture and pose inference, camera calibration, triangulation
-on real cameras, camera/IMU fusion beyond the measured root, real heading alignment, avatars,
-exports and the Analysis workspace remain future work. Triangulation is written independently from
+Physical IMU adapters, camera/IMU fusion beyond the measured root, real IMU heading alignment,
+avatars, exports, technique scoring and the Analysis workspace remain future work. Triangulation is written independently from
 standard multi-view geometry; no FreeMoCap code is used (it is AGPL-3.0, this project is MIT), so
 there is no FreeMoCap importer. Hardware, OpenXR, long-run performance and measurement accuracy
 require separate validation. Every check listed above passes on Windows 11; a packaged Windows
 installer has not been built.
-
-Pretrained pose models for the future camera path, if present, live in `models/` (git-ignored;
-see `models/README.md`). Nothing in the engine loads them yet.
 
 ## Licence
 

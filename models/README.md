@@ -42,7 +42,9 @@ pip download onnxruntime-directml==1.24.4 --no-deps --only-binary=:all: --platfo
 inferred in the camera-only skeleton. The Rust pipeline matched an onnxruntime/OpenCV reference
 of the mmdeploy pipeline within 0.01 px on every keypoint of a COCO photo (17 November 2026).
 YOLOX labels contain only class 0 (person). RTMPose SimCC scores can exceed 1 and are clamped.
-On an RTX 4080 with DirectML, a debug build took about 17 ms per tracked frame versus 74 ms on CPU.
+On an RTX 4080 with DirectML, a tracked frame (pose every frame, person detection every tenth)
+took 3.7 ms in a release build, 17 ms in a debug build and 74 ms on CPU (debug): one shared
+inference thread covers four cameras at 30 Hz in release.
 
 ## Licence note
 
