@@ -96,6 +96,7 @@ impl Drop for StopOnDrop {
 }
 
 impl Source for CameraSource {
+    type Context = SourceContext;
     async fn run(self, context: SourceContext) -> Result<(), SourceError> {
         let stop = Arc::new(AtomicBool::new(false));
         let _guard = StopOnDrop(stop.clone());

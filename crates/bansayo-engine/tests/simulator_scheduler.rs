@@ -6,7 +6,9 @@ use bansayo_engine::{
     skeleton::Skeleton,
     sources::{
         Ingest, Source, SourceContext,
-        simulated::{Control, FaultSetting, Scheduler, SimulatedSource, motions::Motion},
+        simulated::{
+            Control, FaultSetting, Scheduler, SimulatedContext, SimulatedSource, motions::Motion,
+        },
     },
 };
 use std::{
@@ -94,13 +96,15 @@ fn spawn_source(spec: SimulatedSpec, assignments: BTreeMap<DeviceId, SegmentId>)
             )
         })
         .collect();
-    let context = SourceContext {
-        events,
+    let context = SimulatedContext {
         control: control_rx,
-        clock: SessionClock::start(),
-        cancel: cancel.clone(),
-        dropped,
         faults: faults_rx,
+        common: SourceContext {
+            events,
+            clock: SessionClock::start(),
+            cancel: cancel.clone(),
+            dropped,
+        },
     };
     let task = tokio::spawn(source.run(context));
     Harness {

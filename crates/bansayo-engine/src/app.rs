@@ -8,7 +8,7 @@ use crate::{
     sources::{
         DropCounters, SourceContext,
         camera::{CameraSource, Previews},
-        simulated::{Control, SimulatedSource},
+        simulated::{Control, SimulatedContext, SimulatedSource},
     },
 };
 use std::{
@@ -93,20 +93,19 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
             suspended: false,
         });
         controls.push(control);
-        sources.push((source, receiver));
+        sources.push(ConfiguredSource::Simulated(source, receiver));
     }
     let previews = Previews::default();
-    let cameras: Vec<CameraSource> = config
-        .cameras
-        .iter()
-        .map(|spec| CameraSource {
+    for spec in &config.cameras {
+        let source = CameraSource {
             spec: spec.clone(),
             previews: previews.clone(),
-        })
-        .collect();
-    for d in cameras.iter().flat_map(CameraSource::descriptors) {
-        drops.insert(d.id.clone(), Arc::new(AtomicU64::new(0)));
-        descriptors.push(d);
+        };
+        for d in source.descriptors() {
+            drops.insert(d.id.clone(), Arc::new(AtomicU64::new(0)));
+            descriptors.push(d);
+        }
+        sources.push(ConfiguredSource::Camera(source));
     }
     let registry = Registry::new(descriptors, assignments, drops.clone());
     let runner = Runner {
@@ -125,43 +124,14 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
         runner_task.await?;
         Ok(())
     })];
-    for (source, control) in sources {
-        let context = SourceContext {
+    for source in sources {
+        let common = SourceContext {
             events: events_tx.clone(),
-            control,
             clock: clock.clone(),
             cancel: cancel.clone(),
             dropped: drops.clone(),
-            faults: faults_rx.clone(),
         };
-        let devices = source.descriptors().into_iter().map(|d| d.id).collect();
-        tasks.push(tokio::spawn(async move {
-            crate::sources::supervision::supervise(source, devices, context).await;
-            Ok(())
-        }));
-    }
-    for source in cameras {
-        // Camera sources take no simulation control; the channel only completes the context.
-        let (_, control) = watch::channel(Control {
-            motion: crate::sources::simulated::motions::Motion::Standing,
-            speed: 1.0,
-            paused: false,
-            generation: 0,
-            suspended: false,
-        });
-        let context = SourceContext {
-            events: events_tx.clone(),
-            control,
-            clock: clock.clone(),
-            cancel: cancel.clone(),
-            dropped: drops.clone(),
-            faults: faults_rx.clone(),
-        };
-        let devices = source.descriptors().into_iter().map(|d| d.id).collect();
-        tasks.push(tokio::spawn(async move {
-            crate::sources::supervision::supervise(source, devices, context).await;
-            Ok(())
-        }));
+        tasks.push(source.spawn(common, faults_rx.clone()));
     }
     let api = Api {
         client,
@@ -196,4 +166,45 @@ pub async fn run(
     let engine = start(config).await?;
     shutdown.await;
     engine.shutdown().await
+}
+
+/// Closed source kinds use static dispatch and one spawning match; no trait objects.
+enum ConfiguredSource {
+    Simulated(SimulatedSource, watch::Receiver<Control>),
+    Camera(CameraSource),
+}
+impl ConfiguredSource {
+    fn spawn(
+        self,
+        common: SourceContext,
+        faults: watch::Receiver<
+            std::collections::BTreeMap<
+                bansayo_contracts::DeviceId,
+                crate::sources::simulated::FaultSetting,
+            >,
+        >,
+    ) -> JoinHandle<Result<(), EngineError>> {
+        tokio::spawn(async move {
+            match self {
+                Self::Simulated(source, control) => {
+                    let devices = source.descriptors().into_iter().map(|d| d.id).collect();
+                    crate::sources::supervision::supervise(
+                        source,
+                        devices,
+                        SimulatedContext {
+                            common,
+                            control,
+                            faults,
+                        },
+                    )
+                    .await;
+                }
+                Self::Camera(source) => {
+                    let devices = source.descriptors().into_iter().map(|d| d.id).collect();
+                    crate::sources::supervision::supervise(source, devices, common).await;
+                }
+            }
+            Ok(())
+        })
+    }
 }

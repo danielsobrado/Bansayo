@@ -15,6 +15,24 @@ use std::{collections::BTreeMap, sync::atomic::Ordering};
 const MICROSECONDS_PER_SECOND: f64 = 1e6;
 const MIN_SCENARIO_STEP_US: u64 = 1;
 
+/// Simulation-only controls stay out of hardware source contexts.
+#[derive(Clone)]
+pub struct SimulatedContext {
+    pub common: SourceContext,
+    pub control: tokio::sync::watch::Receiver<Control>,
+    pub faults: tokio::sync::watch::Receiver<BTreeMap<DeviceId, FaultSetting>>,
+}
+impl AsRef<SourceContext> for SimulatedContext {
+    fn as_ref(&self) -> &SourceContext {
+        &self.common
+    }
+}
+impl std::ops::Deref for SimulatedContext {
+    type Target = SourceContext;
+    fn deref(&self) -> &Self::Target {
+        &self.common
+    }
+}
 #[derive(Debug, Clone, Copy)]
 pub struct Control {
     pub motion: Motion,
@@ -410,7 +428,8 @@ fn next_scenario_transition(
 }
 
 impl Source for SimulatedSource {
-    async fn run(self, mut context: SourceContext) -> Result<(), crate::sources::SourceError> {
+    type Context = SimulatedContext;
+    async fn run(self, mut context: SimulatedContext) -> Result<(), crate::sources::SourceError> {
         let start_us = context.clock.now_us();
         let initial_control = *context.control.borrow();
         let mut scheduler = Scheduler::new(self.spec, self.skeleton, start_us, initial_control);
@@ -430,7 +449,7 @@ impl Source for SimulatedSource {
                 .next_deadline_us()
                 .map(|t| context.clock.instant_at(t));
             tokio::select! {
-                _ = context.cancel.cancelled() => break,
+                _ = context.common.cancel.cancelled() => break,
                 res = context.control.changed(), if control_open => {
                     match res {
                         Ok(()) => {

@@ -5,10 +5,9 @@ pub mod supervision;
 pub mod validation;
 use crate::clock::SessionClock;
 use bansayo_contracts::{DeviceId, SourceEvent};
-use simulated::Control;
 use std::collections::BTreeMap;
 use std::sync::{Arc, atomic::AtomicU64};
-use tokio::sync::{mpsc, watch};
+use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 pub type DropCounters = BTreeMap<DeviceId, Arc<AtomicU64>>;
 #[derive(Debug, thiserror::Error)]
@@ -25,15 +24,19 @@ pub enum Ingest {
 #[derive(Clone)]
 pub struct SourceContext {
     pub events: mpsc::Sender<Ingest>,
-    pub control: watch::Receiver<Control>,
     pub clock: SessionClock,
     pub cancel: CancellationToken,
     pub dropped: DropCounters,
-    pub faults: watch::Receiver<BTreeMap<DeviceId, simulated::FaultSetting>>,
+}
+impl AsRef<SourceContext> for SourceContext {
+    fn as_ref(&self) -> &SourceContext {
+        self
+    }
 }
 pub trait Source: Send + 'static {
+    type Context: AsRef<SourceContext> + Clone + Send + Sync + 'static;
     fn run(
         self,
-        context: SourceContext,
+        context: Self::Context,
     ) -> impl std::future::Future<Output = Result<(), SourceError>> + Send;
 }
