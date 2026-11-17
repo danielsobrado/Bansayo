@@ -31,3 +31,6 @@ debug.log
 .history/
 .history/
 debug.log
+
+# Python
+__pycache__/
