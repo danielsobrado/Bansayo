@@ -193,6 +193,47 @@ function isTriangulated(v: unknown): boolean {
     )
   );
 }
+function isTrainingState(v: unknown): boolean {
+  return (
+    v === null ||
+    (isObj(v) &&
+      isStr(v.session_id) &&
+      isStr(v.athlete_id) &&
+      isNum(v.rev) &&
+      isNum(v.last_event_seq) &&
+      isStr(v.phase) &&
+      isObj(v.plan) &&
+      isStr(v.plan.title) &&
+      Array.isArray(v.readiness) &&
+      v.readiness.every(
+        (g) => isObj(g) && isStr(g.gate) && isStr(g.state) && reasons(g.reasons),
+      ) &&
+      Array.isArray(v.metric_availability) &&
+      v.metric_availability.every(
+        (m) => isObj(m) && isStr(m.metric) && isStr(m.best_grade) && reasons(m.reasons),
+      ) &&
+      isObj(v.totals) &&
+      isNum(v.totals.reps_completed) &&
+      isNum(v.totals.reps_other) &&
+      (v.current === null || (isObj(v.current) && isObj(v.current.counts))) &&
+      isStr(v.capability_profile))
+  );
+}
+function isTrainingEvent(v: unknown): boolean {
+  return (
+    isObj(v) && isNum(v.event_seq) && isNum(v.t_us) && isStr(v.type) && isObj(v.data)
+  );
+}
+function isObservables(m: Obj): boolean {
+  return (
+    isNum(m.seq) &&
+    isNum(m.t_us) &&
+    Array.isArray(m.values) &&
+    m.values.every(
+      (o) => isObj(o) && isStr(o.id) && (o.value === null || isNum(o.value)) && reasons(o.reasons),
+    )
+  );
+}
 export type ParsedMessage =
   | { kind: "message"; message: ServerMessage }
   | { kind: "unknown"; type: string }
@@ -228,6 +269,15 @@ export function parseServerMessage(text: string): ParsedMessage {
       break;
     case "notice":
       valid = typeof raw.message === "string";
+      break;
+    case "training_state":
+      valid = "state" in raw && isTrainingState(raw.state);
+      break;
+    case "training_event":
+      valid = isStr(raw.session_id) && isTrainingEvent(raw.event);
+      break;
+    case "observables":
+      valid = isObservables(raw);
       break;
     default:
       return { kind: "unknown", type: raw.type };

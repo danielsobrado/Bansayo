@@ -12,6 +12,7 @@ import type {
 } from "@contracts";
 import { createStore } from "./store";
 import { jointHistory } from "./jointHistory";
+import { observablesStore, trainingStore } from "./training";
 
 /** A frame older than this is stale: the skeleton dims and the viewport says there is no pose data. */
 export const STALE_FRAME_MS = 500;
@@ -106,4 +107,7 @@ export function clearLiveValues(): void {
   systemStateStore.set(null);
   clearLandmarks();
   frameStore.clear();
+  // Restored by the `training_state` that follows `hello`, then event refill.
+  trainingStore.set(null);
+  observablesStore.clear();
 }

@@ -16,7 +16,16 @@ import {
   skeletonStore,
   systemStateStore,
 } from "./stores";
+import { contentCache, queryCache } from "./queries";
+import { observablesStore, trainingEvents, trainingStore } from "./training";
 import type { ServerMessage } from "@contracts";
+
+/** Live-region text for a counted repetition; the count is the engine's. */
+function announceRep(data: Record<string, unknown>): void {
+  const rep = data.repetition as { rep_index?: unknown; outcome?: unknown } | undefined;
+  if (rep && typeof rep.rep_index === "number")
+    announce(`Repetition ${rep.rep_index}: ${String(rep.outcome ?? "")}`.trim());
+}
 
 export const BACKOFF_INITIAL_MS = 500;
 export const BACKOFF_MAX_MS = 8_000;
@@ -108,6 +117,7 @@ export class EngineConnection {
           clearLandmarks();
         }
         systemStateStore.set(m.state);
+        contentCache.syncRev(m.state.content_rev);
         break;
       case "skeleton":
         if (skeletonStore.get()?.rev !== m.skeleton.rev)
@@ -133,6 +143,21 @@ export class EngineConnection {
         break;
       case "notice":
         announce(m.message);
+        break;
+      case "training_state":
+        trainingStore.set(m.state);
+        if (m.state)
+          void trainingEvents.sync(m.state.session_id, m.state.last_event_seq);
+        break;
+      case "training_event":
+        void trainingEvents.apply(m.session_id, m.event);
+        // Stored rows of a finished session change: re-read them (10 §4).
+        if (m.event.type === "session_completed" || m.event.type === "session_aborted")
+          queryCache.invalidate("/training/", "/progress/");
+        if (m.event.type === "rep_completed") announceRep(m.event.data);
+        break;
+      case "observables":
+        observablesStore.apply(m.seq, m.t_us, m.values, this.deps.monotonic());
         break;
     }
   }
