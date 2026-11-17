@@ -116,3 +116,15 @@ fn legacy_files_of_all_kinds_are_migrated_without_discarding_payloads() {
         &expected,
     );
 }
+
+#[test]
+fn uninterpreted_profiles_survive_recording_context_restoration() {
+    let sk = Skeleton::builtin("bansayo.body.v1", 1.75).unwrap();
+    let cfg = bansayo_engine::config::parse("schema_version: 1").unwrap();
+    let reg = bansayo_engine::registry::Registry::new(vec![], BTreeMap::new(), BTreeMap::new());
+    let mut store = Store::default();
+    store.insert(profiles());
+    let context = bansayo_engine::recording::Context::snapshot(&reg, &store, &sk, &cfg.config, 100);
+    let restored = context.restore().unwrap().1;
+    assert_retained(&restored, &profiles());
+}
