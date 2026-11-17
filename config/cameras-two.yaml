@@ -1,0 +1,28 @@
+# Two physical USB cameras, 2D pose inference and triangulation; no trackers.
+# Find device indices with `cargo run -p bansayo-engine -- --list-cameras`.
+# Requires the local model files and ONNX Runtime described in models/README.md, and camera
+# intrinsics/extrinsics profiles (scripts/calibrate_cameras.py) before 3D landmarks appear.
+# Add up to MAX_CAMERAS entries to `cameras:`; nothing else changes for three or four cameras.
+schema_version: 1
+engine:
+  publish_rate_hz: 60
+  stale_after_ms: 250
+  data_dir: ./data
+api:
+  bind: 127.0.0.1:7700
+triangulation:
+  # Free-running cameras: views up to half a 30 Hz frame apart are combined.
+  max_skew_ms: 20
+  max_reprojection_error_px: 15.0
+  min_views: 2
+  min_ray_angle_deg: 3.0
+sources:
+  - id: cams
+    kind: camera
+    models_dir: ./models
+    execution: auto          # DirectML on Windows when available, else CPU; or `cpu`
+    min_person_score: 0.5
+    min_keypoint_score: 0.3
+    cameras:
+      - { id: CAM-FRONT, device: 0, resolution_px: [1280, 720], rate_hz: 30 }
+      - { id: CAM-SIDE, device: 1, resolution_px: [1280, 720], rate_hz: 30 }

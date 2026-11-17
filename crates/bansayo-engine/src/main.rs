@@ -14,10 +14,28 @@ struct Args {
     /// Windows cannot deliver Ctrl-C to a child.
     #[arg(long)]
     shutdown_on_stdin_close: bool,
+    /// Print the system cameras with the indices a `camera` source's `device` takes, and exit.
+    #[arg(long)]
+    list_cameras: bool,
 }
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let args = Args::parse();
+    if args.list_cameras {
+        match bansayo_engine::sources::camera::capture::list_devices() {
+            Ok(cameras) if cameras.is_empty() => println!("No cameras found"),
+            Ok(cameras) => {
+                for (index, name) in cameras {
+                    println!("{index}	{name}");
+                }
+            }
+            Err(e) => {
+                eprintln!("{e}");
+                std::process::exit(1);
+            }
+        }
+        return Ok(());
+    }
     let config = match config::load(&args.config) {
         Ok(c) => c,
         Err(e) => {

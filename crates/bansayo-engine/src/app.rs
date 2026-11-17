@@ -7,6 +7,7 @@ use crate::{
     skeleton::Skeleton,
     sources::{
         DropCounters, SourceContext,
+        camera::{CameraSource, Previews},
         simulated::{Control, SimulatedSource},
     },
 };
@@ -94,6 +95,19 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
         controls.push(control);
         sources.push((source, receiver));
     }
+    let previews = Previews::default();
+    let cameras: Vec<CameraSource> = config
+        .cameras
+        .iter()
+        .map(|spec| CameraSource {
+            spec: spec.clone(),
+            previews: previews.clone(),
+        })
+        .collect();
+    for d in cameras.iter().flat_map(CameraSource::descriptors) {
+        drops.insert(d.id.clone(), Arc::new(AtomicU64::new(0)));
+        descriptors.push(d);
+    }
     let registry = Registry::new(descriptors, assignments, drops.clone());
     let runner = Runner {
         config: config.clone(),
@@ -126,12 +140,36 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
             Ok(())
         }));
     }
+    for source in cameras {
+        // Camera sources take no simulation control; the channel only completes the context.
+        let (_, control) = watch::channel(Control {
+            motion: crate::sources::simulated::motions::Motion::Standing,
+            speed: 1.0,
+            paused: false,
+            generation: 0,
+            suspended: false,
+        });
+        let context = SourceContext {
+            events: events_tx.clone(),
+            control,
+            clock: clock.clone(),
+            cancel: cancel.clone(),
+            dropped: drops.clone(),
+            faults: faults_rx.clone(),
+        };
+        let devices = source.descriptors().into_iter().map(|d| d.id).collect();
+        tasks.push(tokio::spawn(async move {
+            crate::sources::supervision::supervise(source, devices, context).await;
+            Ok(())
+        }));
+    }
     let api = Api {
         client,
         streams,
         allowed_origins: Arc::new(config.config.api.allowed_origins.clone()),
         publish_rate: config.config.engine.publish_rate_hz,
         cancel: cancel.clone(),
+        previews,
     };
     let router = api::router(api);
     let stop = cancel.clone();

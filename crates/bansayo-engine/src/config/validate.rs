@@ -58,6 +58,30 @@ pub struct SimulatedSpec {
     pub scenario_period_s: Option<f64>,
 }
 
+/// A physical camera (or image folder) with validated identity.
+#[derive(Debug, Clone)]
+pub struct LiveCameraSpec {
+    pub id: DeviceId,
+    pub backend: crate::sources::camera::capture::Backend,
+    pub rate_hz: f64,
+    pub resolution_px: [u32; 2],
+    pub latency_us: u64,
+}
+
+/// An enabled camera source with validated identities and present model files.
+#[derive(Debug, Clone)]
+pub struct CameraSourceSpec {
+    pub id: SourceId,
+    pub models_dir: PathBuf,
+    pub execution: crate::sources::camera::pose::Execution,
+    pub min_person_score: f32,
+    pub min_keypoint_score: f32,
+    pub cameras: Vec<LiveCameraSpec>,
+}
+
+/// Most cameras one source accepts; inference is shared across them.
+pub const MAX_CAMERAS: usize = 8;
+
 /// A configuration that passed validation, with typed identifiers.
 #[derive(Debug, Clone)]
 pub struct Validated {
@@ -65,6 +89,7 @@ pub struct Validated {
     pub bind: SocketAddr,
     pub assignments: BTreeMap<DeviceId, SegmentId>,
     pub simulated: Vec<SimulatedSpec>,
+    pub cameras: Vec<CameraSourceSpec>,
     /// Non-fatal findings, logged at startup.
     pub warnings: Vec<Problem>,
 }
@@ -140,7 +165,7 @@ pub(super) fn validate(config: Config) -> Result<Validated, Vec<Problem>> {
     if config.processing_profiles.is_some() {
         c.err("processing_profiles", "not implemented in this build");
     }
-    let (simulated, devices) = check_sources(&mut c, &config.sources);
+    let (simulated, cameras, devices) = check_sources(&mut c, &config.sources);
     let assignments = check_assignments(
         &mut c,
         &config.assignments,
@@ -153,6 +178,7 @@ pub(super) fn validate(config: Config) -> Result<Validated, Vec<Problem>> {
             bind: bind.unwrap_or_else(|| ([127, 0, 0, 1], 0).into()),
             assignments,
             simulated,
+            cameras,
             warnings: c.warnings,
         })
     } else {
@@ -256,22 +282,26 @@ fn check_api(c: &mut Check, api: &ApiConfig) -> Option<SocketAddr> {
     }
 }
 
-/// Validates every source; returns the enabled simulated sources and every device id with its
-/// kind (`true` for orientation trackers).
+/// Validates every source; returns the enabled simulated and camera sources and every device id
+/// with its kind (`true` for orientation trackers).
 fn check_sources(
     c: &mut Check,
     sources: &[SourceConfig],
-) -> (Vec<SimulatedSpec>, HashMap<String, bool>) {
+) -> (
+    Vec<SimulatedSpec>,
+    Vec<CameraSourceSpec>,
+    HashMap<String, bool>,
+) {
     let mut source_ids: HashMap<String, usize> = HashMap::new();
     let mut devices: HashMap<String, (String, bool)> = HashMap::new();
     let mut out = vec![];
+    let mut cameras = vec![];
     for (i, source) in sources.iter().enumerate() {
         let path = format!("sources[{i}]");
         let id = match source {
             SourceConfig::Simulated(s) => &s.id,
-            SourceConfig::SlimevrSolarxr(d)
-            | SourceConfig::Esp32Udp(d)
-            | SourceConfig::Camera(d) => &d.id,
+            SourceConfig::Camera(k) => &k.id,
+            SourceConfig::SlimevrSolarxr(d) | SourceConfig::Esp32Udp(d) => &d.id,
         };
         if SourceId::new(id.as_str()).is_err() {
             c.err(
@@ -291,11 +321,17 @@ fn check_sources(
                     out.extend(s.enabled.then_some(spec));
                 }
             }
+            SourceConfig::Camera(k) => {
+                if let Some(spec) = check_camera_source(c, &path, k, &mut devices) {
+                    cameras.extend(k.enabled.then_some(spec));
+                }
+            }
             _ => c.err(format!("{path}.kind"), "not implemented in this build"),
         }
     }
     (
         out,
+        cameras,
         devices
             .into_iter()
             .map(|(k, (_, tracker))| (k, tracker))
@@ -429,6 +465,108 @@ fn check_simulated(
     })
 }
 
+fn check_camera_source(
+    c: &mut Check,
+    path: &str,
+    k: &CameraSourceConfig,
+    devices: &mut HashMap<String, (String, bool)>,
+) -> Option<CameraSourceSpec> {
+    use crate::sources::camera::{capture, pose};
+    if k.enabled {
+        for model in [pose::DETECTOR_MODEL, pose::POSE_MODEL] {
+            let file = k.models_dir.join(model);
+            if !file.is_file() {
+                c.err(
+                    format!("{path}.models_dir"),
+                    format!("{} is missing; see models/README.md", file.display()),
+                );
+            }
+        }
+    }
+    c.range(
+        &format!("{path}.min_person_score"),
+        k.min_person_score.into(),
+        0.0,
+        1.0,
+    );
+    c.range(
+        &format!("{path}.min_keypoint_score"),
+        k.min_keypoint_score.into(),
+        0.0,
+        1.0,
+    );
+    if k.cameras.is_empty() || k.cameras.len() > MAX_CAMERAS {
+        c.err(
+            format!("{path}.cameras"),
+            format!("must list 1 to {MAX_CAMERAS} cameras"),
+        );
+    }
+    let mut indices: HashMap<u32, usize> = HashMap::new();
+    let mut cameras = vec![];
+    for (j, cam) in k.cameras.iter().enumerate() {
+        let p = format!("{path}.cameras[{j}]");
+        c.range(&format!("{p}.rate_hz"), cam.rate_hz, 1.0, 240.0);
+        c.range(&format!("{p}.latency_ms"), cam.latency_ms, 0.0, 1000.0);
+        for (axis, v) in ["width", "height"].iter().zip(cam.resolution_px) {
+            c.range(&format!("{p}.resolution_px.{axis}"), v.into(), 16.0, 8192.0);
+        }
+        let mut resolution = cam.resolution_px;
+        let backend = match (&cam.device, &cam.frames_dir) {
+            (Some(index), None) => {
+                if let Some(prev) = indices.insert(*index, j) {
+                    c.err(
+                        format!("{p}.device"),
+                        format!("{index} is already used by cameras[{prev}]"),
+                    );
+                }
+                Some(capture::Backend::Device(*index))
+            }
+            (None, Some(dir)) => match capture::frame_files(dir) {
+                // An image folder's resolution is its first image's; every image must match.
+                Ok(files) => match image::image_dimensions(&files[0]) {
+                    Ok((w, h)) => {
+                        resolution = [w, h];
+                        Some(capture::Backend::Frames(dir.clone()))
+                    }
+                    Err(e) => {
+                        c.err(
+                            format!("{p}.frames_dir"),
+                            format!("{}: {e}", files[0].display()),
+                        );
+                        None
+                    }
+                },
+                Err(e) => {
+                    c.err(format!("{p}.frames_dir"), e);
+                    None
+                }
+            },
+            _ => {
+                c.err(&p, "set exactly one of device and frames_dir");
+                None
+            }
+        };
+        let id = claim_device(c, &format!("{p}.id"), &cam.id, "camera", false, devices);
+        if let (Some(id), Some(backend)) = (id, backend) {
+            cameras.push(LiveCameraSpec {
+                id,
+                backend,
+                rate_hz: cam.rate_hz,
+                resolution_px: resolution,
+                latency_us: (cam.latency_ms * 1000.0) as u64,
+            });
+        }
+    }
+    Some(CameraSourceSpec {
+        id: SourceId::new(k.id.as_str()).ok()?,
+        models_dir: k.models_dir.clone(),
+        execution: k.execution,
+        min_person_score: k.min_person_score,
+        min_keypoint_score: k.min_keypoint_score,
+        cameras,
+    })
+}
+
 fn check_assignments(
     c: &mut Check,
     assignments: &BTreeMap<String, String>,
@@ -551,6 +689,62 @@ sources:
             "{p:#?}"
         );
         assert!(p.len() >= 9);
+    }
+
+    #[test]
+    fn camera_sources_report_missing_models_and_bad_cameras() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let frames = dir.path().join("frames");
+        std::fs::create_dir(&frames).unwrap();
+        image::RgbImage::new(64, 48)
+            .save(frames.join("0001.png"))
+            .unwrap();
+        let yaml = format!(
+            r#"
+schema_version: 1
+engine: {{ data_dir: {dir:?} }}
+sources:
+  - id: cams
+    kind: camera
+    models_dir: {models:?}
+    cameras:
+      - {{ id: CAM1, device: 0 }}
+      - {{ id: CAM2, device: 0 }}
+      - {{ id: CAM3 }}
+      - {{ id: CAM4, frames_dir: {empty:?} }}
+      - {{ id: CAM5, frames_dir: {frames:?}, rate_hz: 500 }}
+"#,
+            dir = dir.path().display().to_string(),
+            models = dir.path().join("nowhere").display().to_string(),
+            empty = dir.path().display().to_string(),
+            frames = frames.display().to_string(),
+        );
+        let p = problems(&yaml);
+        let has =
+            |prefix: &str, text: &str| p.iter().any(|l| l.starts_with(prefix) && l.contains(text));
+        assert!(
+            has("sources[0].models_dir", "rtmpose-m.onnx is missing"),
+            "{p:#?}"
+        );
+        assert!(
+            has("sources[0].cameras[1].device", "already used by cameras[0]"),
+            "{p:#?}"
+        );
+        assert!(
+            has(
+                "sources[0].cameras[2]",
+                "exactly one of device and frames_dir"
+            ),
+            "{p:#?}"
+        );
+        assert!(
+            has("sources[0].cameras[3].frames_dir", "no .jpg or .png"),
+            "{p:#?}"
+        );
+        assert!(
+            has("sources[0].cameras[4].rate_hz", "between 1 and 240"),
+            "{p:#?}"
+        );
     }
 
     #[test]

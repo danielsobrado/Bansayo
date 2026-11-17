@@ -661,4 +661,13 @@ fn bundled_multi_camera_and_example_configs_load() {
     let example =
         config::load_with_data_dir(root.join("bansayo.example.yaml"), dir.path()).unwrap();
     assert_eq!(example.config.triangulation.min_views, 2);
+    // The camera example is valid apart from the local model files, which CI does not have.
+    match config::load_with_data_dir(root.join("cameras-two.yaml"), dir.path()) {
+        Ok(v) => assert_eq!(v.cameras[0].cameras.len(), 2),
+        Err(config::ConfigError::Invalid(problems)) => assert!(
+            problems.iter().all(|p| p.path == "sources[0].models_dir"),
+            "{problems:#?}"
+        ),
+        Err(other) => panic!("{other}"),
+    }
 }

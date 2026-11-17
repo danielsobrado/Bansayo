@@ -23,6 +23,7 @@ pub struct Api {
     pub allowed_origins: Arc<Vec<String>>,
     pub publish_rate: f64,
     pub cancel: CancellationToken,
+    pub previews: crate::sources::camera::Previews,
 }
 pub fn router(api: Api) -> Router {
     Router::new()
@@ -32,6 +33,7 @@ pub fn router(api: Api) -> Router {
         .route("/api/v1/simulation", put(simulation))
         .route("/api/v1/calibration/reference-pose", post(capture))
         .route("/api/v1/stream", get(ws::upgrade))
+        .route("/api/v1/cameras/{id}/preview.jpg", get(preview))
         .route("/api/v1/devices/{id}/assignment", put(control::assignment))
         .route(
             "/api/v1/simulation/devices/{id}/fault",
@@ -94,6 +96,29 @@ async fn capture(
     match api.client.capture(request).await {
         Ok(data) => Json(ApiResponse::ok(data)).into_response(),
         Err(e) => control_error(e),
+    }
+}
+/// Newest camera frame as JPEG, downscaled; refreshed at most every 100 ms.
+async fn preview(
+    State(api): State<Api>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Response {
+    let jpeg = DeviceId::new(id.as_str())
+        .ok()
+        .and_then(|id| api.previews.read().ok()?.get(&id).cloned());
+    match jpeg {
+        Some(jpeg) => (
+            [
+                (header::CONTENT_TYPE, "image/jpeg"),
+                (header::CACHE_CONTROL, "no-store"),
+            ],
+            jpeg,
+        )
+            .into_response(),
+        None => failure(
+            ApiErrorCode::NotFound,
+            "No preview: the device is not a physical camera or has not delivered a frame yet.",
+        ),
     }
 }
 pub fn failure(code: ApiErrorCode, message: &str) -> Response {

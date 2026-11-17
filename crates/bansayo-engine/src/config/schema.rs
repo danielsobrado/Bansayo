@@ -186,7 +186,7 @@ pub enum SourceConfig {
     Simulated(SimulatedSourceConfig),
     SlimevrSolarxr(DesignedSourceConfig),
     Esp32Udp(DesignedSourceConfig),
-    Camera(DesignedSourceConfig),
+    Camera(CameraSourceConfig),
 }
 
 /// Fields of a source kind that is designed but not implemented.
@@ -264,4 +264,65 @@ pub struct ScenarioStep {
     pub device: String,
     pub action: bansayo_contracts::FaultAction,
     pub quality: Option<f32>,
+}
+
+/// Physical cameras (or image folders) with 2D pose inference.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CameraSourceConfig {
+    pub id: String,
+    #[serde(default = "enabled_default")]
+    pub enabled: bool,
+    /// Holds the ONNX models and `onnxruntime/`; see models/README.md.
+    #[serde(default = "models_dir_default")]
+    pub models_dir: PathBuf,
+    #[serde(default)]
+    pub execution: crate::sources::camera::pose::Execution,
+    #[serde(default = "min_person_score_default")]
+    pub min_person_score: f32,
+    /// Keypoints below this are reported as not detected.
+    #[serde(default = "min_keypoint_score_default")]
+    pub min_keypoint_score: f32,
+    pub cameras: Vec<LiveCameraConfig>,
+}
+
+fn models_dir_default() -> PathBuf {
+    PathBuf::from("./models")
+}
+
+fn min_person_score_default() -> f32 {
+    0.5
+}
+
+fn min_keypoint_score_default() -> f32 {
+    0.3
+}
+
+/// One camera. Exactly one of `device` and `frames_dir`.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct LiveCameraConfig {
+    pub id: String,
+    /// System camera index; `bansayo-engine --list-cameras` prints them.
+    #[serde(default)]
+    pub device: Option<u32>,
+    /// A folder of images played as this camera, for testing and offline footage.
+    #[serde(default)]
+    pub frames_dir: Option<PathBuf>,
+    #[serde(default = "camera_rate_default")]
+    pub rate_hz: f64,
+    /// Requested capture size; the camera may negotiate another.
+    #[serde(default = "camera_resolution_default")]
+    pub resolution_px: [u32; 2],
+    /// Capture-to-arrival latency subtracted from arrival time, milliseconds.
+    #[serde(default)]
+    pub latency_ms: f64,
+}
+
+fn camera_rate_default() -> f64 {
+    30.0
+}
+
+fn camera_resolution_default() -> [u32; 2] {
+    [1280, 720]
 }
