@@ -33,7 +33,9 @@ async fn wait_closed(addr: std::net::SocketAddr, id: &str) {
     let until = Instant::now() + Duration::from_secs(20);
     loop {
         let d = ok(addr, "GET", &format!("training/sessions/{id}"), Value::Null).await;
-        if d["session"]["has_inputs"] == true && ok(addr, "GET", "state", Value::Null).await["recording"].is_null() {
+        if d["session"]["has_inputs"] == true
+            && ok(addr, "GET", "state", Value::Null).await["recording"].is_null()
+        {
             return;
         }
         assert!(Instant::now() < until);
@@ -46,7 +48,8 @@ fn export(data: &std::path::Path, id: &str, plan: TechniquePlan) {
     let src = data.join("sessions").join(id);
     let dst = repo().join("golden/synthetic/sessions").join(id);
     std::fs::create_dir_all(&dst).unwrap();
-    bansayo_engine::recording::recompress(&src.join("recording.mcap"), &dst.join("recording.mcap")).unwrap();
+    bansayo_engine::recording::recompress(&src.join("recording.mcap"), &dst.join("recording.mcap"))
+        .unwrap();
     std::fs::copy(src.join("session.json"), dst.join("session.json")).unwrap();
     let c = bansayo_engine::store::open(&data.join("db/bansayo.sqlite")).unwrap();
     let sid = SessionId::new(id).unwrap();
@@ -58,14 +61,27 @@ fn export(data: &std::path::Path, id: &str, plan: TechniquePlan) {
         coaching: CoachingLevel::Standard,
         tolerance_scale: 1.5,
     };
-    let file = TrainingFile { original: Original::from_events(plan, athlete, &events), snapshots };
-    std::fs::write(dst.join("training.json"), serde_json::to_vec_pretty(&file).unwrap()).unwrap();
+    let file = TrainingFile {
+        original: Original::from_events(plan, athlete, &events),
+        snapshots,
+    };
+    std::fs::write(
+        dst.join("training.json"),
+        serde_json::to_vec_pretty(&file).unwrap(),
+    )
+    .unwrap();
 }
 
 /// The pipeline refuses control while it finishes a recording; retry briefly.
 async fn fault(addr: std::net::SocketAddr, action: &str) {
     for _ in 0..100 {
-        let (status, _) = http(addr, "POST", "simulation/devices/SIM-CAM2/fault", json!({ "action": action })).await;
+        let (status, _) = http(
+            addr,
+            "POST",
+            "simulation/devices/SIM-CAM2/fault",
+            json!({ "action": action }),
+        )
+        .await;
         if status == 200 {
             return;
         }
@@ -116,11 +132,26 @@ async fn generate() {
     let s = ok(addr, "POST", "training/sessions", json!({ "plan": { "kind": "technique", "technique": "taekwondo.dollyeo_chagi", "side": "left", "sets": 1, "reps": 3, "rest_s": 0 } })).await;
     let c = s["session_id"].as_str().unwrap().to_owned();
     wait_state(addr, 20, |s| s["phase"] == "ready").await;
-    ok(addr, "POST", "training/command", json!({ "command": "start" })).await;
+    ok(
+        addr,
+        "POST",
+        "training/command",
+        json!({ "command": "start" }),
+    )
+    .await;
     wait_state(addr, 20, |s| s["phase"] == "active").await;
     motion(addr, "roundhouse_kick").await;
-    wait_state(addr, 30, |s| s["totals"]["reps_other"].as_u64().unwrap_or(0) >= 3).await;
-    ok(addr, "POST", "training/command", json!({ "command": "end" })).await;
+    wait_state(addr, 30, |s| {
+        s["totals"]["reps_other"].as_u64().unwrap_or(0) >= 3
+    })
+    .await;
+    ok(
+        addr,
+        "POST",
+        "training/command",
+        json!({ "command": "end" }),
+    )
+    .await;
     motion(addr, "standing").await;
     wait_closed(addr, &c).await;
     export(dir.path(), &c, plan(PlanSide::Left, 3));

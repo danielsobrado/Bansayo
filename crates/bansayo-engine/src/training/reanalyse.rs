@@ -40,7 +40,11 @@ pub struct Original {
 
 impl Original {
     /// Recovers plan, creation time and commands from a session's stored events.
-    pub fn from_events(plan: TechniquePlan, athlete: AthleteSettings, events: &[TrainingEvent]) -> Self {
+    pub fn from_events(
+        plan: TechniquePlan,
+        athlete: AthleteSettings,
+        events: &[TrainingEvent],
+    ) -> Self {
         let created_t_us = events.first().map_or(0, |e| e.t_us);
         let commands: Vec<TimedCommand> = events
             .iter()
@@ -54,7 +58,9 @@ impl Original {
             })
             .collect();
         // A session that never acknowledged had the acknowledgement on file already.
-        let acked = commands.iter().any(|c| c.command == TrainingCommand::AckSafety);
+        let acked = commands
+            .iter()
+            .any(|c| c.command == TrainingCommand::AckSafety);
         let technique = events
             .first()
             .and_then(|e| e.data["plan"]["technique"].as_str())
@@ -64,7 +70,11 @@ impl Original {
             created_t_us,
             commands,
             athlete,
-            safety_acked: if acked { vec![] } else { technique.into_iter().collect() },
+            safety_acked: if acked {
+                vec![]
+            } else {
+                technique.into_iter().collect()
+            },
         }
     }
 }
@@ -135,14 +145,20 @@ pub fn run(
         capability_profile: context.capability.profile,
         tracking_config_id: context.tracking.0.clone(),
     };
-    let (mut session, mut events) = Session::new(super::session_config(&replay.recording.initial.config), setup, original.created_t_us)
-        .map_err(|p| format!("The plan does not compile: {p:?}"))?;
+    let (mut session, mut events) = Session::new(
+        super::session_config(&replay.recording.initial.config),
+        setup,
+        original.created_t_us,
+    )
+    .map_err(|p| format!("The plan does not compile: {p:?}"))?;
     let period = (1e6 / rate).round() as u64;
     let mut commands = original.commands.iter().peekable();
     let mut last = None;
     while !replay.paused {
         replay.advance(period)?;
-        let Some(sample) = replay.latest_motion.clone() else { continue };
+        let Some(sample) = replay.latest_motion.clone() else {
+            continue;
+        };
         // Ticks before the session existed only warm the solver up.
         if last == Some(sample.t_us) || sample.t_us < original.created_t_us {
             continue;

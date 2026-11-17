@@ -208,14 +208,24 @@ pub fn recompress(src: &std::path::Path, dst: &std::path::Path) -> Result<(), St
             Some(id) => *id,
             None => {
                 let id = w
-                    .add_channel(0, &m.channel.topic, &m.channel.message_encoding, &BTreeMap::new())
+                    .add_channel(
+                        0,
+                        &m.channel.topic,
+                        &m.channel.message_encoding,
+                        &BTreeMap::new(),
+                    )
                     .map_err(|e| e.to_string())?;
                 channels.insert(m.channel.topic.clone(), id);
                 id
             }
         };
         w.write_to_known_channel(
-            &mcap::records::MessageHeader { channel_id: id, sequence: m.sequence, log_time: m.log_time, publish_time: m.publish_time },
+            &mcap::records::MessageHeader {
+                channel_id: id,
+                sequence: m.sequence,
+                log_time: m.log_time,
+                publish_time: m.publish_time,
+            },
             &m.data,
         )
         .map_err(|e| e.to_string())?;

@@ -99,7 +99,10 @@ pub fn router(api: Api) -> Router {
             "/api/v1/training/sessions/{id}/rpe",
             post(training::session_rpe),
         )
-        .route("/api/v1/training/sessions/{id}/reanalyse", post(training::session_reanalyse))
+        .route(
+            "/api/v1/training/sessions/{id}/reanalyse",
+            post(training::session_reanalyse),
+        )
         .route("/api/v1/training/reps/{id}/{rep}", get(training::rep_get))
         .route(
             "/api/v1/training/reps/{id}/{rep}/trace",

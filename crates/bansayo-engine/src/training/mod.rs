@@ -713,17 +713,27 @@ impl Actor {
             && self
                 .r
                 .pipeline
-                .control(crate::pipeline::command::ControlRequest::RecordTraining(session_id.clone()))
+                .control(crate::pipeline::command::ControlRequest::RecordTraining(
+                    session_id.clone(),
+                ))
                 .await
                 .inspect_err(|e| tracing::warn!(%e, "input recording unavailable for this session"))
                 .is_ok();
         let abandon = |pipeline: Client, dir: std::path::PathBuf, id: SessionId| async move {
             if inputs {
-                let _ = pipeline.control(crate::pipeline::command::ControlRequest::RecordStopTraining(id)).await;
+                let _ = pipeline
+                    .control(crate::pipeline::command::ControlRequest::RecordStopTraining(id))
+                    .await;
             }
             let _ = tokio::task::spawn_blocking(move || std::fs::remove_dir_all(dir)).await;
         };
-        let session_dir = self.r.config.engine.data_dir.join("sessions").join(session_id.as_str());
+        let session_dir = self
+            .r
+            .config
+            .engine
+            .data_dir
+            .join("sessions")
+            .join(session_id.as_str());
         let created = Session::new(session_config(&self.r.config), setup, self.now());
         let (session, events) = match created {
             Ok(x) => x,
@@ -731,7 +741,11 @@ impl Actor {
                 abandon(self.r.pipeline.clone(), session_dir, session_id).await;
                 return Err(ControlError {
                     code: ApiErrorCode::InvalidRequest,
-                    message: problems.first().map_or("The plan is not valid.".into(), |p| format!("{}: {}", p.path, p.message)),
+                    message: problems
+                        .first()
+                        .map_or("The plan is not valid.".into(), |p| {
+                            format!("{}: {}", p.path, p.message)
+                        }),
                 });
             }
         };

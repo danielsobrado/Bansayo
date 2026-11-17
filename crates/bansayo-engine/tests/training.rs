@@ -209,12 +209,24 @@ async fn wait_session(addr: std::net::SocketAddr, id: &str) -> Value {
     let until = std::time::Instant::now() + std::time::Duration::from_secs(60);
     loop {
         let (status, v) = http(addr, "GET", &format!("training/sessions/{id}"), Value::Null).await;
-        let events = ok(addr, "GET", &format!("training/sessions/{id}/events?limit=100000"), Value::Null).await;
-        let done = events.as_array().is_some_and(|e| e.last().is_some_and(|l| l["type"] == "session_completed" || l["type"] == "session_aborted"));
+        let events = ok(
+            addr,
+            "GET",
+            &format!("training/sessions/{id}/events?limit=100000"),
+            Value::Null,
+        )
+        .await;
+        let done = events.as_array().is_some_and(|e| {
+            e.last()
+                .is_some_and(|l| l["type"] == "session_completed" || l["type"] == "session_aborted")
+        });
         if status == 200 && done {
             return v["data"].clone();
         }
-        assert!(std::time::Instant::now() < until, "re-analysis {id} did not finish");
+        assert!(
+            std::time::Instant::now() < until,
+            "re-analysis {id} did not finish"
+        );
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
 }
@@ -238,31 +250,107 @@ async fn recorded_session_is_reviewable_and_reanalyses_are_identical() {
     }
     assert_eq!(detail["session"]["has_inputs"], true, "{detail}");
     assert_eq!(detail["session"]["has_motion"], true);
-    let trace = ok(addr, "GET", &format!("training/reps/{id}/2/trace"), Value::Null).await;
+    let trace = ok(
+        addr,
+        "GET",
+        &format!("training/reps/{id}/2/trace"),
+        Value::Null,
+    )
+    .await;
     let n = trace["t_us"].as_array().unwrap().len();
     assert!(n > 30, "{n} samples");
-    let ankle = trace["series"].as_array().unwrap().iter().find(|s| s["id"] == "ankle_speed.right").unwrap();
+    let ankle = trace["series"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["id"] == "ankle_speed.right")
+        .unwrap();
     assert_eq!(ankle["values"].as_array().unwrap().len(), n);
-    let clip = ok(addr, "GET", &format!("training/reps/{id}/2/motion"), Value::Null).await;
+    let clip = ok(
+        addr,
+        "GET",
+        &format!("training/reps/{id}/2/motion"),
+        Value::Null,
+    )
+    .await;
     assert!(clip["samples"].as_array().unwrap().len() > 30);
     assert_eq!(clip["phases"].as_array().unwrap().len(), 5);
-    assert_eq!(clip["samples"][0]["rotations"].as_array().unwrap().len(), 19);
+    assert_eq!(
+        clip["samples"][0]["rotations"].as_array().unwrap().len(),
+        19
+    );
+    // Segment origins are forward kinematics from the root, one per segment.
+    assert_eq!(
+        clip["samples"][0]["positions_m"].as_array().unwrap().len(),
+        19
+    );
+    assert_eq!(
+        clip["samples"][0]["positions_m"][0],
+        clip["samples"][0]["root_m"]
+    );
     // Two re-analyses with pinned content give identical event logs (acceptance 2).
-    let a = ok(addr, "POST", &format!("training/sessions/{id}/reanalyse"), json!({ "content": "pinned" })).await["job_id"].as_str().unwrap().to_owned();
-    let b = ok(addr, "POST", &format!("training/sessions/{id}/reanalyse"), json!({ "content": "pinned" })).await["job_id"].as_str().unwrap().to_owned();
+    let a = ok(
+        addr,
+        "POST",
+        &format!("training/sessions/{id}/reanalyse"),
+        json!({ "content": "pinned" }),
+    )
+    .await["job_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let b = ok(
+        addr,
+        "POST",
+        &format!("training/sessions/{id}/reanalyse"),
+        json!({ "content": "pinned" }),
+    )
+    .await["job_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
     let da = wait_session(addr, &a).await;
     wait_session(addr, &b).await;
     assert_eq!(da["session"]["reanalysis_of"], id.as_str());
     assert_eq!(da["session"]["analysis_rev"], 2);
-    let ea = ok(addr, "GET", &format!("training/sessions/{a}/events?limit=100000"), Value::Null).await;
-    let eb = ok(addr, "GET", &format!("training/sessions/{b}/events?limit=100000"), Value::Null).await;
+    let ea = ok(
+        addr,
+        "GET",
+        &format!("training/sessions/{a}/events?limit=100000"),
+        Value::Null,
+    )
+    .await;
+    let eb = ok(
+        addr,
+        "GET",
+        &format!("training/sessions/{b}/events?limit=100000"),
+        Value::Null,
+    )
+    .await;
     assert_eq!(ea, eb);
     assert_eq!(da["session"]["reps_completed"], 3, "{da}");
-    let (status, _) = http(addr, "POST", &format!("training/sessions/{id}/reanalyse"), json!({ "content": "current" })).await;
+    let (status, _) = http(
+        addr,
+        "POST",
+        &format!("training/sessions/{id}/reanalyse"),
+        json!({ "content": "current" }),
+    )
+    .await;
     assert_eq!(status, 400);
     // Deleting the original removes it, its re-analyses and its files.
-    ok(addr, "DELETE", &format!("training/sessions/{id}"), Value::Null).await;
-    assert_eq!(http(addr, "GET", &format!("training/sessions/{a}"), Value::Null).await.0, 404);
+    ok(
+        addr,
+        "DELETE",
+        &format!("training/sessions/{id}"),
+        Value::Null,
+    )
+    .await;
+    assert_eq!(
+        http(addr, "GET", &format!("training/sessions/{a}"), Value::Null)
+            .await
+            .0,
+        404
+    );
     assert!(!dir.path().join("sessions").join(&id).exists());
     engine.shutdown().await.unwrap();
 }

@@ -700,25 +700,40 @@ pub async fn rep_motion(State(api): State<Api>, Path((id, rep)): Path<(String, u
             points_m: vec![],
         }],
     };
+    // Segment origins come from the engine's forward kinematics so clients draw without any.
+    // shortcut: uses the current skeleton definition, not the one recorded with the session;
+    // upgrade when skeleton definitions are stored per session.
+    let definition = api.streams.skeleton.borrow().clone();
+    let skeleton =
+        crate::skeleton::Skeleton::builtin(&definition.model_id, f64::from(definition.height_m))
+            .ok();
     for (_, bytes) in rows {
         let Ok(s) = serde_json::from_slice::<MotionSample>(&bytes) else {
             continue;
         };
         let Some(b) = s.body else { continue };
         clip.skeleton_rev = b.skeleton_rev;
-        let n = b.segments.len();
+        let rotations: Option<Vec<_>> = b
+            .segments
+            .iter()
+            .map(|g| crate::math::rot_from_wire(g.rotation))
+            .collect();
+        let positions_m = match (&skeleton, rotations) {
+            (Some(sk), Some(r)) if r.len() == sk.len() => crate::skeleton::forward_kinematics(
+                sk,
+                &r,
+                crate::math::v3_from_wire(b.root.position_m),
+            )
+            .iter()
+            .map(crate::math::v3_to_wire)
+            .collect(),
+            _ => continue,
+        };
         clip.samples.push(ClipSample {
             t_us: s.t_us,
             root_m: b.root.position_m,
             rotations: b.segments.iter().map(|g| g.rotation).collect(),
-            positions_m: (0..n)
-                .map(|i| {
-                    b.keypoints
-                        .get(i)
-                        .and_then(|k| k.as_ref())
-                        .map_or([0.0; 3], |k| k.position_m)
-                })
-                .collect(),
+            positions_m,
             inferred: b
                 .segments
                 .iter()
@@ -741,7 +756,11 @@ pub async fn rep_motion(State(api): State<Api>, Path((id, rep)): Path<(String, u
 
 /// Starts a re-analysis of a stored session (12 §7.2) on the blocking pool; the result is a new
 /// session row linked by `reanalysis_of`, whose id is the job id.
-pub async fn session_reanalyse(State(api): State<Api>, Path(id): Path<String>, body: Result<Json<ReanalyseRequest>, JsonRejection>) -> Response {
+pub async fn session_reanalyse(
+    State(api): State<Api>,
+    Path(id): Path<String>,
+    body: Result<Json<ReanalyseRequest>, JsonRejection>,
+) -> Response {
     let (Ok(id), Ok(Json(r))) = (session_id(&id), body) else {
         return bad("Provide { \"content\": \"pinned\", \"source_mask\": [device ids] }.");
     };
@@ -750,7 +769,11 @@ pub async fn session_reanalyse(State(api): State<Api>, Path(id): Path<String>, b
     }
     let sid = id.clone();
     let loaded = query(&api, move |c| {
-        Ok((read::session(c, &sid)?, read::events(c, &sid, 0, 1_000_000)?, read::snapshots(c, &sid)?))
+        Ok((
+            read::session(c, &sid)?,
+            read::events(c, &sid, 0, 1_000_000)?,
+            read::snapshots(c, &sid)?,
+        ))
     })
     .await;
     let (detail, events, snapshots) = match loaded {
@@ -759,22 +782,36 @@ pub async fn session_reanalyse(State(api): State<Api>, Path(id): Path<String>, b
         Err(r) => return r,
     };
     if !detail.session.has_inputs {
-        return failure(ApiErrorCode::Conflict, "This session has no input recording to re-analyse.");
+        return failure(
+            ApiErrorCode::Conflict,
+            "This session has no input recording to re-analyse.",
+        );
     }
     let library = match crate::content_store::ContentStore::library_from_snapshots(&snapshots) {
         Ok(l) => l,
-        Err(_) => return failure(ApiErrorCode::Conflict, "The session's content snapshots could not be read."),
+        Err(_) => {
+            return failure(
+                ApiErrorCode::Conflict,
+                "The session's content snapshots could not be read.",
+            );
+        }
     };
-    let profile = crate::training::athletes::Athletes::new(&api.data_dir).get(&detail.session.athlete_id).ok();
+    let profile = crate::training::athletes::Athletes::new(&api.data_dir)
+        .get(&detail.session.athlete_id)
+        .ok();
     let athlete = crate::training::reanalyse::AthleteSettings {
         id: detail.session.athlete_id.clone(),
         stance: profile.as_ref().and_then(|p| p.default_stance),
-        coaching: profile.as_ref().map_or(CoachingLevel::Standard, |p| p.coaching.level),
+        coaching: profile
+            .as_ref()
+            .map_or(CoachingLevel::Standard, |p| p.coaching.level),
         tolerance_scale: profile.as_ref().map_or(1.0, |p| p.coaching.tolerance_scale),
     };
     let Plan::Technique(plan) = detail.plan.clone();
     let original = crate::training::reanalyse::Original::from_events(plan, athlete, &events);
-    let Some(writer) = api.store.clone() else { return no_store() };
+    let Some(writer) = api.store.clone() else {
+        return no_store();
+    };
     let job = crate::training::new_session_id();
     let job_id = job.clone();
     let (data_dir, mask) = (api.data_dir.clone(), r.source_mask.unwrap_or_default());
@@ -806,7 +843,11 @@ pub async fn session_reanalyse(State(api): State<Api>, Path(id): Path<String>, b
             }
             rx.blocking_recv().map_err(|e| e.to_string())??;
             for e in out.events {
-                writer.send(Write::Event(job.clone(), Box::new(e), detail.session.title.clone()));
+                writer.send(Write::Event(
+                    job.clone(),
+                    Box::new(e),
+                    detail.session.title.clone(),
+                ));
             }
             Ok(())
         })();
