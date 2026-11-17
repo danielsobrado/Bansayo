@@ -176,8 +176,17 @@ fn dlt(views: &[View]) -> Option<V3> {
     let h = svd.v_t?.row(svd.singular_values.imin()).clone_owned();
     (h[3].abs() > 1e-12).then(|| V3::new(h[0], h[1], h[2]) / h[3])
 }
-/// Triangulates the newest synchronised set of calibrated camera views at `now`. `None` when
-/// fewer than `min_views` cameras are usable.
+/// Two frames of one camera further apart than this are not interpolated between.
+pub const MAX_INTERPOLATION_GAP_US: u64 = 100_000;
+
+/// Triangulates every calibrated camera aligned to one instant, `None` when fewer than
+/// `min_views` cameras are usable.
+///
+/// Cameras whose newest frame is within `max_skew_ms` of the newest overall take part. The
+/// instant is the oldest of their newest frames, so each has a frame at or after it; a camera
+/// with a frame before it too is linearly interpolated between the two, otherwise its first
+/// frame after the instant is used if within `max_skew_ms`. Free-running cameras therefore
+/// contribute the same moment instead of frames up to one period apart.
 pub fn triangulate(
     registry: &Registry,
     store: &Store,
@@ -185,46 +194,77 @@ pub fn triangulate(
     stale_us: u64,
     config: &TriangulationConfig,
 ) -> Option<PoseLandmarks3D> {
+    let skew_us = config.max_skew_ms * 1000;
     let mut views: Vec<_> = registry
         .entries
         .iter()
         .filter_map(|(id, e)| {
-            let o = e
-                .latest
-                .as_ref()
-                .filter(|o| now.saturating_sub(o.t_us) <= stale_us)?;
-            let ObservationData::Landmarks2d { landmarks } = &o.data else {
-                return None;
-            };
+            let frames: Vec<&PoseLandmarks2D> = e
+                .landmarks
+                .iter()
+                .filter(|o| now.saturating_sub(o.t_us) <= stale_us)
+                .filter_map(|o| match &o.data {
+                    ObservationData::Landmarks2d { landmarks } => Some(landmarks),
+                    _ => None,
+                })
+                .collect();
+            let latest = *frames.last()?;
             let (intrinsics, k) = store.camera(CalibrationKind::CameraIntrinsics, id)?;
             let (extrinsics, e) = store.camera(CalibrationKind::CameraExtrinsics, id)?;
             let camera = Camera::new(k, &e)
-                .filter(|c| c.k.image_size_px == landmarks.frame_meta.image_size_px)?;
-            Some((id, camera, landmarks, [intrinsics, extrinsics]))
+                .filter(|c| c.k.image_size_px == latest.frame_meta.image_size_px)?;
+            Some((id, camera, frames, [intrinsics, extrinsics]))
         })
         .collect();
     let newest = views
         .iter()
-        .map(|v| v.2)
+        .map(|v| *v.2.last().unwrap_or_else(|| unreachable!()))
         .max_by_key(|l| l.frame_meta.t_us)?;
-    let (t_us, schema, len) = (
+    let (newest_us, schema, len) = (
         newest.frame_meta.t_us,
         newest.schema_id.clone(),
         newest.points.len(),
     );
-    views.retain(|(_, _, l, _)| {
-        t_us - l.frame_meta.t_us <= config.max_skew_ms * 1000
-            && l.schema_id == schema
-            && l.points.len() == len
+    views.retain(|(_, _, frames, _)| {
+        frames.last().is_some_and(|l| {
+            newest_us - l.frame_meta.t_us <= skew_us
+                && l.schema_id == schema
+                && l.points.len() == len
+        })
     });
     if views.len() < config.min_views as usize {
         return None;
     }
+    let t_us = views
+        .iter()
+        .filter_map(|v| v.2.last().map(|l| l.frame_meta.t_us))
+        .min()?;
+    let aligned: Vec<_> = views
+        .iter()
+        .filter_map(|(id, camera, frames, refs)| {
+            let after = frames.iter().find(|f| f.frame_meta.t_us >= t_us)?;
+            let before = frames.iter().rev().find(|f| f.frame_meta.t_us <= t_us);
+            let points = match before {
+                Some(b) if b.frame_meta.t_us == t_us => b.points.clone(),
+                Some(b)
+                    if after.frame_meta.t_us - b.frame_meta.t_us <= MAX_INTERPOLATION_GAP_US =>
+                {
+                    interpolate(b, after, t_us)
+                }
+                _ if after.frame_meta.t_us - t_us <= skew_us => after.points.clone(),
+                _ => return None,
+            };
+            Some((*id, camera, points, after.origin, refs))
+        })
+        .collect();
+    if aligned.len() < config.min_views as usize {
+        return None;
+    }
     let points = (0..len)
         .map(|i| {
-            let detections: Vec<_> = views
+            let detections: Vec<_> = aligned
                 .iter()
-                .filter_map(|(id, c, l, _)| Some((*id, c, l.points[i].as_ref()?)))
+                .filter_map(|(id, c, points, _, _)| Some((*id, *c, points[i].as_ref()?)))
                 .collect();
             point(&detections, config)
         })
@@ -232,12 +272,30 @@ pub fn triangulate(
     Some(PoseLandmarks3D::Triangulated {
         t_us,
         frame: FrameRef::World,
-        origin: views
+        origin: aligned
             .iter()
-            .map(|v| v.2.origin)
+            .map(|v| v.3)
             .reduce(|a, b| if a == b { a } else { Origin::Live })?,
         schema_id: schema,
-        calibration_refs: views.iter().flat_map(|v| v.3.clone()).collect(),
+        calibration_refs: aligned.iter().flat_map(|v| v.4.clone()).collect(),
         points,
     })
+}
+
+/// Landmarks at `t_us` between two frames; a point missing from either is missing.
+fn interpolate(a: &PoseLandmarks2D, b: &PoseLandmarks2D, t_us: u64) -> Vec<Option<Landmark2D>> {
+    let span = (b.frame_meta.t_us - a.frame_meta.t_us) as f32;
+    let s = (t_us - a.frame_meta.t_us) as f32 / span;
+    a.points
+        .iter()
+        .zip(&b.points)
+        .map(|(p, q)| {
+            let (p, q) = (p.as_ref()?, q.as_ref()?);
+            Some(Landmark2D {
+                x_px: p.x_px + (q.x_px - p.x_px) * s,
+                y_px: p.y_px + (q.y_px - p.y_px) * s,
+                confidence: p.confidence.min(q.confidence),
+            })
+        })
+        .collect()
 }

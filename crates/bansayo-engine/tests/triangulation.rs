@@ -341,7 +341,8 @@ fn views_out_of_sync_or_stale_are_not_combined() {
     else {
         panic!("two synchronised views");
     };
-    assert_eq!(t_us, NOW);
+    // Aligned to the older of the two participating cameras' newest frames.
+    assert_eq!(t_us, NOW - 10_000);
     assert_eq!(origin, Origin::Simulated);
     assert_eq!(calibration_refs.len(), 4, "only CAM1 and CAM2 contribute");
     assert!(points.iter().flatten().all(|p| p.views == 2));
@@ -670,4 +671,42 @@ fn bundled_multi_camera_and_example_configs_load() {
         ),
         Err(other) => panic!("{other}"),
     }
+}
+
+#[test]
+fn free_running_cameras_are_interpolated_to_one_instant() {
+    // Camera 0 at 0 and 33 ms; camera 1 runs 16 ms out of phase, during a fast kick.
+    let t0 = 0.45; // seconds into the kick, where the leg moves quickly
+    let at = |rig: &Rig, ms: u64| rig.truth(Motion::FrontKick, t0 + ms as f64 / 1000.0);
+    let error = |rig: &mut Rig, camera1_ms: &[u64]| {
+        for (seq, ms) in [0u64, 33].into_iter().enumerate() {
+            let view = rig.view(0, &at(rig, ms), seq as u64 + 1, NOW + ms * 1000);
+            rig.see(view);
+        }
+        for (seq, ms) in camera1_ms.iter().enumerate() {
+            let view = rig.view(1, &at(rig, *ms), seq as u64 + 1, NOW + ms * 1000);
+            rig.see(view);
+        }
+        let Some(PoseLandmarks3D::Triangulated { t_us, points, .. }) =
+            rig.triangulate(NOW + 49_000)
+        else {
+            panic!("triangulated")
+        };
+        assert_eq!(t_us, NOW + 33_000, "aligned to camera 0's newest frame");
+        let truth = at(rig, 33);
+        let errors: Vec<f64> = points
+            .iter()
+            .zip(&truth)
+            .filter_map(|(p, t)| Some(error_m(p.as_ref()?, t)))
+            .collect();
+        errors.iter().cloned().fold(0.0, f64::max)
+    };
+    let interpolated = error(&mut rig(&RING[..2], 0.0, false), &[16, 49]);
+    let nearest = error(&mut rig(&RING[..2], 0.0, false), &[49]);
+    eprintln!(
+        "worst landmark error: interpolated {:.1} mm, nearest frame {:.1} mm",
+        interpolated * 1e3,
+        nearest * 1e3
+    );
+    assert!(interpolated < nearest / 3.0, "{interpolated} vs {nearest}");
 }

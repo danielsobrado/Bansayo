@@ -11,8 +11,9 @@ engine:
 api:
   bind: 127.0.0.1:7700
 triangulation:
-  # Free-running cameras: views up to half a 30 Hz frame apart are combined.
-  max_skew_ms: 20
+  # Cameras are interpolated to one instant; a camera takes part while its newest frame is
+  # within this of the newest overall. Keep it above one frame period (33 ms at 30 Hz).
+  max_skew_ms: 40
   max_reprojection_error_px: 15.0
   min_views: 2
   min_ray_angle_deg: 3.0

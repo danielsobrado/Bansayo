@@ -207,6 +207,7 @@ impl Runtime {
                             entry.connected = false;
                             entry.latest = None;
                             entry.recent.clear();
+                            entry.landmarks.clear();
                             entry.first_us = None;
                         }
                     }

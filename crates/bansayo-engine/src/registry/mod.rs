@@ -3,6 +3,8 @@ pub mod persistence;
 use crate::{calibration::Store, config::QualityConfig, sources::DropCounters};
 use bansayo_contracts::*;
 use std::collections::BTreeMap;
+/// Camera frames kept per camera: about a quarter second at 30 Hz.
+pub const LANDMARK_HISTORY: usize = 8;
 #[derive(Clone)]
 pub struct Entry {
     pub descriptor: DeviceDescriptor,
@@ -13,6 +15,8 @@ pub struct Entry {
     pub connected: bool,
     pub reported_quality: f32,
     pub recent: std::collections::VecDeque<u64>,
+    /// Newest camera landmark observations, oldest first, for time alignment across cameras.
+    pub landmarks: std::collections::VecDeque<SensorObservation>,
     pub failure: Option<String>,
 }
 #[derive(Clone)]
@@ -42,6 +46,7 @@ impl Registry {
                             connected: true,
                             reported_quality: 1.0,
                             recent: Default::default(),
+                            landmarks: Default::default(),
                             failure: None,
                         },
                     )
@@ -68,6 +73,7 @@ impl Registry {
                 if connected {
                     e.first_us = None;
                     e.recent.clear();
+                    e.landmarks.clear();
                     e.latest = None;
                 }
                 true
@@ -87,6 +93,7 @@ impl Registry {
                     connected: true,
                     reported_quality: 1.0,
                     recent: Default::default(),
+                    landmarks: Default::default(),
                     failure: None,
                 });
                 true
@@ -115,6 +122,12 @@ impl Registry {
         }
         entry.first_us.get_or_insert(o.t_us);
         entry.received += 1;
+        if matches!(o.data, ObservationData::Landmarks2d { .. }) {
+            if entry.landmarks.len() == LANDMARK_HISTORY {
+                entry.landmarks.pop_front();
+            }
+            entry.landmarks.push_back(o.clone());
+        }
         entry.latest = Some(o);
         true
     }
