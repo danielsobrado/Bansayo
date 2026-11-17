@@ -75,7 +75,7 @@ fn one_off_deviations_produce_no_cue_and_the_gate_needs_persistence() {
         [None, None, None]
     );
     // Two of the last three at grade A.
-    assert_eq!(run(&mut s, &[bad.clone()]), [Some("ca".into())]);
+    assert_eq!(run(&mut s, std::slice::from_ref(&bad)), [Some("ca".into())]);
     // Grade B needs three of the last four.
     let mut s = Scheduler::new(CoachingLevel::Detailed, 3, false);
     s.start_set(5);

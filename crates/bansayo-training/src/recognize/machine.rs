@@ -9,8 +9,10 @@ use std::collections::VecDeque;
 #[derive(Debug, Clone, Default)]
 pub struct History {
     /// `(t_us, [(value, norm)])` per tick, oldest first.
-    frames: VecDeque<(u64, Vec<(Option<f64>, Option<f64>)>)>,
+    frames: VecDeque<(u64, Vec<ValueNorm>)>,
 }
+
+type ValueNorm = (Option<f64>, Option<f64>);
 
 const HISTORY_SPAN_US: u64 = 6_000_000;
 

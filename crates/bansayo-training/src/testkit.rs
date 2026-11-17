@@ -74,7 +74,8 @@ fn x(a: [f64; 3]) -> [f64; 3] {
 pub fn skeleton(height: f64) -> SkeletonDefinition {
     let (centre, rest) = ROWS.split_at(5);
     let (arm, leg) = rest.split_at(4);
-    let mut rows: Vec<(String, Option<String>, [f64; 3], [f64; 3])> = vec![];
+    type Owned = (String, Option<String>, [f64; 3], [f64; 3]);
+    let mut rows: Vec<Owned> = vec![];
     let own = |r: &Row| (r.0.to_string(), r.1.map(String::from), r.2, r.3);
     let mir = |r: &Row| (mirror_name(r.0), r.1.map(mirror_name), x(r.2), x(r.3));
     rows.extend(centre.iter().map(own));
@@ -145,14 +146,24 @@ pub fn body(sk: &SkeletonDefinition, rotations: &[Rot<f64>], root: V3<f64>, t: u
         };
     }
     let mut keypoints: Vec<Option<KeypointState>> = vec![None; 26];
+    // Evidence as the camera-only pipeline publishes it: FK keypoints, a triangulated root,
+    // skeleton-fit axes and rest-filled twist.
+    let fk = Evidence {
+        provenance: Provenance::Derived,
+        method: MethodId::Fk,
+        ..evidence(t)
+    };
     let kp = |p: V3<f64>| {
         Some(KeypointState {
             position_m: w(&p),
-            evidence: evidence(t),
+            evidence: fk.clone(),
         })
     };
     for i in 0..19 {
         keypoints[i] = kp(pos[i]);
+    }
+    if let Some(k) = keypoints[0].as_mut() {
+        k.evidence = evidence(t);
     }
     for (target, seg, contact) in [
         (19, 4, None),
@@ -173,8 +184,16 @@ pub fn body(sk: &SkeletonDefinition, rotations: &[Rot<f64>], root: V3<f64>, t: u
             .iter()
             .map(|r| SegmentState {
                 rotation: wq(r),
-                axis: evidence(t),
-                twist: evidence(t),
+                axis: Evidence {
+                    method: MethodId::SkeletonFitAxis,
+                    ..evidence(t)
+                },
+                twist: Evidence {
+                    provenance: Provenance::Inferred,
+                    method: MethodId::RestFill,
+                    confidence: None,
+                    ..evidence(t)
+                },
                 angular_velocity_rad_s: None,
                 angular_velocity: crate::evidence::unavailable(),
             })

@@ -464,9 +464,11 @@ pub fn measure(
                 norm: false,
                 sign: 1.0,
             });
-            let s: Vec<(f64, Option<f64>)> = window_frames
-                .iter()
-                .filter_map(|f| sample(f, &o))
+            // The window's edges are part of it: interpolate there, then add inner samples.
+            let s: Vec<(f64, Option<f64>)> = [a, b]
+                .into_iter()
+                .filter_map(|t| interpolate(&frames, &o, t))
+                .chain(window_frames.iter().filter_map(|f| sample(f, &o)))
                 .map(|s| (s.0, s.1))
                 .collect();
             let max = s.iter().copied().max_by(|p, q| p.0.total_cmp(&q.0));

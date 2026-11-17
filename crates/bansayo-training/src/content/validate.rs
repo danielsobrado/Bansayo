@@ -643,7 +643,7 @@ pub fn validate_scoring(s: &ScoringModel, lib: &Library) -> Vec<ContentProblem> 
             ));
         }
         if let Some(t) = &c.tolerance
-            && !(t.inner < t.outer)
+            && t.inner.partial_cmp(&t.outer) != Some(std::cmp::Ordering::Less)
         {
             out.push(problem(
                 format!("{path}.tolerance"),
