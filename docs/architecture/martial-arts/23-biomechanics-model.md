@@ -133,6 +133,17 @@ instruments in the target or under the feet ([30](30-instrumented-equipment.md))
 
 ## 7. Footwork and spatial movement
 
+| Item | Footwork and spatial movement |
+|---|---|
+| Use case and value | Stance, foot placement, pivots, steps, travel and turns are checked in kata, poomsae, Muay Thai footwork and VR drills. Measurable value: per-step stance, facing and travel results, and step length and direction against the definition |
+| Existing support | Triangulation and measured root on simulated cameras; the calibration board that fixes the floor origin and forward axis; stance and transition definition kinds; the sequence grammar |
+| Needed now | Stances and transitions as ordinary definitions (specified); a floor frame that persists across sessions (`floor_plane`); the two observables `step_length` and `step_direction`. No separate footwork engine |
+| Dependencies | A calibrated multi-camera rig; a pose model with heel and toe for foot angle and pivot; anchor tags to detect rig drift |
+| Feasibility and limits | Feasible at `multi_view`. Not assessed with one camera. The rear foot is often hidden by the lead leg; foot angle is unavailable with the current COCO-17 model |
+| Priority | P0 architecture; built with Phase 4 and package 6c |
+| Smallest milestone | Stance and step checks of a four-step line drill, on the simulator and then on the rig |
+| Evidence before development | V-02 and V-03 (volume and floor accuracy), V-13 (ankle positions) on the physical rig |
+
 First-class by construction, not by a separate subsystem:
 
 | Need | Realisation | Reference |
