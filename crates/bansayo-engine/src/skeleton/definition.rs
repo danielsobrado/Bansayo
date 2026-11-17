@@ -168,6 +168,23 @@ impl Skeleton {
     }
 
     /// `bansayo.body.v1.joints`: a landmark per segment origin, an edge per parent link.
+    pub fn keypoint_schema(&self) -> LandmarkSchema {
+        let mut schema = self.landmark_schema();
+        schema.id = bansayo_contracts::BODY_KEYPOINT_SCHEMA_ID.into();
+        schema.names = bansayo_contracts::BODY_KEYPOINT_NAMES
+            .map(String::from)
+            .to_vec();
+        schema.edges.extend([
+            [4, 19],
+            [8, 20],
+            [12, 21],
+            [15, 22],
+            [18, 23],
+            [15, 24],
+            [18, 25],
+        ]);
+        schema
+    }
     pub fn landmark_schema(&self) -> LandmarkSchema {
         LandmarkSchema {
             id: LANDMARK_SCHEMA_ID.into(),

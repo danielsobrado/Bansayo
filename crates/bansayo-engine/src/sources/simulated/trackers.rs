@@ -18,11 +18,7 @@ pub fn reading(
     heading: f64,
     world: Rot,
 ) -> Quat {
-    let mount = Rot::from_euler_angles(
-        sample(id, seed, 0, 1) * 2.0,
-        sample(id, seed, 0, 2) * 2.0,
-        sample(id, seed, 0, 3) * 2.0,
-    );
+    let mount = mounting(id, seed);
     let n = noise_deg.to_radians();
     let noise = Rot::from_euler_angles(
         sample(id, seed, seq, 4) * n,
@@ -59,4 +55,12 @@ mod tests {
             reading(&id, 43, 10, 0.2, 0.0, Rot::identity())
         );
     }
+}
+
+pub(super) fn mounting(id: &DeviceId, seed: u64) -> Rot {
+    Rot::from_euler_angles(
+        sample(id, seed, 0, 1) * 2.0,
+        sample(id, seed, 0, 2) * 2.0,
+        sample(id, seed, 0, 3) * 2.0,
+    )
 }

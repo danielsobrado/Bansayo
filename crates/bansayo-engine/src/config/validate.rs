@@ -48,6 +48,7 @@ pub struct CameraSpec {
 /// An enabled simulated source with validated identities.
 #[derive(Debug, Clone)]
 pub struct SimulatedSpec {
+    pub landmark_schema: String,
     pub id: SourceId,
     pub seed: u64,
     pub motion: Motion,
@@ -461,7 +462,16 @@ fn check_simulated(
             });
         }
     }
+    if s.landmark_schema != crate::skeleton::proportions::LANDMARK_SCHEMA_ID
+        && s.landmark_schema != bansayo_contracts::BODY_KEYPOINT_SCHEMA_ID
+    {
+        c.err(
+            format!("{path}.landmark_schema"),
+            "unsupported simulated landmark schema",
+        );
+    }
     Some(SimulatedSpec {
+        landmark_schema: s.landmark_schema.clone(),
         id: SourceId::new(s.id.as_str()).ok()?,
         seed: s.seed,
         motion: motion?,

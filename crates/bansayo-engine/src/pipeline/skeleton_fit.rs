@@ -117,7 +117,7 @@ impl Keypoints<'_> {
         })
     }
     fn get(&self, k: K, sk: &Skeleton) -> Option<Point> {
-        if self.schema == LANDMARK_SCHEMA_ID {
+        if self.schema == LANDMARK_SCHEMA_ID || self.schema == BODY_KEYPOINT_SCHEMA_ID {
             // One landmark per segment origin, in skeleton order.
             let name = match k {
                 K::Pelvis => "pelvis",

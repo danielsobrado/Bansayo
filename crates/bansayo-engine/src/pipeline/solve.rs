@@ -110,7 +110,7 @@ pub fn solve(
         .or_else(|| match &landmarks_3d {
             Some(PoseLandmarks3D::Triangulated {
                 schema_id, points, ..
-            }) if schema_id == LANDMARK_SCHEMA_ID => sk
+            }) if (schema_id == LANDMARK_SCHEMA_ID || schema_id == BODY_KEYPOINT_SCHEMA_ID) => sk
                 .segments
                 .iter()
                 .position(|s| s.parent.is_none())

@@ -1039,6 +1039,10 @@
         {
           "id": "front_kick",
           "label": "Front kick"
+        },
+        {
+          "id": "roundhouse_kick",
+          "label": "Roundhouse kick"
         }
       ],
       "speed": 1.0,

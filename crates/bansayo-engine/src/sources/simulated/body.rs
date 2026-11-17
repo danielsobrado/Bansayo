@@ -4,7 +4,7 @@
 use bansayo_contracts::SegmentId;
 
 use super::motions::{Motion, ScriptedAngles};
-use crate::math::{Rot, V3, rot_x, rot_z};
+use crate::math::{Rot, V3, rot_x, rot_y, rot_z};
 use crate::skeleton::{Skeleton, floor_contact_root, forward_kinematics};
 
 /// The body at one instant, in skeleton segment order.
@@ -13,6 +13,29 @@ pub struct BodyPose {
     pub rotations: Vec<Rot>,
     pub positions: Vec<V3>,
     pub root: V3,
+}
+
+impl BodyPose {
+    /// The canonical 19 origins and seven distal/contact points.
+    pub fn keypoints(&self, sk: &Skeleton) -> Vec<V3> {
+        let mut out = self.positions.clone();
+        for (segment, contact) in [
+            (4, None),
+            (8, None),
+            (12, None),
+            (15, Some(1)),
+            (18, Some(1)),
+            (15, Some(0)),
+            (18, Some(0)),
+        ] {
+            let def = &sk.segments[segment];
+            let offset = contact
+                .and_then(|i| def.contact_points.get(i))
+                .unwrap_or(&def.tail);
+            out.push(self.positions[segment] + self.rotations[segment] * offset);
+        }
+        out
+    }
 }
 
 fn set(sk: &Skeleton, world: &mut [Option<Rot>], id: &str, r: Rot) {
@@ -34,8 +57,9 @@ fn arm(left: bool, elevation: f64) -> Rot {
 /// World rotations of the explicitly animated segments; the rest follow their parent.
 fn animate(sk: &Skeleton, motion: Motion, a: &ScriptedAngles) -> Vec<Rot> {
     let mut w: Vec<Option<Rot>> = vec![None; sk.len()];
-    let pelvis = rot_x(a.pelvis_tilt);
-    let chest = rot_x(a.trunk_lean);
+    let heading = rot_y(a.pelvis_yaw);
+    let pelvis = heading * rot_x(a.pelvis_tilt);
+    let chest = heading * rot_x(a.trunk_lean);
     set(sk, &mut w, "pelvis", pelvis);
     set(sk, &mut w, "spine", pelvis.slerp(&chest, 0.5));
     set(sk, &mut w, "chest", chest);
@@ -57,8 +81,23 @@ fn animate(sk: &Skeleton, motion: Motion, a: &ScriptedAngles) -> Vec<Rot> {
     ] {
         // Thigh forward angle from vertical in world, and shin = thigh flexed back by the knee.
         let thigh_fwd = hip - a.pelvis_tilt;
-        set(sk, &mut w, &format!("{side}_thigh"), rot_x(-thigh_fwd));
-        set(sk, &mut w, &format!("{side}_shin"), rot_x(knee - thigh_fwd));
+        let plane = if side == "right" {
+            rot_y(a.kick_plane_yaw)
+        } else {
+            Rot::identity()
+        };
+        set(
+            sk,
+            &mut w,
+            &format!("{side}_thigh"),
+            heading * plane * rot_x(-thigh_fwd) * plane.inverse(),
+        );
+        set(
+            sk,
+            &mut w,
+            &format!("{side}_shin"),
+            heading * plane * rot_x(knee - thigh_fwd) * plane.inverse(),
+        );
         if motion == Motion::Squat {
             set(sk, &mut w, &format!("{side}_foot"), Rot::identity());
         }

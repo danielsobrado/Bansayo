@@ -84,7 +84,11 @@ impl SimulatedSource {
                 model: Some("Simulated IMU".into()),
                 firmware: None,
                 transport: Transport::Simulated,
-                capabilities: vec![SensorCapability::Orientation, SensorCapability::Quality],
+                capabilities: vec![
+                    SensorCapability::Orientation,
+                    SensorCapability::AngularVelocity,
+                    SensorCapability::Quality,
+                ],
                 nominal_rate_hz: Some(t.rate_hz as f32),
                 camera: None,
             })
@@ -100,7 +104,13 @@ impl SimulatedSource {
                 nominal_rate_hz: Some(c.rate_hz as f32),
                 camera: Some(CameraInfo {
                     resolution_px: c.resolution_px,
-                    landmark_schema: Some(self.skeleton.landmark_schema()),
+                    landmark_schema: Some(
+                        if self.spec.landmark_schema == BODY_KEYPOINT_SCHEMA_ID {
+                            self.skeleton.keypoint_schema()
+                        } else {
+                            self.skeleton.landmark_schema()
+                        },
+                    ),
                 }),
             }))
             .collect()
@@ -141,6 +151,7 @@ struct DeviceSlot {
     seq: u64,
     next_due_us: u64,
     time: crate::clock::SourceTime,
+    previous_rotation: Option<(crate::math::Rot, u64)>,
     connected: Option<bool>,
     fault: FaultSetting,
     kind: DeviceKindState,
@@ -170,6 +181,7 @@ impl Scheduler {
                 seq: 0,
                 next_due_us: 0,
                 time: Default::default(),
+                previous_rotation: None,
                 connected: None,
                 fault: FaultSetting::default(),
                 kind: DeviceKindState::Tracker {
@@ -185,6 +197,7 @@ impl Scheduler {
                 seq: 0,
                 next_due_us: 0,
                 time: Default::default(),
+                previous_rotation: None,
                 connected: None,
                 fault: FaultSetting::default(),
                 kind: DeviceKindState::Camera { spec_index },
@@ -354,6 +367,41 @@ impl Scheduler {
                         .get(&slot.id)
                         .and_then(|s| self.skeleton.index_of(s))
                         .unwrap_or(0);
+                    let rotation = pose.rotations[index];
+                    let rate = slot
+                        .previous_rotation
+                        .filter(|(_, t)| now_us > *t)
+                        .map_or_else(crate::math::V3::zeros, |(previous, t)| {
+                            let world_rate = (rotation * previous.inverse()).scaled_axis()
+                                / ((now_us - t) as f64 / 1e6);
+                            trackers::mounting(&slot.id, self.spec.seed)
+                                * rotation.inverse()
+                                * world_rate
+                        });
+                    slot.previous_rotation = Some((rotation, now_us));
+                    emit(
+                        &slot.id,
+                        SourceEvent::Observation {
+                            observation: SensorObservation {
+                                device_id: slot.id.clone(),
+                                source_id: self.spec.id.clone(),
+                                origin: Origin::Simulated,
+                                seq: slot.seq,
+                                t_us,
+                                device_time_us: Some(now_us),
+                                time_quality,
+                                calibration_ref: None,
+                                confidence: Some(slot.fault.quality),
+                                data: ObservationData::AngularVelocity {
+                                    frame: FrameRef::Sensor {
+                                        id: slot.id.clone(),
+                                    },
+                                    rad_s: crate::math::v3_to_wire(&rate),
+                                },
+                            },
+                        },
+                    );
+                    metrics.emitted_observations += 1;
                     let q = trackers::reading(
                         &slot.id,
                         self.spec.seed,
@@ -384,8 +432,13 @@ impl Scheduler {
                 }
                 DeviceKindState::Camera { spec_index } => {
                     let camera = &self.spec.cameras[spec_index];
+                    let points = if self.spec.landmark_schema == BODY_KEYPOINT_SCHEMA_ID {
+                        pose.keypoints(&self.skeleton)
+                    } else {
+                        pose.positions.clone()
+                    };
                     let landmarks =
-                        camera::project(camera, self.spec.seed, slot.seq, t_us, &pose.positions);
+                        camera::project(camera, self.spec.seed, slot.seq, t_us, &points);
                     let mut landmarks = landmarks;
                     landmarks.frame_meta.time_quality = time_quality;
                     SourceEvent::Observation {

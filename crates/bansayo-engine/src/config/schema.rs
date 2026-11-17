@@ -204,6 +204,8 @@ pub struct DesignedSourceConfig {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct SimulatedSourceConfig {
+    #[serde(default = "simulated_schema_default")]
+    pub landmark_schema: String,
     pub id: String,
     #[serde(default = "enabled_default")]
     pub enabled: bool,
@@ -349,4 +351,8 @@ impl Default for EvidenceConfig {
 #[serde(deny_unknown_fields, default)]
 pub struct TrackingConfig {
     pub profile_override: Option<bansayo_contracts::CapabilityProfileId>,
+}
+
+fn simulated_schema_default() -> String {
+    crate::skeleton::proportions::LANDMARK_SCHEMA_ID.into()
 }

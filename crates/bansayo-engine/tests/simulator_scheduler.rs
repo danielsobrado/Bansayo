@@ -45,6 +45,7 @@ fn camera_spec(id: &str, rate_hz: f64) -> CameraSpec {
 
 fn spec(trackers: Vec<TrackerSpec>, cameras: Vec<CameraSpec>) -> SimulatedSpec {
     SimulatedSpec {
+        landmark_schema: bansayo_engine::skeleton::proportions::LANDMARK_SCHEMA_ID.into(),
         id: SourceId::new("sim").unwrap(),
         seed: 42,
         motion: Motion::Squat,
@@ -120,7 +121,18 @@ fn drain(rx: &mut mpsc::Receiver<Ingest>) -> Vec<SourceEvent> {
     let mut out = vec![];
     while let Ok(item) = rx.try_recv() {
         if let Ingest::Event(ev) = item {
-            out.push(ev);
+            // These cadence tests inspect the original primary streams. Gyro cadence has its own regression.
+            if !matches!(
+                &ev,
+                SourceEvent::Observation {
+                    observation: SensorObservation {
+                        data: ObservationData::AngularVelocity { .. },
+                        ..
+                    }
+                }
+            ) {
+                out.push(ev);
+            }
         }
     }
     out
@@ -164,7 +176,7 @@ fn idle_wakeups_skip_body_pose_and_shared_instants_reuse_pose() {
         default_control(Motion::Squat),
     );
     let m0 = mixed.step(0, &assignments, &faults, |_, _| {});
-    assert_eq!(m0.emitted_observations, 16);
+    assert_eq!(m0.emitted_observations, 28);
     assert_eq!(m0.body_pose_evals, 1);
     assert_eq!(mixed.next_deadline_us(), Some(10_000));
 
@@ -204,14 +216,14 @@ fn delayed_wakeup_recovers_with_single_observation_and_no_burst() {
         sched
             .step(0, &assignments, &faults, |_, _| {})
             .emitted_observations,
-        1
+        2
     );
     assert_eq!(sched.next_deadline_us(), Some(10_000));
     assert_eq!(
         sched
             .step(10_000, &assignments, &faults, |_, _| {})
             .emitted_observations,
-        1
+        2
     );
     assert_eq!(sched.next_deadline_us(), Some(20_000));
 
@@ -219,10 +231,12 @@ fn delayed_wakeup_recovers_with_single_observation_and_no_burst() {
     let mut seqs = vec![];
     let stalled = sched.step(520_000, &assignments, &faults, |_, ev| {
         if let SourceEvent::Observation { observation } = ev {
-            seqs.push((observation.seq, observation.t_us));
+            if matches!(observation.data, ObservationData::Orientation { .. }) {
+                seqs.push((observation.seq, observation.t_us));
+            }
         }
     });
-    assert_eq!(stalled.emitted_observations, 1);
+    assert_eq!(stalled.emitted_observations, 2);
     assert_eq!(seqs, vec![(3, 520_000)]);
     assert_eq!(sched.next_deadline_us(), Some(530_000));
 
@@ -231,7 +245,7 @@ fn delayed_wakeup_recovers_with_single_observation_and_no_burst() {
         sched
             .step(530_000, &assignments, &faults, |_, _| {})
             .emitted_observations,
-        1
+        2
     );
     assert_eq!(sched.next_deadline_us(), Some(540_000));
 }
@@ -454,6 +468,7 @@ async fn reconnect_after_simulated_disconnection_and_scripted_scenario() {
 
     // Scripted scenario that disconnects at 0.0 s and reconnects at 0.1 s wakes on schedule.
     let scripted_spec = SimulatedSpec {
+        landmark_schema: bansayo_engine::skeleton::proportions::LANDMARK_SCHEMA_ID.into(),
         scenario_period_s: None,
         scenario: vec![
             config::ScenarioStep {

@@ -62,6 +62,7 @@ fn rig(positions: &[[f64; 3]], noise_px: f64, tracker: bool) -> Rig {
     let t1 = DeviceId::new("T1").unwrap();
     let source = SimulatedSource {
         spec: SimulatedSpec {
+            landmark_schema: bansayo_engine::skeleton::proportions::LANDMARK_SCHEMA_ID.into(),
             id: SourceId::new("sim").unwrap(),
             seed: SEED,
             motion: Motion::Standing,

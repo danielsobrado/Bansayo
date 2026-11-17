@@ -58,7 +58,11 @@ pub fn project(
         },
         frame: FrameRef::Image { id: c.id.clone() },
         origin: Origin::Simulated,
-        schema_id: LANDMARK_SCHEMA_ID.into(),
+        schema_id: if positions.len() == 26 {
+            BODY_KEYPOINT_SCHEMA_ID.into()
+        } else {
+            LANDMARK_SCHEMA_ID.into()
+        },
         detector: "simulated-projection".into(),
         points,
     }

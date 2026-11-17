@@ -359,6 +359,7 @@ pub fn simulation() -> SimulationState {
         ("knee_flexion", "Knee flexion"),
         ("arm_raise", "Arm raise"),
         ("front_kick", "Front kick"),
+        ("roundhouse_kick", "Roundhouse kick"),
     ];
     SimulationState {
         source_id: src("sim"),
