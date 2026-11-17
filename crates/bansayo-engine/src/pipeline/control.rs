@@ -301,10 +301,11 @@ impl Runtime {
                         reply,
                     ));
                 }
-                if let Some(position) = request.position_us
-                    && let Err(e) = replay.seek(position)
-                {
-                    return Err((unavailable(e), reply));
+                if let Some(position) = request.position_us {
+                    if let Err(e) = replay.seek(position) {
+                        return Err((unavailable(e), reply));
+                    }
+                    self.last_landmarks_3d_us = None;
                 }
                 if let Some(speed) = request.speed {
                     replay.speed = speed;
@@ -327,6 +328,7 @@ impl Runtime {
                         reply,
                     ));
                 }
+                self.last_landmarks_3d_us = None;
                 for control in &engine.controls {
                     control.send_modify(|c| c.suspended = false);
                 }
@@ -408,6 +410,7 @@ impl Runtime {
                     let data = json!(replay.state());
                     let messages = replay.advance(0).map_err(unavailable)?;
                     self.replay = Some(replay);
+                    self.last_landmarks_3d_us = None;
                     for control in &engine.controls {
                         control.send_modify(|c| c.suspended = true);
                     }
