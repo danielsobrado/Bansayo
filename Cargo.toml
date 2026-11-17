@@ -41,3 +41,13 @@ rusqlite = { version = "0.37", features = ["bundled"] }
 ort = { version = "=2.0.0-rc.15", default-features = false, features = ["std", "load-dynamic", "api-24"] }
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 nokhwa = { version = "0.10", default-features = false, features = ["input-msmf"] }
+
+# Parallel builds on Windows: with full debug info the engine library was ~460 MB (most of it
+# debug info for dependency code instantiated inside it), and 24 test binaries linking it at once
+# exhausted memory (LNK1102, then "can't find crate"). Line tables keep file and line numbers in
+# backtraces; set `CARGO_PROFILE_DEV_DEBUG=full` for a debugger session that inspects variables.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
