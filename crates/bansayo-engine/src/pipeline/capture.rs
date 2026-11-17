@@ -119,3 +119,42 @@ pub(super) fn profiles(
     }
     Ok(out)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::calibration::mounting::CAPTURE_WINDOW_US;
+    #[test]
+    fn queued_samples_before_capture_never_enter_the_mounting_window() {
+        let id = DeviceId::new("T1").unwrap();
+        let (reply, _) = oneshot::channel();
+        let mut capture = Capture {
+            until: 1_000 + CAPTURE_WINDOW_US,
+            targets: BTreeMap::from([(id.clone(), (SegmentId::new("pelvis").unwrap(), vec![]))]),
+            reply,
+        };
+        let mut o = SensorObservation {
+            device_id: id.clone(),
+            source_id: SourceId::new("sim").unwrap(),
+            origin: Origin::Simulated,
+            seq: 1,
+            t_us: 999,
+            device_time_us: None,
+            time_quality: TimeQuality::ReceiveTime,
+            calibration_ref: None,
+            confidence: Some(1.0),
+            data: ObservationData::Orientation {
+                frame: FrameRef::SensorReference { id: id.clone() },
+                q: [0.0, 0.0, 0.0, 1.0],
+            },
+        };
+        capture.observe(&o);
+        assert!(capture.targets[&id].1.is_empty());
+        o.t_us = 1_000;
+        capture.observe(&o);
+        assert_eq!(capture.targets[&id].1.len(), 1);
+        o.t_us = capture.until + 1;
+        capture.observe(&o);
+        assert_eq!(capture.targets[&id].1.len(), 1);
+    }
+}
