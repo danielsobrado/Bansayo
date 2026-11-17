@@ -82,9 +82,10 @@ pub fn solve(
         }
     }
     let landmarks_3d = triangulate(registry, store, now, stale_us, &config.triangulation);
-    // Camera-only mode: with no IMU-observed segment, the skeleton is fitted to the landmarks.
-    // shortcut: cameras never fill segments IMUs miss; mixing assumes calibrated IMU heading.
-    let camera_fit = (!observed.iter().any(|o| *o))
+    // Camera-only mode: with no orientation trackers configured, the skeleton is fitted to the
+    // landmarks. With trackers, uncalibrated ones still give the inferred rest skeleton.
+    // shortcut: cameras never fill segments IMUs miss; mixing needs calibrated IMU heading.
+    let camera_fit = (!has_trackers)
         .then(|| landmarks_3d.as_ref().and_then(|l| fit(sk, l)))
         .flatten();
     if let Some(f) = &camera_fit {
