@@ -1,4 +1,5 @@
 //! Independent source tasks. Ingest drops newest at capacity; counters remain observable.
+pub mod camera;
 pub mod simulated;
 pub mod supervision;
 pub mod validation;
