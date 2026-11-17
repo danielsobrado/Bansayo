@@ -5,7 +5,7 @@ use nalgebra::{Matrix3, UnitQuaternion as Q, Vector3 as V};
 #[test]
 fn forward_trunk_lean_is_positive_and_follows_the_pelvis_sagittal_plane() {
     let pelvis = Q::identity();
-    let forward = Q::from_euler_angles(-0.3, 0.0, 0.0);
+    let forward = Q::from_euler_angles(0.3, 0.0, 0.0);
     assert!((trunk_forward_lean(&pelvis, &forward).unwrap() - 0.3).abs() < 1e-12);
     let heading = Q::from_axis_angle(&V::y_axis(), 1.2);
     assert!((trunk_forward_lean(&heading, &(heading * forward)).unwrap() - 0.3).abs() < 1e-12);

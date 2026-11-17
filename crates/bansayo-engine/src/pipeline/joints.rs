@@ -1,10 +1,11 @@
 //! Pure measurements. Inferred segment rotations never produce a numeric joint value.
 use crate::{
-    math::{Rot, V3, angle_between},
+    math::Rot,
     registry::reason,
     skeleton::{Skeleton, proportions::JointKind},
 };
 use bansayo_contracts::*;
+use bansayo_training::observables::angles;
 pub fn measure(sk: &Skeleton, rotations: &[Rot], observed: &[bool]) -> Vec<JointMeasurement> {
     sk.joints
         .iter()
@@ -30,26 +31,35 @@ pub fn measure(sk: &Skeleton, rotations: &[Rot], observed: &[bool]) -> Vec<Joint
             let a = rotations[j.a];
             let b = rotations[j.b];
             let value = match j.kind {
-                JointKind::LongAxes => {
-                    angle_between(&(a * sk.segments[j.a].tail), &(b * sk.segments[j.b].tail))
-                }
+                JointKind::LongAxes => Some(angles::axis_angle(
+                    &a,
+                    &sk.segments[j.a].tail,
+                    &b,
+                    &sk.segments[j.b].tail,
+                )),
                 JointKind::FromDownAxis => {
-                    angle_between(&(a * (-V3::y())), &(b * sk.segments[j.b].tail))
+                    Some(angles::from_down_axis(&a, &b, &sk.segments[j.b].tail))
                 }
-                JointKind::SagittalFromDown => {
-                    let d = a.inverse() * (b * (-V3::y()));
-                    d.z.atan2(-d.y)
-                }
-                JointKind::TrunkLean => {
-                    let d = b * V3::y();
-                    (-d.z).atan2(d.y)
-                }
+                JointKind::SagittalFromDown => Some(angles::hip_flexion(&a, &b)),
+                JointKind::TrunkLean => angles::trunk_forward_lean(&a, &b),
             };
             JointMeasurement {
-                value: Some(value as f32),
-                provenance: Provenance::Derived,
+                value: value.map(|v| v as f32),
+                provenance: if value.is_some() {
+                    Provenance::Derived
+                } else {
+                    Provenance::Unavailable
+                },
                 confidence: None,
-                reasons: vec![],
+                reasons: if value.is_some() {
+                    vec![]
+                } else {
+                    vec![reason(
+                        "out_of_plane",
+                        None,
+                        "Chest axis has too little projection in the pelvis sagittal plane.",
+                    )]
+                },
             }
         })
         .collect()

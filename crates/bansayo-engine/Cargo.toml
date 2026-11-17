@@ -8,6 +8,7 @@ rust-version.workspace = true
 
 [dependencies]
 bansayo-contracts.workspace = true
+bansayo-training.workspace = true
 mcap.workspace = true
 bytes.workspace = true
 axum.workspace = true

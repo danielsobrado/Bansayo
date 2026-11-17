@@ -14,6 +14,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 ts-rs = "12"
 bansayo-contracts = { path = "crates/bansayo-contracts" }
+bansayo-training = { path = "crates/bansayo-training" }
 axum = { version = "0.8", features = ["ws"] }
 clap = { version = "4", features = ["derive"] }
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
