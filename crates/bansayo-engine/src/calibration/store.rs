@@ -109,14 +109,42 @@ impl Store {
         }
     }
 }
-pub(crate) fn valid_profile(p: &CalibrationProfile) -> bool {
+pub fn valid_profile(p: &CalibrationProfile) -> bool {
+    use crate::pipeline::triangulate::{extrinsics_valid, intrinsics_valid};
+    let data = || serde_json::Value::Object(p.data.clone());
     p.schema_version == CALIBRATION_PROFILE_SCHEMA_VERSION
-        && p.kind == CalibrationKind::Mounting
         && p.subject.device_id.is_some()
-        && p.subject.segment_id.is_some()
-        && serde_json::from_value::<MountingData>(p.data.clone().into())
-            .ok()
-            .is_some_and(|d| rot_from_wire(d.q_sensor_from_segment).is_some())
+        && match p.kind {
+            CalibrationKind::Mounting => {
+                p.subject.segment_id.is_some()
+                    && serde_json::from_value::<MountingData>(data())
+                        .ok()
+                        .is_some_and(|d| rot_from_wire(d.q_sensor_from_segment).is_some())
+            }
+            CalibrationKind::CameraIntrinsics => {
+                p.subject.segment_id.is_none()
+                    && serde_json::from_value::<CameraIntrinsicsData>(data())
+                        .ok()
+                        .is_some_and(|k| intrinsics_valid(&k) && !k.image_size_px.contains(&0))
+            }
+            CalibrationKind::CameraExtrinsics => {
+                p.subject.segment_id.is_none()
+                    && serde_json::from_value::<CameraExtrinsicsData>(data())
+                        .ok()
+                        .is_some_and(|e| extrinsics_valid(&e))
+            }
+            _ => false,
+        }
+}
+
+/// Canonical id of a camera profile; one profile per kind and camera, so a new one replaces it.
+pub fn camera_profile_id(kind: CalibrationKind, device: &DeviceId) -> Option<ProfileId> {
+    let name = match kind {
+        CalibrationKind::CameraIntrinsics => "intrinsics",
+        CalibrationKind::CameraExtrinsics => "extrinsics",
+        _ => return None,
+    };
+    ProfileId::new(format!("camera-{name}-{device}")).ok()
 }
 pub(crate) struct LegacyProfiles {
     pub valid: Vec<(PathBuf, CalibrationProfile)>,

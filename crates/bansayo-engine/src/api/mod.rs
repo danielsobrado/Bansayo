@@ -32,6 +32,7 @@ pub fn router(api: Api) -> Router {
         .route("/api/v1/skeleton", get(skeleton))
         .route("/api/v1/simulation", put(simulation))
         .route("/api/v1/calibration/reference-pose", post(capture))
+        .route("/api/v1/calibration/profiles", post(import_profiles))
         .route("/api/v1/stream", get(ws::upgrade))
         .route("/api/v1/cameras/{id}/preview.jpg", get(preview))
         .route("/api/v1/devices/{id}/assignment", put(control::assignment))
@@ -119,6 +120,21 @@ async fn preview(
             ApiErrorCode::NotFound,
             "No preview: the device is not a physical camera or has not delivered a frame yet.",
         ),
+    }
+}
+async fn import_profiles(
+    State(api): State<Api>,
+    body: Result<Json<Vec<CalibrationProfile>>, JsonRejection>,
+) -> Response {
+    let Ok(Json(profiles)) = body else {
+        return failure(
+            ApiErrorCode::InvalidRequest,
+            "Provide a JSON array of camera calibration profiles.",
+        );
+    };
+    match api.client.import(profiles).await {
+        Ok(data) => Json(ApiResponse::ok(data)).into_response(),
+        Err(e) => control_error(e),
     }
 }
 pub fn failure(code: ApiErrorCode, message: &str) -> Response {

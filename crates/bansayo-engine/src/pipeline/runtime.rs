@@ -258,6 +258,26 @@ impl Runtime {
                         }
                     }
                 }
+                Event::Command(Some(Command::Import(profiles, reply))) => {
+                    if self.replay.is_some() {
+                        let _ = reply.send(Err(ControlError::new(
+                            ApiErrorCode::Conflict,
+                            "Calibration import is unavailable during playback.",
+                        )));
+                    } else if self.capture.is_some() || self.busy {
+                        let _ = reply.send(Err(ControlError::new(
+                            ApiErrorCode::Conflict,
+                            "Another operation is still running.",
+                        )));
+                    } else {
+                        match check_import(&engine, &profiles) {
+                            Err(e) => {
+                                let _ = reply.send(Err(e));
+                            }
+                            Ok(()) => self.save_profiles(&engine, profiles, reply),
+                        }
+                    }
+                }
                 Event::Command(Some(Command::Saved(profiles, result, reply))) => {
                     self.busy = false;
                     match result {
@@ -391,7 +411,7 @@ impl Runtime {
                         "Engine is shutting down.",
                     )));
                 }
-                Command::Capture(_, reply) => {
+                Command::Capture(_, reply) | Command::Import(_, reply) => {
                     let _ = reply.send(Err(ControlError::new(
                         ApiErrorCode::Unavailable,
                         "Engine is shutting down.",
@@ -486,39 +506,106 @@ impl Runtime {
             Err(e) => {
                 let _ = c.reply.send(Err(e));
             }
-            Ok(profiles) => {
-                self.busy = true;
-                let dir = engine.config.config.engine.data_dir.clone();
-                let mut stale = engine.store.stale.clone();
-                let mut next_profiles = engine.store.profiles.clone();
-                for p in &profiles {
-                    stale.remove(&p.id);
-                    next_profiles.insert(p.id.clone(), p.clone());
-                }
-                let snapshot =
-                    engine.snapshot_with(&engine.registry.assignments, &stale, &next_profiles);
-                let ids: Vec<ProfileId> = profiles.iter().map(|p| p.id.clone()).collect();
-                let tx = self.commands.clone();
-                tokio::spawn(async move {
-                    let result = tokio::task::spawn_blocking(move || {
-                        save_runtime_snapshot(&dir, &snapshot)?;
-                        for id in &ids {
-                            if let Err(error) = remove_legacy_profile_file(&dir, id) {
-                                tracing::warn!(
-                                    profile=%id,
-                                    %error,
-                                    "Calibration committed, but legacy file could not be removed"
-                                );
-                            }
-                        }
-                        Ok::<(), std::io::Error>(())
-                    })
-                    .await
-                    .map_err(|e| e.to_string())
-                    .and_then(|r| r.map_err(|e| e.to_string()));
-                    let _ = tx.send(Command::Saved(profiles, result, c.reply)).await;
-                });
-            }
+            Ok(profiles) => self.save_profiles(engine, profiles, c.reply),
         }
     }
+    /// Commits profiles to the runtime snapshot off the loop; `Command::Saved` applies them.
+    fn save_profiles(
+        &mut self,
+        engine: &Runner,
+        profiles: Vec<CalibrationProfile>,
+        reply: tokio::sync::oneshot::Sender<Result<Vec<CalibrationProfileSummary>, ControlError>>,
+    ) {
+        self.busy = true;
+        let dir = engine.config.config.engine.data_dir.clone();
+        let mut stale = engine.store.stale.clone();
+        let mut next_profiles = engine.store.profiles.clone();
+        for p in &profiles {
+            stale.remove(&p.id);
+            next_profiles.insert(p.id.clone(), p.clone());
+        }
+        let snapshot = engine.snapshot_with(&engine.registry.assignments, &stale, &next_profiles);
+        let ids: Vec<ProfileId> = profiles.iter().map(|p| p.id.clone()).collect();
+        let tx = self.commands.clone();
+        tokio::spawn(async move {
+            let result = tokio::task::spawn_blocking(move || {
+                save_runtime_snapshot(&dir, &snapshot)?;
+                for id in &ids {
+                    if let Err(error) = remove_legacy_profile_file(&dir, id) {
+                        tracing::warn!(
+                            profile=%id,
+                            %error,
+                            "Calibration committed, but legacy file could not be removed"
+                        );
+                    }
+                }
+                Ok::<(), std::io::Error>(())
+            })
+            .await
+            .map_err(|e| e.to_string())
+            .and_then(|r| r.map_err(|e| e.to_string()));
+            let _ = tx.send(Command::Saved(profiles, result, reply)).await;
+        });
+    }
+}
+
+/// An import must name known cameras with canonical ids and valid data, and may not leave a
+/// camera's extrinsics paired with intrinsics they were not computed with.
+fn check_import(engine: &Runner, profiles: &[CalibrationProfile]) -> Result<(), ControlError> {
+    let bad = |m: String| Err(ControlError::new(ApiErrorCode::InvalidRequest, m));
+    if profiles.is_empty() {
+        return bad("Provide at least one camera calibration profile.".into());
+    }
+    for p in profiles {
+        let Some(device) = p.subject.device_id.as_ref() else {
+            return bad(format!("{} has no subject device.", p.id));
+        };
+        let camera = engine
+            .registry
+            .entries
+            .get(device)
+            .is_some_and(|e| e.descriptor.kind == DeviceKind::Camera);
+        if !camera {
+            return bad(format!("{device} is not a configured camera."));
+        }
+        if calibration::camera_profile_id(p.kind, device).as_ref() != Some(&p.id) {
+            return bad(format!(
+                "{} must be camera_intrinsics or camera_extrinsics with id camera-<intrinsics|extrinsics>-{device}.",
+                p.id
+            ));
+        }
+        if !calibration::valid_profile(p) {
+            return bad(format!("{} has invalid or non-finite camera data.", p.id));
+        }
+        if profiles.iter().filter(|q| q.id == p.id).count() > 1 {
+            return bad(format!("{} appears twice.", p.id));
+        }
+        let paired = |kind| {
+            profiles
+                .iter()
+                .any(|q| q.kind == kind && q.subject.device_id.as_ref() == Some(device))
+                || engine.store.camera_ref(kind, device).state == CalibrationState::Valid
+        };
+        let new_extrinsics = profiles.iter().any(|q| {
+            q.kind == CalibrationKind::CameraExtrinsics
+                && q.subject.device_id.as_ref() == Some(device)
+        });
+        if p.kind == CalibrationKind::CameraIntrinsics
+            && !new_extrinsics
+            && engine
+                .store
+                .camera_ref(CalibrationKind::CameraExtrinsics, device)
+                .state
+                != CalibrationState::Missing
+        {
+            return bad(format!(
+                "New intrinsics for {device} need new extrinsics too: the existing ones were solved with the old intrinsics."
+            ));
+        }
+        if p.kind == CalibrationKind::CameraExtrinsics && !paired(CalibrationKind::CameraIntrinsics)
+        {
+            return bad(format!("Extrinsics for {device} need its intrinsics."));
+        }
+    }
+    Ok(())
 }

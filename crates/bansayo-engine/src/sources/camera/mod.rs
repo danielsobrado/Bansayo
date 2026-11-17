@@ -119,7 +119,19 @@ impl Source for CameraSource {
             std::thread::Builder::new()
                 .name(format!("pose-{}", self.spec.id))
                 .spawn(move || {
-                    if let Err(e) = inference_loop(&source, &slots, &stop, &context) {
+                    // ONNX Runtime loading panics when its library is missing; report it instead.
+                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        inference_loop(&source, &slots, &stop, &context)
+                    }))
+                    .unwrap_or_else(|panic| {
+                        Err(panic
+                            .downcast_ref::<String>()
+                            .cloned()
+                            .or_else(|| panic.downcast_ref::<&str>().map(|s| s.to_string()))
+                            .map(|m| format!("{m} (see models/README.md)"))
+                            .unwrap_or_else(|| "pose inference panicked".into()))
+                    });
+                    if let Err(e) = result {
                         let _ = fatal_tx.send(e);
                     }
                 })

@@ -49,6 +49,11 @@ pub enum Command {
         ReferencePoseRequest,
         oneshot::Sender<Result<Vec<CalibrationProfileSummary>, ControlError>>,
     ),
+    /// Camera intrinsics/extrinsics computed outside the engine (scripts/calibrate_cameras.py).
+    Import(
+        Vec<CalibrationProfile>,
+        oneshot::Sender<Result<Vec<CalibrationProfileSummary>, ControlError>>,
+    ),
     Saved(
         Vec<CalibrationProfile>,
         Result<(), String>,
@@ -90,6 +95,19 @@ impl Client {
         let (tx, rx) = oneshot::channel();
         self.commands
             .send(Command::Capture(request, tx))
+            .await
+            .map_err(|_| unavailable())?;
+        rx.await.map_err(|_| unavailable())?
+    }
+}
+impl Client {
+    pub async fn import(
+        &self,
+        profiles: Vec<CalibrationProfile>,
+    ) -> Result<Vec<CalibrationProfileSummary>, ControlError> {
+        let (tx, rx) = oneshot::channel();
+        self.commands
+            .send(Command::Import(profiles, tx))
             .await
             .map_err(|_| unavailable())?;
         rx.await.map_err(|_| unavailable())?
