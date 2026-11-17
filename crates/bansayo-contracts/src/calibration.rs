@@ -10,7 +10,7 @@ use crate::{DeviceId, Origin, ProfileId, Quat, SegmentId, Vec3};
 pub const CALIBRATION_PROFILE_SCHEMA_VERSION: u32 = 1;
 
 /// What a calibration profile calibrates.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum CalibrationKind {
     ImuBias,
