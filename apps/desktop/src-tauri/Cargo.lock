@@ -245,6 +245,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "bansayo-contracts",
+ "bansayo-training",
  "bytes",
  "clap",
  "futures-util",
@@ -264,6 +265,14 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "bansayo-training"
+version = "0.1.0"
+dependencies = [
+ "bansayo-contracts",
+ "nalgebra",
 ]
 
 [[package]]

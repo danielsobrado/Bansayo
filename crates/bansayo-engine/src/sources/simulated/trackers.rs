@@ -28,6 +28,14 @@ pub fn reading(
     rot_to_wire(&(noise * yaw_deg(-heading) * world * mount.inverse()))
 }
 
+pub(super) fn mounting(id: &DeviceId, seed: u64) -> Rot {
+    Rot::from_euler_angles(
+        sample(id, seed, 0, 1) * 2.0,
+        sample(id, seed, 0, 2) * 2.0,
+        sample(id, seed, 0, 3) * 2.0,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -55,12 +63,4 @@ mod tests {
             reading(&id, 43, 10, 0.2, 0.0, Rot::identity())
         );
     }
-}
-
-pub(super) fn mounting(id: &DeviceId, seed: u64) -> Rot {
-    Rot::from_euler_angles(
-        sample(id, seed, 0, 1) * 2.0,
-        sample(id, seed, 0, 2) * 2.0,
-        sample(id, seed, 0, 3) * 2.0,
-    )
 }

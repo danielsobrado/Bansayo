@@ -230,10 +230,10 @@ fn delayed_wakeup_recovers_with_single_observation_and_no_burst() {
     // Simulate a 500 ms scheduling stall: emit exactly 1 observation, never 50 overdue ones.
     let mut seqs = vec![];
     let stalled = sched.step(520_000, &assignments, &faults, |_, ev| {
-        if let SourceEvent::Observation { observation } = ev {
-            if matches!(observation.data, ObservationData::Orientation { .. }) {
-                seqs.push((observation.seq, observation.t_us));
-            }
+        if let SourceEvent::Observation { observation } = ev
+            && matches!(observation.data, ObservationData::Orientation { .. })
+        {
+            seqs.push((observation.seq, observation.t_us));
         }
     });
     assert_eq!(stalled.emitted_observations, 2);
