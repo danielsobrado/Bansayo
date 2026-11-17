@@ -6,7 +6,7 @@
  * The camera frame is `FrameRef::Camera`: +X right, +Y down, +Z along the optical axis.
  * `p_world = q_world_from_camera * p_camera + t_world_from_camera_m`.
  */
-export type CameraExtrinsicsData = { q_world_from_camera: [number, number, number, number], 
+export type CameraExtrinsicsData = { q_world_from_camera: [number, number, number, number],
 /**
  * Camera optical centre in world, metres.
  */

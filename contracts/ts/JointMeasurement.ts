@@ -5,7 +5,7 @@ import type { Reason } from "./Reason";
 /**
  * One joint measurement, index-aligned with `SkeletonDefinition.joints`.
  */
-export type JointMeasurement = { 
+export type JointMeasurement = {
 /**
  * In `JointDef.unit`; `null` when unavailable.
  */

@@ -3,11 +3,11 @@
 /**
  * `data` of a `camera_intrinsics` profile: pinhole model with Brown-Conrady distortion.
  */
-export type CameraIntrinsicsData = { 
+export type CameraIntrinsicsData = {
 /**
  * Image width and height the intrinsics were calibrated at, pixels.
  */
-image_size_px: [number, number], fx_px: number, fy_px: number, cx_px: number, cy_px: number, 
+image_size_px: [number, number], fx_px: number, fy_px: number, cx_px: number, cy_px: number,
 /**
  * `[k1, k2, p1, p2, k3]` (OpenCV order); all zero for an ideal pinhole.
  */

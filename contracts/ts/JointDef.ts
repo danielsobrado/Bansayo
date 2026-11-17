@@ -6,11 +6,11 @@ import type { SegmentId } from "./SegmentId";
 /**
  * A joint measurement computed by the engine from two segments.
  */
-export type JointDef = { 
+export type JointDef = {
 /**
  * e.g. `left_knee_flexion`.
  */
-id: string, label: string, segments: [SegmentId, SegmentId], method: JointMethod, unit: AngleUnit, 
+id: string, label: string, segments: [SegmentId, SegmentId], method: JointMethod, unit: AngleUnit,
 /**
  * Whether the definition has been validated against a reference.
  */

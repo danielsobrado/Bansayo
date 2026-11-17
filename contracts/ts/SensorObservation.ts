@@ -9,23 +9,23 @@ import type { TimeQuality } from "./TimeQuality";
 /**
  * One measurement from one device, with its source, time, frame and calibration made explicit.
  */
-export type SensorObservation = { device_id: DeviceId, source_id: SourceId, origin: Origin, 
+export type SensorObservation = { device_id: DeviceId, source_id: SourceId, origin: Origin,
 /**
  * Sequence number per (device, observation kind); gaps count as loss.
  */
-seq: number, 
+seq: number,
 /**
  * Capture instant, session clock.
  */
-t_us: number, 
+t_us: number,
 /**
  * Device clock, if the device has one.
  */
-device_time_us: number | null, time_quality: TimeQuality, 
+device_time_us: number | null, time_quality: TimeQuality,
 /**
  * Profile already applied by the adapter, if any.
  */
-calibration_ref: ProfileId | null, 
+calibration_ref: ProfileId | null,
 /**
  * 0..1, or `null` when nothing meaningful can be said.
  */

@@ -10,15 +10,15 @@ import type { Transport } from "./Transport";
 /**
  * Static description of a device, announced by its source.
  */
-export type DeviceDescriptor = { id: DeviceId, source_id: SourceId, kind: DeviceKind, origin: Origin, 
+export type DeviceDescriptor = { id: DeviceId, source_id: SourceId, kind: DeviceKind, origin: Origin,
 /**
  * Hardware model, e.g. `ESP32-C3 + ICM-45686`.
  */
-model: string | null, firmware: string | null, transport: Transport, capabilities: Array<SensorCapability>, 
+model: string | null, firmware: string | null, transport: Transport, capabilities: Array<SensorCapability>,
 /**
  * Nominal output rate, Hz.
  */
-nominal_rate_hz: number | null, 
+nominal_rate_hz: number | null,
 /**
  * Present for cameras.
  */

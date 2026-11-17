@@ -7,23 +7,23 @@ import type { SegmentDef } from "./SegmentDef";
  * The active skeleton. In the rest pose (T-pose facing +Z) every segment frame is aligned with
  * world axes.
  */
-export type SkeletonDefinition = { 
+export type SkeletonDefinition = {
 /**
  * e.g. `bansayo.body.v1`.
  */
-model_id: string, 
+model_id: string,
 /**
  * Increments whenever the definition or its scaling changes.
  */
-rev: number, 
+rev: number,
 /**
  * Body height the proportions are scaled by, metres.
  */
-height_m: number, 
+height_m: number,
 /**
  * `assumed` until body-proportion calibration exists.
  */
-proportions: CalibrationState, 
+proportions: CalibrationState,
 /**
  * Parents precede children.
  */

@@ -38,6 +38,13 @@ impl TypeVisitor for Collect<'_> {
         }
         let body =
             T::export_to_string(self.cfg).unwrap_or_else(|e| panic!("exporting {name}: {e}"));
+        // ts-rs emits spaces before some line breaks; keep checked-in output whitespace-clean.
+        let body = body
+            .lines()
+            .map(str::trim_end)
+            .collect::<Vec<_>>()
+            .join("\n")
+            + "\n";
         self.files.insert(name, body);
         T::visit_dependencies(self);
     }

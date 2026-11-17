@@ -8,23 +8,23 @@ import type { ProfileId } from "./ProfileId";
 /**
  * A persisted, versioned calibration result: one JSON file in `<data_dir>/calibration/`.
  */
-export type CalibrationProfile = { 
+export type CalibrationProfile = {
 /**
  * Currently 1.
  */
-schema_version: number, id: ProfileId, kind: CalibrationKind, 
+schema_version: number, id: ProfileId, kind: CalibrationKind,
 /**
  * How it was obtained, e.g. `reference_pose`.
  */
-method: string, origin: Origin, 
+method: string, origin: Origin,
 /**
  * RFC 3339 UTC creation time.
  */
-created_utc: string, subject: CalibrationSubject, depends_on: Array<CalibrationDependency>, 
+created_utc: string, subject: CalibrationSubject, depends_on: Array<CalibrationDependency>,
 /**
  * Kind-specific result, e.g. `MountingData` for `mounting`.
  */
-data: Record<string, unknown>, 
+data: Record<string, unknown>,
 /**
  * Kind-specific capture quality, e.g. `MountingQuality` for `mounting`.
  */

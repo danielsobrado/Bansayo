@@ -7,19 +7,19 @@ import type { Origin } from "./Origin";
 /**
  * Single-camera 2D landmarks in the `image` frame. Not metric.
  */
-export type PoseLandmarks2D = { frame_meta: CameraFrameMetadata, 
+export type PoseLandmarks2D = { frame_meta: CameraFrameMetadata,
 /**
  * Always `{ type: "image", id }`.
  */
-frame: FrameRef, origin: Origin, 
+frame: FrameRef, origin: Origin,
 /**
  * Matches the camera's `LandmarkSchema.id`.
  */
-schema_id: string, 
+schema_id: string,
 /**
  * e.g. `simulated-projection`.
  */
-detector: string, 
+detector: string,
 /**
  * Index-aligned with the schema; `null` means not detected.
  */

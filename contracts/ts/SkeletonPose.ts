@@ -5,15 +5,15 @@ import type { SegmentPose } from "./SegmentPose";
 /**
  * Pose of the whole skeleton at one tick.
  */
-export type SkeletonPose = { 
+export type SkeletonPose = {
 /**
  * `SkeletonDefinition.rev` this pose refers to.
  */
-skeleton_rev: number, 
+skeleton_rev: number,
 /**
  * Root segment origin in world, metres.
  */
-root_position_m: [number, number, number], root_position_provenance: Provenance, 
+root_position_m: [number, number, number], root_position_provenance: Provenance,
 /**
  * Index-aligned with `SkeletonDefinition.segments`.
  */

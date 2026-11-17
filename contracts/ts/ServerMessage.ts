@@ -13,15 +13,15 @@ import type { TrackingQuality } from "./TrackingQuality";
 /**
  * One WebSocket text frame. `hello` is always first.
  */
-export type ServerMessage = { "type": "hello", protocol_version: number, engine_version: string, 
+export type ServerMessage = { "type": "hello", protocol_version: number, engine_version: string,
 /**
  * RFC 3339 UTC instant of session time zero.
  */
-session_epoch_utc: string, conventions: Conventions, skeleton: SkeletonDefinition, state: SystemState, } | { "type": "skeleton", skeleton: SkeletonDefinition, } | { "type": "state", state: SystemState, } | { "type": "frame", seq: number, t_us: number, 
+session_epoch_utc: string, conventions: Conventions, skeleton: SkeletonDefinition, state: SystemState, } | { "type": "skeleton", skeleton: SkeletonDefinition, } | { "type": "state", state: SystemState, } | { "type": "frame", seq: number, t_us: number,
 /**
  * Origins of every contributing source.
  */
-origins: Array<Origin>, pose: SkeletonPose | null, 
+origins: Array<Origin>, pose: SkeletonPose | null,
 /**
  * Index-aligned with `SkeletonDefinition.joints`.
  */

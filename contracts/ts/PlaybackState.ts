@@ -4,11 +4,11 @@ import type { RecordingSession } from "./RecordingSession";
 /**
  * An active playback.
  */
-export type PlaybackState = { session: RecordingSession, paused: boolean, 
+export type PlaybackState = { session: RecordingSession, paused: boolean,
 /**
  * Playback speed multiplier, 1 = real time.
  */
-speed: number, 
+speed: number,
 /**
  * Microseconds, `0 ..= session.duration_us`.
  */

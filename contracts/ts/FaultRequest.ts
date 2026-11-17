@@ -4,7 +4,7 @@ import type { FaultAction } from "./FaultAction";
 /**
  * `POST /simulation/devices/{id}/fault` body.
  */
-export type FaultRequest = { action: FaultAction, 
+export type FaultRequest = { action: FaultAction,
 /**
  * Device-reported quality 0..1 for `degrade`.
  */

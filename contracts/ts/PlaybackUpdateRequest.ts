@@ -3,7 +3,7 @@
 /**
  * `PUT /playback` body. Absent fields are left unchanged.
  */
-export type PlaybackUpdateRequest = { paused?: boolean, speed?: number, 
+export type PlaybackUpdateRequest = { paused?: boolean, speed?: number,
 /**
  * Microseconds, `0 ..= session.duration_us`.
  */

@@ -4,19 +4,19 @@ import type { TimeQuality } from "./TimeQuality";
 /**
  * Statistics of a device's observation stream.
  */
-export type StreamStatus = { 
+export type StreamStatus = {
 /**
  * Measured observation rate, Hz.
  */
-measured_rate_hz: number, 
+measured_rate_hz: number,
 /**
  * Session time of the last accepted observation.
  */
-last_seen_t_us: number | null, 
+last_seen_t_us: number | null,
 /**
  * Observations accepted.
  */
-received: number, 
+received: number,
 /**
  * Observations lost in transport (seq gaps) or dropped at a full queue.
  */

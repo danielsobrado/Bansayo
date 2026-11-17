@@ -8,15 +8,15 @@ import type { SegmentId } from "./SegmentId";
 /**
  * A calibration profile as listed in the system state.
  */
-export type CalibrationProfileSummary = { id: ProfileId, kind: CalibrationKind, state: CalibrationState, device_id: DeviceId | null, segment_id: SegmentId | null, 
+export type CalibrationProfileSummary = { id: ProfileId, kind: CalibrationKind, state: CalibrationState, device_id: DeviceId | null, segment_id: SegmentId | null,
 /**
  * How it was obtained, e.g. `reference_pose`, `declared_by_simulator`, `default`.
  */
-method: string, 
+method: string,
 /**
  * RFC 3339 UTC creation time; `null` for defaults.
  */
-created_utc: string | null, 
+created_utc: string | null,
 /**
  * The profile's `data` for camera kinds (`CameraIntrinsicsData`, `CameraExtrinsicsData`),
  * so clients can draw cameras without a second request. Omitted for other kinds.

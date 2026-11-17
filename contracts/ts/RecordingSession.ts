@@ -5,11 +5,11 @@ import type { SessionId } from "./SessionId";
 /**
  * Metadata of a recorded session.
  */
-export type RecordingSession = { id: SessionId, name: string, 
+export type RecordingSession = { id: SessionId, name: string,
 /**
  * RFC 3339 UTC.
  */
-created_utc: string, 
+created_utc: string,
 /**
  * Microseconds.
  */

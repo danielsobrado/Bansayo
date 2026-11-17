@@ -4,7 +4,7 @@ import type { LandmarkSchema } from "./LandmarkSchema";
 /**
  * Camera-specific descriptor fields.
  */
-export type CameraInfo = { 
+export type CameraInfo = {
 /**
  * Image width and height, pixels.
  */

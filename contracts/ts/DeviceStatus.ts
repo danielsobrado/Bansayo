@@ -11,15 +11,15 @@ import type { TrackingState } from "./TrackingState";
 /**
  * Live status of one device.
  */
-export type DeviceStatus = { descriptor: DeviceDescriptor, state: TrackingState, reasons: Array<Reason>, 
+export type DeviceStatus = { descriptor: DeviceDescriptor, state: TrackingState, reasons: Array<Reason>,
 /**
  * Body segment this device is assigned to.
  */
-assignment: SegmentId | null, stream: StreamStatus, battery: BatteryStatus | null, signal: SignalStatus | null, 
+assignment: SegmentId | null, stream: StreamStatus, battery: BatteryStatus | null, signal: SignalStatus | null,
 /**
  * Device-reported quality, 0..1.
  */
-quality: number | null, 
+quality: number | null,
 /**
  * The calibration kinds relevant to this device.
  */

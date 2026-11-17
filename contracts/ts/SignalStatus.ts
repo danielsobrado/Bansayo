@@ -3,7 +3,7 @@
 /**
  * Radio signal report.
  */
-export type SignalStatus = { 
+export type SignalStatus = {
 /**
  * Received signal strength, dBm.
  */

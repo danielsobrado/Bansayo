@@ -3,7 +3,7 @@
 /**
  * One detected 2D landmark, pixels in the image frame.
  */
-export type Landmark2D = { x_px: number, y_px: number, 
+export type Landmark2D = { x_px: number, y_px: number,
 /**
  * 0..1.
  */

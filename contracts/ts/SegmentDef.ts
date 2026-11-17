@@ -4,19 +4,19 @@ import type { SegmentId } from "./SegmentId";
 /**
  * One body segment. Its origin is its proximal joint centre.
  */
-export type SegmentDef = { id: SegmentId, 
+export type SegmentDef = { id: SegmentId,
 /**
  * `null` for the root.
  */
-parent: SegmentId | null, 
+parent: SegmentId | null,
 /**
  * Origin of this segment in the parent's frame at rest, metres.
  */
-offset_m: [number, number, number], 
+offset_m: [number, number, number],
 /**
  * From the origin to the distal end, in this segment's frame, metres.
  */
-tail_m: [number, number, number], 
+tail_m: [number, number, number],
 /**
  * Points that can touch the floor, in this segment's frame, metres.
  */

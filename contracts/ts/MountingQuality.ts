@@ -3,11 +3,11 @@
 /**
  * `quality` of a `mounting` profile captured by reference pose.
  */
-export type MountingQuality = { 
+export type MountingQuality = {
 /**
  * Length of the capture window, milliseconds.
  */
-capture_window_ms: number, 
+capture_window_ms: number,
 /**
  * Angular spread of the readings over the window, radians.
  */

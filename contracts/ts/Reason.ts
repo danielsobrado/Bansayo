@@ -3,15 +3,15 @@
 /**
  * Machine-readable explanation of a degraded, unavailable or inferred condition.
  */
-export type Reason = { 
+export type Reason = {
 /**
  * Stable code, e.g. `segment_not_observed`.
  */
-code: string, 
+code: string,
 /**
  * The device, segment or feature the reason is about, if any.
  */
-subject: string | null, 
+subject: string | null,
 /**
  * Message written for the user.
  */

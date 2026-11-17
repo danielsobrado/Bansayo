@@ -5,15 +5,15 @@ import type { Provenance } from "./Provenance";
 /**
  * Pose of one segment, world frame.
  */
-export type SegmentPose = { 
+export type SegmentPose = {
 /**
  * `q_world_from_segment`.
  */
-rotation: [number, number, number, number], 
+rotation: [number, number, number, number],
 /**
  * Segment origin in world, metres, from forward kinematics.
  */
-position_m: [number, number, number], 
+position_m: [number, number, number],
 /**
  * Provenance of the rotation.
  */

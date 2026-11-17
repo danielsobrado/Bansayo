@@ -5,7 +5,7 @@ import type { TrackingState } from "./TrackingState";
 /**
  * Overall tracking quality of one frame.
  */
-export type TrackingQuality = { state: TrackingState, 
+export type TrackingQuality = { state: TrackingState,
 /**
  * Segments whose rotation is measured or derived.
  */

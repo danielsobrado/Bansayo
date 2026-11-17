@@ -3,11 +3,11 @@
 /**
  * Names and connectivity of a landmark set; points are index-aligned with `names`.
  */
-export type LandmarkSchema = { 
+export type LandmarkSchema = {
 /**
  * e.g. `bansayo.body.v1.joints`.
  */
-id: string, names: Array<string>, 
+id: string, names: Array<string>,
 /**
  * Pairs of indices into `names` drawn as bones.
  */

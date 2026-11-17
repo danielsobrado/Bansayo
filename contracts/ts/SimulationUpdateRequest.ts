@@ -3,7 +3,7 @@
 /**
  * `PUT /simulation` body. Absent fields are left unchanged.
  */
-export type SimulationUpdateRequest = { motion?: string, 
+export type SimulationUpdateRequest = { motion?: string,
 /**
  * Speed multiplier.
  */

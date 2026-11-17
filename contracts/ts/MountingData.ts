@@ -3,7 +3,7 @@
 /**
  * `data` of a `mounting` profile.
  */
-export type MountingData = { 
+export type MountingData = {
 /**
  * Rotation from the segment frame into the sensor body frame.
  */

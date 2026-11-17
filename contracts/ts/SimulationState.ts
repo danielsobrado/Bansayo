@@ -5,11 +5,11 @@ import type { SourceId } from "./SourceId";
 /**
  * State of the simulated source.
  */
-export type SimulationState = { source_id: SourceId, 
+export type SimulationState = { source_id: SourceId,
 /**
  * Id of the current motion.
  */
-motion: string, available_motions: Array<MotionOption>, 
+motion: string, available_motions: Array<MotionOption>,
 /**
  * Speed multiplier, 1 = real time.
  */

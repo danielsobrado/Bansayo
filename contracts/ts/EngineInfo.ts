@@ -5,7 +5,7 @@ import type { TrackingState } from "./TrackingState";
 /**
  * Engine identity and overall state.
  */
-export type EngineInfo = { version: string, protocol_version: number, mode: EngineMode, state: TrackingState, 
+export type EngineInfo = { version: string, protocol_version: number, mode: EngineMode, state: TrackingState,
 /**
  * Seconds since engine start.
  */

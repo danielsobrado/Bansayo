@@ -5,15 +5,15 @@ import type { TimeQuality } from "./TimeQuality";
 /**
  * Timing and size of the camera frame landmarks were detected in.
  */
-export type CameraFrameMetadata = { device_id: DeviceId, frame_seq: number, 
+export type CameraFrameMetadata = { device_id: DeviceId, frame_seq: number,
 /**
  * Capture instant, session clock.
  */
-t_us: number, 
+t_us: number,
 /**
  * Device clock, if the camera has one.
  */
-device_time_us: number | null, time_quality: TimeQuality, 
+device_time_us: number | null, time_quality: TimeQuality,
 /**
  * Image width and height, pixels.
  */

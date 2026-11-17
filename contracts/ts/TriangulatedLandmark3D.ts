@@ -4,23 +4,23 @@ import type { DeviceId } from "./DeviceId";
 /**
  * One triangulated landmark, metres in the world frame.
  */
-export type TriangulatedLandmark3D = { m: [number, number, number], 
+export type TriangulatedLandmark3D = { m: [number, number, number],
 /**
  * Propagated position uncertainty in metres; not a validated accuracy.
  */
-sigma_m?: number | null, 
+sigma_m?: number | null,
 /**
  * Number of camera views used; equals `used_views.len()`.
  */
-views: number, 
+views: number,
 /**
  * RMS reprojection error over the used views, pixels.
  */
-reprojection_error_px: number, confidence: number, 
+reprojection_error_px: number, confidence: number,
 /**
  * Cameras whose observation contributed to `m`.
  */
-used_views: Array<DeviceId>, 
+used_views: Array<DeviceId>,
 /**
  * Cameras that observed the landmark but were rejected as outliers.
  */

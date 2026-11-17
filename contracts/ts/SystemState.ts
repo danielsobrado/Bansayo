@@ -11,15 +11,15 @@ import type { SimulationState } from "./SimulationState";
 /**
  * Everything clients need to render status. Sent on change and at 1 Hz.
  */
-export type SystemState = { 
+export type SystemState = {
 /**
  * Increments on every change.
  */
-rev: number, 
+rev: number,
 /**
  * Additive under protocol version 1; absent in older recordings and engines.
  */
-capability_report?: CapabilityReport | null, engine: EngineInfo, devices: Array<DeviceStatus>, calibration: Array<CalibrationProfileSummary>, features: Array<FeatureStatus>, recording: RecordingState | null, playback: PlaybackState | null, 
+capability_report?: CapabilityReport | null, engine: EngineInfo, devices: Array<DeviceStatus>, calibration: Array<CalibrationProfileSummary>, features: Array<FeatureStatus>, recording: RecordingState | null, playback: PlaybackState | null,
 /**
  * `null` when no simulated source is configured.
  */

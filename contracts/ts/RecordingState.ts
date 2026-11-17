@@ -4,11 +4,11 @@ import type { SessionId } from "./SessionId";
 /**
  * An active recording.
  */
-export type RecordingState = { session_id: SessionId, 
+export type RecordingState = { session_id: SessionId,
 /**
  * Session time recording started.
  */
-started_t_us: number, events: number, 
+started_t_us: number, events: number,
 /**
  * Events dropped because the recorder could not keep up.
  */

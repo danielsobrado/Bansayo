@@ -3,7 +3,7 @@
 /**
  * Battery report.
  */
-export type BatteryStatus = { 
+export type BatteryStatus = {
 /**
  * Charge level, 0..1.
  */
