@@ -453,7 +453,7 @@ fn simulator_declared_extrinsics_reproject_truth_to_the_simulators_pixels() {
 }
 
 #[test]
-fn solver_measures_the_root_with_trackers_and_keeps_camera_only_poseless() {
+fn solver_measures_the_root_with_trackers_and_fits_a_camera_only_skeleton() {
     let mut rig = rig(&RING[..2], 0.0, true);
     let truth = body_pose(&rig.skeleton, Motion::Squat, 2.0);
     rig.observe(Motion::Squat, 2.0, 1, NOW);
@@ -483,8 +483,22 @@ fn solver_measures_the_root_with_trackers_and_keeps_camera_only_poseless() {
     let mut cameras_only = self::rig(&RING[..2], 0.0, false);
     cameras_only.observe(Motion::Squat, 2.0, 1, NOW);
     let solved = cameras_only.solve(NOW);
-    assert!(solved.pose.is_none());
     assert!(solved.landmarks_3d.is_some());
+    // Cameras alone now fit the skeleton: measured root, observed legs, exact knee angle.
+    let pose = solved.pose.as_ref().expect("camera-only pose");
+    assert_eq!(pose.root_position_provenance, Provenance::Measured);
+    assert!((v3_from_wire(pose.root_position_m) - truth.root).norm() < 1e-3);
+    let joints = bansayo_engine::pipeline::joints::measure(
+        &cameras_only.skeleton,
+        &solved.rotations,
+        &solved.observed,
+    );
+    let knee = joints[0].value.expect("left knee measured") as f64;
+    assert!(
+        (knee - Motion::Squat.angles(2.0).left_knee).abs() < 1e-3,
+        "{knee}"
+    );
+    assert_ne!(solved.quality.state, TrackingState::Unavailable);
 }
 
 async fn request(addr: SocketAddr, method: &str, path: &str, body: &str) -> serde_json::Value {
@@ -586,7 +600,7 @@ sources:
             .clone()
     };
     assert_eq!(feature("landmarks_3d_triangulated"), "available");
-    assert_eq!(feature("skeleton_pose"), "unavailable");
+    assert_eq!(feature("skeleton_pose"), "degraded");
     let cam1 = state["devices"]
         .as_array()
         .unwrap()

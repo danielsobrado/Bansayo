@@ -6,6 +6,7 @@ pub mod features;
 pub mod joints;
 mod runner;
 mod runtime;
+pub mod skeleton_fit;
 pub mod solve;
 pub mod triangulate;
 pub use runner::*;

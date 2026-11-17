@@ -3,7 +3,7 @@ use crate::{
     calibration::Store,
     config::Config,
     math::{Rot, rot_from_wire, rot_to_wire, v3_from_wire, v3_to_wire},
-    pipeline::triangulate::triangulate,
+    pipeline::{skeleton_fit::fit, triangulate::triangulate},
     registry::{Registry, reason},
     skeleton::{Skeleton, floor_contact_root, forward_kinematics, proportions::LANDMARK_SCHEMA_ID},
 };
@@ -81,8 +81,37 @@ pub fn solve(
             rotations[i] = s.parent.map_or(Rot::identity(), |p| rotations[p]);
         }
     }
+    let landmarks_3d = triangulate(registry, store, now, stale_us, &config.triangulation);
+    // Camera-only mode: with no IMU-observed segment, the skeleton is fitted to the landmarks.
+    // shortcut: cameras never fill segments IMUs miss; mixing assumes calibrated IMU heading.
+    let camera_fit = (!observed.iter().any(|o| *o))
+        .then(|| landmarks_3d.as_ref().and_then(|l| fit(sk, l)))
+        .flatten();
+    if let Some(f) = &camera_fit {
+        rotations.clone_from(&f.rotations);
+        observed.clone_from(&f.observed);
+        confidence.clone_from(&f.confidence);
+        sources.clone_from(&f.sources);
+    }
+    // The body landmark schema is index-aligned with the skeleton's segments.
+    // shortcut: the camera root is used as-is, without smoothing or blending with the IMU estimate;
+    // upgrade with fusion stage 4's complementary correction once real cameras are connected.
+    let measured_root = camera_fit
+        .as_ref()
+        .map(|f| f.root)
+        .or_else(|| match &landmarks_3d {
+            Some(PoseLandmarks3D::Triangulated {
+                schema_id, points, ..
+            }) if schema_id == LANDMARK_SCHEMA_ID => sk
+                .segments
+                .iter()
+                .position(|s| s.parent.is_none())
+                .and_then(|i| points.get(i)?.as_ref())
+                .map(|p| v3_from_wire(p.m)),
+            _ => None,
+        });
     let observed_count = observed.iter().filter(|o| **o).count() as u32;
-    let state = if !has_trackers {
+    let state = if !has_trackers && camera_fit.is_none() {
         TrackingState::Unavailable
     } else if observed_count == 0 {
         TrackingState::Acquiring
@@ -91,31 +120,16 @@ pub fn solve(
     } else {
         TrackingState::Tracking
     };
-    if !has_trackers {
+    if !has_trackers && camera_fit.is_none() {
         reasons.push(reason("no_orientation_devices",None,"No orientation trackers are configured; camera landmarks do not provide a world skeleton."));
     }
-    if observed_count > 0 {
+    if observed_count > 0 && camera_fit.is_none() {
         reasons.push(reason(
             "heading_alignment_assumed",
             None,
             "Heading alignment is assumed to be identity.",
         ));
     }
-    let landmarks_3d = triangulate(registry, store, now, stale_us, &config.triangulation);
-    // The body landmark schema is index-aligned with the skeleton's segments.
-    // shortcut: the camera root is used as-is, without smoothing or blending with the IMU estimate;
-    // upgrade with fusion stage 4's complementary correction once real cameras are connected.
-    let measured_root = match &landmarks_3d {
-        Some(PoseLandmarks3D::Triangulated {
-            schema_id, points, ..
-        }) if schema_id == LANDMARK_SCHEMA_ID => sk
-            .segments
-            .iter()
-            .position(|s| s.parent.is_none())
-            .and_then(|i| points.get(i)?.as_ref())
-            .map(|p| v3_from_wire(p.m)),
-        _ => None,
-    };
     let root = measured_root.unwrap_or_else(|| floor_contact_root(sk, &rotations));
     let positions = forward_kinematics(sk, &rotations, root);
     let fresh_orientation = registry.entries.values().any(|e| {
@@ -124,7 +138,7 @@ pub fn solve(
                 && now.saturating_sub(o.t_us) <= stale_us
         })
     });
-    let pose = fresh_orientation.then(|| SkeletonPose {
+    let pose = (fresh_orientation || camera_fit.is_some()).then(|| SkeletonPose {
         skeleton_rev: sk.definition.rev,
         root_position_m: v3_to_wire(&root),
         root_position_provenance: if measured_root.is_some() {

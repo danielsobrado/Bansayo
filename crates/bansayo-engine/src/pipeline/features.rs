@@ -53,6 +53,11 @@ pub fn features(devices: &[DeviceStatus], solved: &Solved) -> Vec<FeatureStatus>
                 "partial_observation",
                 "Untracked segments are inferred; dependent joint values remain unavailable.",
             ),
+            SegmentOrientation | SkeletonPose | JointAngles if !trackers && observed > 0 => (
+                Degraded,
+                "camera_only_skeleton",
+                "Fitted to triangulated landmarks: axial twist and unseen segments are inferred.",
+            ),
             SegmentOrientation | SkeletonPose | JointAngles if trackers => (
                 Degraded,
                 "mounting_calibration_missing",
