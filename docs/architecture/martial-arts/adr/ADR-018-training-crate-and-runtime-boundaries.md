@@ -19,7 +19,9 @@ languages or services that have no concrete need.
 
 1. The engine stays **one process**. No new service, broker or backend language.
 2. A third crate, **`bansayo-training`**, holds all training logic as a pure library: no Tokio, no
-   file or network I/O, no clock. It depends only on `bansayo-contracts`.
+   file or network I/O, no clock. Of the workspace crates it depends only on `bansayo-contracts`;
+   external crates are allowed when they are pure in the same sense (amended 17 November 2026 by
+   the owner: `serde_json` and other pure dependencies are permitted).
 3. Inside the engine a **training runner** actor hosts that library. Its only tracking input is
    `MotionSample` plus `CapabilityReport`, delivered over a bounded channel from the pipeline
    runner. It shares no mutable state with tracking.

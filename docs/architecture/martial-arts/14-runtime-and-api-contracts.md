@@ -91,7 +91,7 @@ flowchart LR
 | Crate / module | Contents | May depend on | Status |
 |---|---|---|---|
 | `bansayo-contracts` | Adds `motion.rs` (Evidence, BodyState, PlanarBody, ObservableValue), `training.rs` (TrainingState, TrainingEvent, Repetition, MetricMeasurement, ScoreResult, commands), `capability.rs`, `athlete.rs`, `progress.rs`, `fiducial.rs`; extends `observation.rs`, `device.rs`, `calibration.rs`, `wire.rs`, `api.rs`, `state.rs` | `serde`, `ts-rs` | Existing crate, additions Proposed |
-| **`bansayo-training`** | `content/` (definition types, validation, compilation), `observables/`, `segment/`, `recognize/` (phase machine, arbiter, DTW, form alignment), `exercise/`, `metrics/`, `scoring/`, `coaching/`, `reference/`, `progress/` | `bansayo-contracts`, `nalgebra`, `serde`, `thiserror`. **No Tokio, no file or network I/O, no clock** | Proposed |
+| **`bansayo-training`** | `content/` (definition types, validation, compilation), `observables/`, `segment/`, `recognize/` (phase machine, arbiter, DTW, form alignment), `exercise/`, `metrics/`, `scoring/`, `coaching/`, `reference/`, `progress/` | `bansayo-contracts`, `nalgebra`, `serde`, `serde_json`, `thiserror`, and further pure crates as needed. **No Tokio, no file or network I/O, no clock, never `bansayo-engine`** | Proposed |
 | `bansayo-engine::training` | The training runner actor; builds `MotionSample`; routes commands; owns the session | `bansayo-training`, `pipeline` | Proposed |
 | `bansayo-engine::content_store` | Directory scan, YAML parse, index, snapshots, atomic writes | `bansayo-training::content`, `config` | Proposed |
 | `bansayo-engine::store` | SQLite writer thread, migrations, queries | `rusqlite`, `bansayo-training::progress` | Proposed |

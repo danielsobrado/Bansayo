@@ -12,9 +12,9 @@ kind `technique` only; no sequences, workouts, holds, assessments, free mode, re
 annotations, new sources, calibration procedures, smoothing changes, export, LAN or VR change.
 New dependency: `rusqlite` 0.37 (bundled), building in the workspace and in
 `apps/desktop/src-tauri`. Content hashes use an in-crate SHA-256 (`bansayo-training::hash`), so no
-hashing crate was added. `bansayo-training` additionally depends on `serde_json` for event payloads
-and canonical content JSON, beyond the four dependencies the Phase 0 boundary lists; it is pure
-(no I/O) and is recorded here as a deviation for the owner.
+hashing crate was added. `bansayo-training` also depends on `serde_json` for event payloads and
+canonical content JSON; the owner allowed this and further pure dependencies (ADR-018 amended, 14
+§2 updated). The boundary stays: no Tokio, no I/O, no clock, never the engine.
 
 ### Deliverables per milestone
 
@@ -28,9 +28,11 @@ and canonical content JSON, beyond the four dependencies the Phase 0 boundary li
 
 ### Acceptance evidence (18 §3 Phase 1)
 
-Windows 11, Rust 1.92, Node 24, `CARGO_TARGET_DIR=F:\drusniel-cache\cargo-target`. Workspace
-test builds use `-j 4`: at full parallelism the linker intermittently reports missing or invalid
-rlibs for the ~460 MB engine library on this machine.
+Windows 11, Rust 1.92, Node 24, `CARGO_TARGET_DIR=F:\drusniel-cache\cargo-target`. The
+evidence below was first taken with `-j 4`: with full debug info the engine library was ~460 MB,
+and 24 parallel test links ran out of memory (`LNK1102`, then "can't find crate"). The dev
+profile now uses line-tables-only debug info and none for third-party crates (root and Tauri
+`Cargo.toml`); the library is ~120 MB and builds and tests pass at default parallelism.
 
 | # | Criterion | Command and result |
 |---|---|---|
@@ -51,8 +53,8 @@ rlibs for the ~460 MB engine library on this machine.
 
 | Check | Result |
 |---|---|
-| `cargo fmt --all --check`; `cargo clippy --workspace --all-targets -j 4 -- -D warnings` | **pass** |
-| `cargo test --workspace -j 4 --no-fail-fast` | **pass**: 30 test binaries, 178 passed, 0 failed, 2 ignored (the existing photo-detector test without local models; the on-purpose golden generator) |
+| `cargo fmt --all --check`; `cargo clippy --workspace --all-targets -- -D warnings` | **pass** |
+| `cargo test --workspace --no-fail-fast` (default parallelism, three consecutive runs) | **pass**: 30 test binaries, 178 passed, 0 failed, 2 ignored (the existing photo-detector test without local models; the on-purpose golden generator) |
 | Tauri crate: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` | **pass** (1 test); `rusqlite` resolves and builds there |
 | `node scripts/verify-gate1.mjs`; `node scripts/verify-gate2.mjs` | **pass**: 8 and 5 real-process checks; scripts unchanged |
 | Desktop `npx vitest run`; `npm run build`; `npx playwright test` | **pass**: 54 unit tests; build (existing large-chunk advisory); 4 Playwright tests |
