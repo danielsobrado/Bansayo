@@ -7,6 +7,16 @@
 | Would amend | ADR-017 (views combined only within a configured skew) in [docs/12](../../../12-decisions.md) |
 | Specified in | [08 §4.3](../08-tracking-and-sensor-fusion.md), [16 §3](../16-accuracy-and-validation.md) |
 
+## Implementation note (17 November 2026)
+
+Commit `b5de231` implemented the interpolation of item 2: the registry keeps 8 landmark frames per
+camera and cameras within `max_skew_ms` are interpolated to the oldest of their newest frames. On
+a **simulated** front kick with cameras 16 ms out of phase the worst landmark error fell from
+11.3 mm to 0.6 mm. Not built: the `time_sync` profile, the `gated | aligned` switch, the
+interpolation flag and the uncertainty term. Because the behaviour is now always on, the criteria
+below decide whether it **stays** the default on real cameras, and the `mode` switch is needed
+only to run V-08.
+
 ## Context
 
 ADR-017 combines views only when their frame times lie within `triangulation.max_skew_ms`

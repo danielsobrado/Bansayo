@@ -263,6 +263,12 @@ are the existing ones. A validation failure is `invalid_request` with
 | `GET /training/reps/{session_id}/{rep_index}/alignment?reference=` | — | `{ distance: number \| null; path: [number, number][]; phase_map: { phase, rep: [t0, t1], ref: [t0, t1] }[] }` | DTW of [07 §4.1](07-recognition-and-coaching.md) |
 | `POST /training/sessions/{id}/reanalyse` | `{ content: "pinned" \| "current"; source_mask?: DeviceId[] }` | `{ job_id }` | Requires `recording.mcap`; result is a new session row |
 | `GET /programs/enrolments?athlete_id=` / `PUT /programs/enrolments/{program_id}` / `DELETE …` | Enrolment | Enrolment with the next proposed session | |
+| `GET /training/sessions/{id}/provenance` | — | Engine and catalogue versions, tracking configuration, calibration set with QA, content references, `reanalysis_of` | [32 §3](32-measurement-provenance.md) |
+
+Routes specified with later capabilities, all additive: `GET /content/feasibility`
+([22 §7](22-measurement-feasibility.md)); `POST /content/evaluate` and `POST /content/suggest`
+([20 §5](20-technique-authoring.md)); `GET /progress/recommendations` and
+`POST /progress/recommendations/{id}` with `{ outcome }` ([24 §3](24-adaptive-training.md)).
 
 ### 5.4 Progress and references
 

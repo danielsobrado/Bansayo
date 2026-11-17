@@ -42,3 +42,9 @@ The system never presents a value as better than it is. Every number shown to a 
 client carries its origin (live or simulated), its provenance (measured, derived, inferred or
 unavailable) and the calibration it depends on. A missing input produces a labelled gap, never a
 plausible-looking fabrication.
+
+## Training platform architecture
+
+The design for martial-arts training, movement analysis and coaching built on this engine is a
+separate set: [architecture/martial-arts/](architecture/martial-arts/README.md). It continues the
+decision records from ADR-018.

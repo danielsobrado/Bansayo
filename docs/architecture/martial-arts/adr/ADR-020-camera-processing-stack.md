@@ -7,9 +7,17 @@
 | Extends | ADR-009 (camera path) in [docs/12](../../../12-decisions.md) |
 | Specified in | [08 §3](../08-tracking-and-sensor-fusion.md), [15 §2.1](../15-performance-and-latency.md) |
 
+## Implementation note (17 November 2026)
+
+Commits `ea9b5d7` and `9aa9904` built items 1, 2, 3 (decoding through the `image` crate) and 6 of
+the decision below, plus image-folder cameras; see
+[08 §1.2](../08-tracking-and-sensor-fusion.md). No physical camera has been connected. Item 4,
+manual exposure, is not built. The status therefore stays Pending Validation, now on hardware
+rather than on a spike.
+
 ## Context
 
-No real camera code exists. ADR-009 deferred the capture crate to a Windows spike. Martial-arts
+When this record was drafted no real camera code existed. ADR-009 deferred the capture crate to a Windows spike. Martial-arts
 movement adds requirements ordinary webcam use does not have: short manual exposure, the highest
 frame rate the camera offers, several cameras at once, per-frame arrival timestamps and no frame
 queueing.

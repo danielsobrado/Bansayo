@@ -226,6 +226,11 @@ The second line is an **estimate of a joint centre through soft tissue**. It has
 
 ## 7. Camera calibration with an AprilTag board
 
+**Current path (17 November 2026):** `scripts/calibrate_cameras.py` calibrates with a ChArUco
+board through OpenCV and imports profiles with `POST /calibration/profiles`. It is kept until body
+clusters are built; the procedure below is the in-engine successor
+([ADR-024](adr/ADR-024-fiducial-markers-and-board-calibration.md), revision). §7.4 applies to both.
+
 ### 7.1 Board
 
 `bansayo-board-a3`: 6 × 4 `tag36h11` tags, identifiers 0–23 row-major from the top-left, edge

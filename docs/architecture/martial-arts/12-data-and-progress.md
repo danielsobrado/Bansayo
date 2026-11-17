@@ -44,6 +44,7 @@ interface AthleteProfile {
 | Access control | None between local profiles. The operating-system account is the security boundary ([17 §2](17-security-privacy-and-safety.md)) |
 | Consent | No motion data is stored for an athlete until `consent.motion_data_utc` is set; video recording additionally needs `consent.video_utc`. Both are set by explicit UI actions and can be withdrawn (which stops future recording; deletion is a separate action) |
 | Calibration scope | Athlete-scoped kinds: `body_proportions`, `mounting`, `marker_mounting`, `heading_alignment`. Their `CalibrationSubject` gains `athlete_id`. Switching athlete unloads the previous athlete's and loads the new one's. `mounting` and `marker_mounting` older than `calibration.mounting_max_age_s` (default 14 400) are `stale`: straps do not survive a day. Rig-scoped kinds (`camera_*`, `floor_plane`, `time_sync`, `marker_geometry`, `imu_bias`, `xr_alignment`) are shared |
+| Later additive fields | `consent.dataset_use_utc` (use of recordings as golden or example data, [28 §4](28-dataset-and-regression.md)) and `rom_caps` (athlete-set range limits, [23 §5.2](23-biomechanics-model.md)) |
 | Normalisation | Lengths come from the athlete's skeleton (`body_proportions`), never from profile fields other than `height_m` |
 
 ## 2. Data directory

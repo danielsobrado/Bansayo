@@ -106,6 +106,11 @@ stateDiagram-v2
 | `tracking_lost` | `tracking_lost` | Show what is missing; no counting |
 | holds | `holding` | Hold timer counts stable time only |
 
+When the start stance's predicate cannot be evaluated in the current capability report (stance
+geometry needs world keypoints, so this is the normal case at profile `basic`), the stance gate is
+replaced by 500 ms of stillness (activity below the segmenter's `end_below`) and the stance is
+reported as not assessed ([22 §4](22-measurement-feasibility.md)).
+
 For `hold` definitions `in_rep` is replaced by `holding`; a hold ends when the stable time reaches
 `hold_s`, the athlete releases, or `max_hold_s` elapses.
 

@@ -17,7 +17,7 @@ continue from its R21.
 | R28 | A wrong cue teaches a wrong habit | Harm to technique; loss of trust | Evidence gate and persistence; basis tag; one cue; default level `standard`; cue precision measured before `detailed` is default | V-24 |
 | R29 | Comparability classes fragment history: every detector or method change starts a new series | Long-term progress looks like many short series | Continuity re-analysis with a source mask; method-difference display; classes hash only what changes the number (not the engine version) | V-34; Phase 4 |
 | R30 | The architecture is large for a single developer | Layers built and never exercised | Slice-first roadmap; Phase 6 as optional packages; every component has a "not built until" condition | Roadmap discipline |
-| R31 | The Godot client has never been run; GDScript JSON parsing at 90–120 Hz is unmeasured | VR frame budget missed | First task of Phase 5 is to run it; the stream rate is client-limited; existing ADR-010 names the native-extension fallback | L-07; O-10 |
+| R31 | The Godot client has never run in a headset; GDScript JSON parsing at 90–120 Hz is unmeasured | VR frame budget missed | First task of Phase 5 is to run it; the stream rate is client-limited; existing ADR-010 names the native-extension fallback | L-07; O-10 |
 | R32 | Pose inference and VR rendering share one GPU | Either the tracking rate or the headset frame rate drops | `max_inference_hz` is the first control; stage timing shows which side yields | L-07, L-08 |
 | R33 | Two stores (SQLite rows, MCAP files) can disagree after a crash | Rows without clips or files without rows | Rows are authoritative; `has_*` flags are corrected at start; orphan directories are removed at start; `pending.jsonl` recovery | Crash tests in Phase 1 |
 | R34 | Content without an expression language is too restrictive for instructors | Pressure to add scripting | Each unmet need is logged as a candidate catalogue entry; the boundary is revisited only on the pattern of such requests ([ADR-030](adr/ADR-030-configuration-and-content.md)) | Phase 3 authoring experience |
@@ -51,15 +51,18 @@ Things assumed, read but not run, or not checked while producing this set.
 | Id | Item | How it is settled | Blocks |
 |---|---|---|---|
 | O-01 | `trunk_forward_lean` in `pipeline/joints.rs` appears, by reading, to return a negative value for a forward lean and to ignore the pelvis frame, contradicting docs/03. Not executed | Unit test asserting the documented sign during the move to `bansayo-training` | Phase 0 |
-| O-02 | The local `rtmpose-m.onnx` is taken to be COCO-17 from its source configuration; its output shape was not inspected. Availability, licence and speed of a Halpe-26 export are unconfirmed | Inspect the model; export or obtain a Halpe-26 model; measure inference time | Phase 2 |
-| O-03 | `nokhwa` with Media Foundation: manual exposure control, MJPEG at high frame rates and several cameras on one controller are unverified | The capture spike of ADR-020 | Phase 2 |
-| O-04 | `ort` version, CUDA/cuDNN pairing and DirectML fallback on the target machine (existing R7) | Pin and run | Phase 2 |
+| O-02 | The shipped pose model is RTMPose-m COCO-17 (confirmed by the implementation of 17 November 2026, 3.7 ms per tracked frame in release per docs/13). Availability, licence and speed of a Halpe-26 export are unconfirmed | Export or obtain a Halpe-26 model; measure inference time | Foot observables |
+| O-03 | `nokhwa` with Media Foundation is implemented but has met no physical camera: enumeration, MJPEG negotiation at high frame rates, several cameras on one controller, unplug/replug and manual exposure control are unverified | Connect cameras; hardware bring-up | Phase 2 |
+| O-04 | ONNX Runtime runs with DirectML on the development machine; the CUDA provider and its driver pairing (existing R7) are untested | Run with CUDA; compare rates | Phase 2 |
+| O-20 | The detector smooths landmarks with a One-Euro filter before they are recorded and solved; whether it is configurable was not checked | Read `sources/camera`; move smoothing off the recorded path ([08 §1.2](08-tracking-and-sensor-fusion.md)) | Any camera timing or speed metric |
+| O-21 | The ChArUco calibration script has only passed its synthetic self-test | Calibrate the physical rig; run V-01 – V-03 | Phase 4 |
+| O-22 | The work of 17 November 2026 was read from docs/13 and commit messages, not from the code; details in [08 §1.2](08-tracking-and-sensor-fusion.md) may be imprecise | Read the code at the start of Phase 0 | Phase 0 |
 | O-05 | AprilTag family facts (cell counts, identifier counts, relative false-positive behaviour) are quoted from memory of the published families, not re-read from the sources | Read the library's family definitions; correct [09 §2](09-optical-markers-and-calibration.md) and the range table if needed | Phase 4 |
 | O-06 | Which AprilTag binding crate: licence, maintenance, Windows build | Spike | Phase 4 |
 | O-07 | Measurement ranges of the LSM6DSV80X / LSM6DSV320X high-g variants were not read from datasheets; whether ±16 g saturation at the shin matters is unmeasured | Datasheets; V-17 | Package 6b |
 | O-08 | Whether SlimeVR Server's SolarXR feed exposes raw angular rates (existing R3) | Read the schema; test | Package 6b |
 | O-09 | Kick and punch speed figures used for blur and skew arithmetic (13–18 m/s, 15 m/s worked example) are literature-order values quoted from abstracts | V-30 measures the test athletes' own speeds | Camera guidance |
-| O-10 | The Godot client has never been imported or run | Install Godot; run the smoke test and a session | Phase 5 |
+| O-10 | The Godot client runs on 4.5.1 in desktop mode (17 November 2026) but has never run in a headset; controller bindings and room alignment are untested | Headset session | Phase 5 |
 | O-11 | `serde_norway` maintenance status (existing ADR-012 check) | Check when the content loader is written | Phase 1 |
 | O-12 | `rusqlite` with bundled SQLite inside both the workspace engine and the out-of-workspace Tauri shell build | Build both | Phase 1 |
 | O-13 | Windows per-user data-directory permissions as created by the engine | Inspect ACLs on a fresh install | Phase 1 |
@@ -68,6 +71,9 @@ Things assumed, read but not run, or not checked while producing this set.
 | O-16 | Size of `motion.mcap` per minute with every observable at 120 Hz | L-08 | Retention defaults |
 | O-17 | Whether the desktop's session-clock estimator (needed for local timers and the metronome) is accurate enough for audible tempo | Measure beat error against the engine clock | Phase 3 |
 | O-18 | Style attributions ("Kukkiwon/WT", "Shotokan") of the initial definitions were written by the project, not by instructors of those styles | Instructor review | `reviewed` status |
+| O-23 | The anatomical joint-limit envelope of [23 §4](23-biomechanics-model.md) and the segment mass-fraction table have no sourced values yet | Take both from a cited normative source when the code is written | Solver constraints; balance proxy |
+| O-24 | No instructor of any of the three disciplines has seen the definitions, bands, cues or safety limits; the review workflow of [20](20-technique-authoring.md) has no reviewers yet | Find at least two instructors per style | `reviewed` status of any definition |
+| O-25 | Interference between headset tracking and printed tags or IMU radios is unknown | Lab check with the owner's headset ([29](29-tracking-hardware-lab.md)) | Phase 5 with tags |
 | O-19 | This document set was produced over two sessions; documents 01–14 and the examples were re-read, link-checked and parse-checked in the second, but no schema validator exists to check the YAML examples against [13](13-configuration-schemas.md) mechanically | The content loader's validator, run over `examples/` as its first test corpus | Phase 1 |
 
 ## 4. Decisions pending validation
@@ -121,7 +127,8 @@ Weaknesses this review exposed, kept visible rather than argued away:
 
 ## 6. What this architecture task did not do
 
-- No code was written, compiled or run; no test was executed.
+- No code was written, compiled or run; no test was executed. (Other work on 17 November 2026
+  did change code; this set only records it, see O-22.)
 - No hardware was used; every number is a design value or a target.
 - No dependency was added; crate choices marked pending are untested on this machine.
 - No licence was reviewed beyond what docs/12 already records.

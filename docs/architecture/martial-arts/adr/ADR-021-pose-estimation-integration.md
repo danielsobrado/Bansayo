@@ -7,6 +7,14 @@
 | Extends | ADR-009 in [docs/12](../../../12-decisions.md) |
 | Specified in | [08 §3–4](../08-tracking-and-sensor-fusion.md), [04 §2.2](../04-movement-domain-model.md) |
 
+## Implementation note (17 November 2026)
+
+Commit `a18fab9` built items 1, 3 and 5 with **RTMPose-m COCO-17**, ONNX Runtime loaded at run
+time and DirectML on Windows; `scripts/setup.py` downloads the models with SHA-256 checks. Two
+differences from this record remain open: the model has no foot keypoints (item 2), and the
+detector applies One-Euro smoothing to its output, which this architecture requires to be removed
+from the recorded and solved path ([08 §1.2](../08-tracking-and-sensor-fusion.md)).
+
 ## Context
 
 ADR-009 chose RTMPose on ONNX Runtime through `ort`, with a permissively licensed detector, and

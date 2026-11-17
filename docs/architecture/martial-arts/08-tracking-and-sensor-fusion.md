@@ -13,7 +13,9 @@ Decision records: [ADR-020](adr/ADR-020-camera-processing-stack.md),
 
 ## 1. What exists today
 
-Verified by reading the code on 16 November 2026.
+Verified by reading the code on 16 November 2026. **Commits of 17 November 2026 (up to `0be8e3e`)
+changed several rows; §1.2 lists what they delivered and how this design absorbs it.** Where the
+table and §1.2 differ, §1.2 is current.
 
 | Capability | Status | Evidence |
 |---|---|---|
@@ -43,6 +45,23 @@ These are defects of fit, found in the code, that every later step depends on.
 | T-05 | `OffsetEstimator` is never called | Every source with a device clock maps device time through it; sources without one use arrival time minus `latency_ms` and report `receive_time` |
 | T-06 | Triangulated landmarks have no uncertainty | Add `sigma_m: number \| null` to `TriangulatedLandmark3D` (additive), filled by the formula in [04 §8](04-movement-domain-model.md) |
 | T-07 | Validation rejects orientation in any frame but the device's own `sensor_reference`, and `nominal_rate_hz > 1000` | Kept for IMU orientation. The new `pose` observation (§2.2) carries poses in other frames. The rate limit stays; faster IMUs are decimated in the adapter |
+
+### 1.2 Delivered on 17 November 2026 and its place in this design
+
+Source: [docs/13](../../13-implementation-status.md) "Camera and VR vertical slice" and the commit
+messages; the code was not re-read line by line. No physical camera or headset has been connected
+to any of it.
+
+| Delivered | Relation to this document | Decision |
+|---|---|---|
+| `kind: camera` source on `nokhwa` / Media Foundation, MJPEG decoded in-process, one capture thread per camera with a latest-frame slot, image-folder cameras, JPEG preview endpoint, `--list-cameras` | Is §3's capture chain, built. Manual exposure control is **not** in the configuration schema | Kept. Exposure control (§3.2) remains required before any speed metric is graded; [ADR-020](adr/ADR-020-camera-processing-stack.md) stays Pending Validation on physical cameras |
+| YOLOX + RTMPose-m (**COCO-17**) on ONNX Runtime loaded at run time, DirectML on Windows, box-overlap subject tracking, detection every tenth frame | Is §3's inference path with the COCO-17 model: no heel or toe | Kept. Halpe-26 remains the recommended schema ([ADR-021](adr/ADR-021-pose-estimation-integration.md)) |
+| **One-Euro smoothing** of 2D landmarks in the detector | Conflicts with §7.4 ("published landmarks are unsmoothed") and with recording raw inputs | **To change before training metrics:** the adapter records and forwards the detector's unsmoothed output; display smoothing, if wanted, is applied on a copy for the preview overlay. Until then the filter and its parameters are part of `tracking_config_id` and speed and timing metrics from cameras are capped at grade B |
+| `POST /calibration/profiles` import with validation and atomic persistence; the store persists camera intrinsics and extrinsics | Resolves T-03 for the camera kinds | Kept as the stable calibration contract: any calibration tool writes profiles through it |
+| `scripts/calibrate_cameras.py`: ChArUco capture, intrinsics, floor-board extrinsics, quality gates (Python + OpenCV, run by the operator, not by the engine) | A working alternative to the in-engine AprilTag board procedure of [09 §7](09-optical-markers-and-calibration.md) | **Adopted as the calibration path** until body clusters are built; see the revised [ADR-024](adr/ADR-024-fiducial-markers-and-board-calibration.md) |
+| Registry keeps 8 landmark frames per camera; cameras within `max_skew_ms` are linearly interpolated to the oldest of their newest frames | Is §4.3's mechanism, built without the `mode` switch and without the uncertainty term | Kept. [ADR-023](adr/ADR-023-time-aligned-triangulation.md) stays Pending Validation on real cameras; `sigma_m` and the `time_interpolated` flag are still to be added |
+| `pipeline/skeleton_fit`: pelvis and chest frames, minimal-swing limbs with inherited twist, used when no trackers are configured | Is §4.5, built for the camera-only case | Kept. Twist evidence must be labelled `inferred` where §4.5 says so when `BodyState` is introduced |
+| VR client validated on Godot 4.5.1 in desktop mode; `movement_counter.gd` counts squats and kicks from engine angles with fixed thresholds | The counting duplicates, in the client, what the training runner will own | Accepted as PoC debt; removed when the `training` topic exists ([11 §1](11-vr-architecture.md)) |
 
 ## 2. Tracking provider architecture
 

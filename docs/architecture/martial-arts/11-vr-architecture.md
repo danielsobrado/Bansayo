@@ -18,7 +18,14 @@ enabled, GDScript):
 | `body_root.gd` | Holds the alignment transform (identity) | Same |
 | `status_panel.gd`, `dev_rig.gd`, `training_room.gd` | Status label; desktop orbit camera; room, OpenXR start-up with desktop fallback | Same |
 
-Planned in docs/08 and not built: avatar retargeting, headset alignment, mirror, tracker roles.
+Update, commits of 17 November 2026: the client now imports, parses and renders on Godot 4.5.1 in
+desktop mode (OpenXR not started; no headset connected), and gained a status panel with joint
+readouts, record/replay buttons, a controller-based room alignment, and `movement_counter.gd`,
+which counts squats and kicks from the engine's angles with fixed thresholds. That counter is
+**PoC debt**: it is the one place where a client derives a training value, and it is deleted when
+the engine's `training` topic provides counts (§3, `training_client.gd`).
+
+Planned in docs/08 and not built: avatar retargeting, mirror, tracker roles.
 Everything else in this document is **Proposed**.
 
 ## 2. Runtime and technology decisions

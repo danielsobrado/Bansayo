@@ -37,6 +37,25 @@ Differences from the phase list suggested in the brief, and why:
 
 Phases 3 and 4 are independent of each other and can run in either order or in parallel.
 
+### 2.1 Position at commit `0be8e3e` (17 November 2026)
+
+A camera-to-VR slice was built in parallel with this document set
+([08 §1.2](08-tracking-and-sensor-fusion.md)). It delivered tracking parts of later phases ahead of
+the training stack; none of it has met a physical camera or headset.
+
+| Phase | Already delivered | Still open in that phase |
+|---|---|---|
+| 0 | Store persists camera profiles (part of T-03) | Everything else, including the training crate and T-01 |
+| 1 | — | All of it. This is now the critical path: tracking exists, training does not |
+| 2 | Camera source, preview, YOLOX + RTMPose COCO-17 on ONNX Runtime | Physical cameras; manual exposure; unsmoothed landmark path; `PlanarBody`; feet-capable model; the slice itself |
+| 4 | Calibration import and ChArUco script; interpolation to a common instant; camera-only skeleton fit | Calibration check and QA record; `time_sync`; gates; sigma; body proportions; all validation experiments |
+| 5 | Client runs on Godot 4.5.1 (desktop mode); status panel; room alignment by controller | Everything in the phase table; replacing the client-side `movement_counter.gd` with engine events |
+
+Consequence for ordering: Phases 0 and 1 are unchanged and come first. Phase 2 shrinks to hardware
+bring-up plus the image-plane path. The work already done in Phase 4's area is accepted as is and
+is not extended until Phase 1 has produced stored, graded measurements — more tracking without a
+consumer would repeat the pattern this roadmap exists to avoid.
+
 ```mermaid
 flowchart LR
   P0["0 · Engine fit"] --> P1["1 · Slice on simulator"]
@@ -246,7 +265,38 @@ itself; it consumes the tokens that technique machines emit.
 | **P1** — high value | Phases 3, 4, 5: catalogue, combinations, workouts and builder, mobility, assessments, free training, references and ghost, re-analysis, export and deletion; calibration wizard, multi-view, skeleton fit, validated tables; VR training |
 | **P2** — later | Phase 6 packages: marker clusters; IMUs; forms; programs; XR ingest; LAN and standalone; depth and ranging; learned recognition |
 
-## 7. Not on the roadmap
+## 7. Future capabilities on the same roadmap
+
+The owner's later phase names map onto the phases above; the capability documents 20–32 say what
+each needs **now** so that it can be added later without redesign.
+
+| Owner's phase | Here | 
+|---|---|
+| A — Reliable measurement foundation | Phases 0, 1, 2, plus the provenance record ([32](32-measurement-provenance.md)), synthetic golden sessions ([28](28-dataset-and-regression.md)) and lab Block A ([29](29-tracking-hardware-lab.md)) |
+| B — Usable martial arts training | Phase 3, with personal baselines and envelope ([23 §5](23-biomechanics-model.md)) |
+| C — Better hardware and immersive training | Phases 4, 5; packages 6a, 6b; wearables ([21](21-wearable-hardware.md)); mixed reality ([25](25-mixed-reality-and-avatars.md)) |
+| D — Advanced movement intelligence | Packages 6c, 6d; sequencing metrics and footwork ([23](23-biomechanics-model.md)); Technique Editor ([20](20-technique-authoring.md)); adaptive rules ([24](24-adaptive-training.md)) |
+| E — Extended training ecosystem | Instrumented equipment ([30](30-instrumented-equipment.md)); bundles and remote review ([26](26-instructor-and-remote-coaching.md)); reaction drills ([27](27-reaction-and-decision-drills.md)); explainer ([24 §6](24-adaptive-training.md)) |
+
+| Capability | Priority | Needed now (data or contract) | Built in | First milestone | Evidence before building |
+|---|---|---|---|---|---|
+| Measurement provenance and status vocabulary | P0 | Provenance record on every stored measurement | Phase 1 | Attempt detail shows full provenance | None |
+| Measurement feasibility matrix | P0 | Metric gates (they are the matrix) | Phase 1 (readiness list) | Per-metric availability with reasons before a session | Experiments per cell before any cell is quoted |
+| Golden sessions and regression | P0 | Manifest; `regress` subcommand; dataset consent flag | Phase 1 (synthetic), Phase 2+ (real) | Three synthetic sessions in CI | Physical recordings for the real set |
+| Technique authoring and review | P0 model / P1 tools | `review` block, example sets, annotation body | Phase 3 (annotation), later (editor) | Corrected phase boundaries on ten repetitions with an evaluation | Hand-authoring experience; instructors found |
+| Biomechanics and personalisation | P0 model / P1 metrics | Body-model record; `peak:` anchor; envelope query | Phase 3 (envelope), Phase 4 (sequencing) | One sequencing lag on the rig | V-16 timing resolution |
+| Footwork and spatial analysis | P0 architecture | Stances and transitions as definitions; floor frame | Phase 4, package 6c | Four-step line drill with stance checks | `multi_view` on the rig |
+| Hardware laboratory | P0 to run | Timing diagnostics; alignment switch; unsmoothed landmarks | Alongside Phases 2 and 4 | Block A in one afternoon | — |
+| Wearable hardware | P0 rules / P2 build | Mount interface; carrier `imu` block | Packages 6a, 6b | One shin cuff measured | V-05 with flat tags |
+| Deployment and device lifecycle | P1 | Firmware fields on `DeviceDescriptor`; migrations | Phase 2 onward | Offline installer | Physical devices |
+| Adaptive training | P1 | Stored cues, scores, RPE (already specified) | After Phase 3 | One rule, one proposal | V-24 cue precision |
+| Mixed reality and avatars | P1 design | Avatar map; alignment quality fields | Phase 5 | Mirror on the real floor | Headset session |
+| Instrumented equipment | P2 | Nothing built; contract written | When a device exists | One contact pad | The device |
+| Instructor and remote coaching | P2 | Stable ids and versions on everything exportable | After Phase 3 | Three repetitions opened on another installation | A real coach–student pair |
+| Reaction and decision drills | P2 | Nothing built; event pair written | After Phase 5 | Two-target drill with uncertainty | L-03/L-04 display latency |
+| Language-model explanations | Experimental | Structured summary contract | After adaptive rules | Checked rephrasing of one recommendation | Rules validated first |
+
+## 8. Not on the roadmap
 
 Partner or sparring analysis; hand, finger and face tracking; cloud sync or accounts; a content
 marketplace; automatic program generation; a fisheye camera model; an EKF or factor-graph smoother
