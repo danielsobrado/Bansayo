@@ -137,20 +137,127 @@ impl Check {
     }
 }
 
+fn check_training_sections(c: &mut Check, config: &Config) {
+    let v2 = [
+        ("content", config.content.is_some()),
+        ("analysis", config.analysis.is_some()),
+        ("recognition", config.recognition.is_some()),
+        ("training", config.training.is_some()),
+        ("coaching", config.coaching.is_some()),
+        ("progress", config.progress.is_some()),
+        ("storage", config.storage.is_some()),
+    ];
+    if config.schema_version < 2 {
+        for (key, present) in v2 {
+            if present {
+                c.err(key, "needs schema_version: 2");
+            }
+        }
+        for (i, s) in config.sources.iter().enumerate() {
+            if let SourceConfig::Simulated(s) = s
+                && s.detector_id.is_some()
+            {
+                c.err(
+                    format!("sources[{i}].detector_id"),
+                    "needs schema_version: 2",
+                );
+            }
+        }
+    }
+    let a = config.analysis();
+    c.positive("analysis.filters.position_hz", a.filters.position_hz, 100.0);
+    c.positive("analysis.filters.angle_hz", a.filters.angle_hz, 100.0);
+    let r = config.recognition();
+    c.range(
+        "recognition.accept_confidence.free",
+        r.accept_confidence.free,
+        0.0,
+        1.0,
+    );
+    c.range(
+        "recognition.accept_confidence.guided",
+        r.accept_confidence.guided,
+        0.0,
+        1.0,
+    );
+    c.range("recognition.ambiguity_margin", r.ambiguity_margin, 0.0, 1.0);
+    let s = &r.segmenter;
+    c.positive("recognition.segmenter.start_above", s.start_above, 100.0);
+    c.positive("recognition.segmenter.end_below", s.end_below, 100.0);
+    if s.end_below > s.start_above {
+        c.err(
+            "recognition.segmenter.end_below",
+            "must not exceed start_above",
+        );
+    }
+    if s.max_ms <= s.min_ms {
+        c.err("recognition.segmenter.max_ms", "must exceed min_ms");
+    }
+    let t = config.training();
+    c.range("training.countdown_s", t.countdown_s, 0.0, 60.0);
+    c.positive(
+        "training.limits.session_minutes",
+        f64::from(t.limits.session_minutes),
+        1440.0,
+    );
+    c.positive(
+        "training.limits.strikes_per_session",
+        f64::from(t.limits.strikes_per_session),
+        100_000.0,
+    );
+    let k = config.coaching();
+    for (key, v) in [
+        (
+            "coaching.tolerance_scale.beginner",
+            k.tolerance_scale.beginner,
+        ),
+        (
+            "coaching.tolerance_scale.intermediate",
+            k.tolerance_scale.intermediate,
+        ),
+        (
+            "coaching.tolerance_scale.advanced",
+            k.tolerance_scale.advanced,
+        ),
+    ] {
+        c.positive(key, v, 10.0);
+    }
+    let p = config.progress();
+    c.positive(
+        "progress.baseline_sessions",
+        f64::from(p.baseline_sessions),
+        100.0,
+    );
+    c.positive(
+        "progress.baseline_window_days",
+        p.baseline_window_days,
+        3650.0,
+    );
+    if p.trend_sessions < 4 {
+        c.err("progress.trend_sessions", "must be at least 4");
+    }
+    for (i, d) in config.content().dirs.iter().enumerate() {
+        if d.as_os_str().is_empty() {
+            c.err(format!("content.dirs[{i}]"), "must not be empty");
+        }
+    }
+}
+
 pub(super) fn validate(config: Config) -> Result<Validated, Vec<Problem>> {
     let mut c = Check {
         problems: vec![],
         warnings: vec![],
     };
-    if config.schema_version != SUPPORTED_SCHEMA_VERSION {
+    if !(MIN_SCHEMA_VERSION..=SUPPORTED_SCHEMA_VERSION).contains(&config.schema_version) {
         c.err(
             "schema_version",
             format!(
-                "{} is not supported by this build (supports {SUPPORTED_SCHEMA_VERSION})",
+                "{} is not supported by this build (supports {MIN_SCHEMA_VERSION} and {SUPPORTED_SCHEMA_VERSION})",
                 config.schema_version
             ),
         );
     }
+    check_training_sections(&mut c, &config);
     if !config.evidence.detector_noise_floor_px.is_finite()
         || config.evidence.detector_noise_floor_px <= 0.0
     {
@@ -649,7 +756,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let yaml = format!(
             r#"
-schema_version: 2
+schema_version: 3
 engine: {{ publish_rate_hz: 0, data_dir: {dir:?} }}
 api: {{ bind: "nowhere" }}
 triangulation: {{ min_views: 1, max_reprojection_error_px: 0 }}
@@ -671,7 +778,7 @@ sources:
         let p = problems(&yaml);
         let has =
             |prefix: &str, text: &str| p.iter().any(|l| l.starts_with(prefix) && l.contains(text));
-        assert!(has("schema_version", "2 is not supported"), "{p:#?}");
+        assert!(has("schema_version", "3 is not supported"), "{p:#?}");
         assert!(
             has("engine.publish_rate_hz", "between 1 and 1000"),
             "{p:#?}"
@@ -783,5 +890,51 @@ sources:
         );
         let v = parse(&yaml).expect("valid");
         assert!(v.simulated.is_empty() && v.assignments.is_empty());
+    }
+
+    #[test]
+    fn schema_two_sections_load_and_version_one_rejects_them() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let base = |v: u32, extra: &str| {
+            format!(
+                "schema_version: {v}\nengine: {{ data_dir: {:?} }}\nsources:\n  - {{ id: sim, kind: simulated, trackers: [{{ id: SIM-T01, rate_hz: 100 }}] }}\n{extra}",
+                dir.path().display().to_string()
+            )
+        };
+        let v2 = "content: { dirs: [./content] }\nanalysis: { filters: { position_hz: 10 } }\nrecognition: { accept_confidence: { guided: 0.6 } }\ntraining: { countdown_s: 3 }\ncoaching: { cooldown_reps: 2 }\nprogress: { trend_sessions: 6 }\nstorage: { record_defaults: { video: false } }\n";
+        let ok = parse(&base(2, v2)).expect("schema 2 loads");
+        assert_eq!(ok.config.analysis().filters.position_hz, 10.0);
+        assert_eq!(ok.config.recognition().accept_confidence.guided, 0.6);
+        assert_eq!(ok.config.training().pause_after_tracking_loss_ms, 3000);
+        assert!(parse(&base(1, "")).is_ok(), "version 1 files still load");
+        let p = problems(&base(1, v2));
+        for key in [
+            "content",
+            "analysis",
+            "recognition",
+            "training",
+            "coaching",
+            "progress",
+            "storage",
+        ] {
+            assert!(
+                p.iter()
+                    .any(|l| l.starts_with(key) && l.contains("needs schema_version: 2")),
+                "{key}: {p:#?}"
+            );
+        }
+        let p = problems(&base(
+            2,
+            "recognition: { segmenter: { start_above: 0.2, end_below: 0.5 } }\nprogress: { trend_sessions: 2 }\n",
+        ));
+        assert!(
+            p.iter()
+                .any(|l| l.starts_with("recognition.segmenter.end_below")),
+            "{p:#?}"
+        );
+        assert!(
+            p.iter().any(|l| l.starts_with("progress.trend_sessions")),
+            "{p:#?}"
+        );
     }
 }

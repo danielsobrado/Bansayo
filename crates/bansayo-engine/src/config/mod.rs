@@ -2,6 +2,7 @@
 
 mod load;
 mod schema;
+mod training;
 mod validate;
 
 pub use load::{ConfigError, load, load_with_data_dir, parse};

@@ -17,7 +17,7 @@ cue.resolved: This point now stays within the target range.
 prog.kick.low_slow: Kick low and slowly, focusing on the chamber.
 prog.kick.middle: Kick to the middle target at normal speed.
 prog.kick.high: Kick high and control the retraction.
-reason.calibration_missing: Not assessed: calibration needed ({subject}).
+reason.calibration_missing: "Not assessed: calibration needed ({subject})."
 status.observed: Observed
 status.estimated: Estimated
 status.indicative: Indicative

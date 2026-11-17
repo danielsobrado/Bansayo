@@ -6,8 +6,10 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-/// The only `schema_version` this build supports.
-pub const SUPPORTED_SCHEMA_VERSION: u32 = 1;
+/// The newest `schema_version` this build reads; version 1 files still load (13 §3).
+pub const SUPPORTED_SCHEMA_VERSION: u32 = 2;
+pub const MIN_SCHEMA_VERSION: u32 = 1;
+pub use super::training::*;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -37,6 +39,45 @@ pub struct Config {
     /// Reserved for camera processing; rejected until the camera milestone.
     #[serde(default)]
     pub processing_profiles: Option<Value>,
+    // Sections added by schema_version 2; absent means defaults.
+    #[serde(default)]
+    pub content: Option<ContentConfig>,
+    #[serde(default)]
+    pub analysis: Option<AnalysisConfig>,
+    #[serde(default)]
+    pub recognition: Option<RecognitionConfig>,
+    #[serde(default)]
+    pub training: Option<TrainingSection>,
+    #[serde(default)]
+    pub coaching: Option<CoachingSection>,
+    #[serde(default)]
+    pub progress: Option<ProgressSection>,
+    #[serde(default)]
+    pub storage: Option<StorageSection>,
+}
+
+impl Config {
+    pub fn content(&self) -> ContentConfig {
+        self.content.clone().unwrap_or_default()
+    }
+    pub fn analysis(&self) -> AnalysisConfig {
+        self.analysis.clone().unwrap_or_default()
+    }
+    pub fn recognition(&self) -> RecognitionConfig {
+        self.recognition.clone().unwrap_or_default()
+    }
+    pub fn training(&self) -> TrainingSection {
+        self.training.clone().unwrap_or_default()
+    }
+    pub fn coaching(&self) -> CoachingSection {
+        self.coaching.clone().unwrap_or_default()
+    }
+    pub fn progress(&self) -> ProgressSection {
+        self.progress.clone().unwrap_or_default()
+    }
+    pub fn storage(&self) -> StorageSection {
+        self.storage.clone().unwrap_or_default()
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -216,6 +257,9 @@ pub struct SimulatedSourceConfig {
     pub motion: String,
     #[serde(default = "speed_default")]
     pub speed: f64,
+    /// Pose-model identity of the simulated cameras, for comparability classes (schema 2).
+    #[serde(default)]
+    pub detector_id: Option<String>,
     #[serde(default)]
     pub trackers: Vec<SimTrackerConfig>,
     #[serde(default)]
