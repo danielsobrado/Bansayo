@@ -781,6 +781,14 @@ pub async fn session_reanalyse(
         Ok((None, ..)) => return not_found("No stored session with this id."),
         Err(r) => return r,
     };
+    // Until the session row is closed its event log may still be in the writer's queue, and a
+    // replay of a partial log would miss commands.
+    if detail.session.status == SessionStatus::Active {
+        return failure(
+            ApiErrorCode::Conflict,
+            "This session is still being stored; try again shortly.",
+        );
+    }
     if !detail.session.has_inputs {
         return failure(
             ApiErrorCode::Conflict,

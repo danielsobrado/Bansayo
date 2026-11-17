@@ -156,3 +156,16 @@ pub async fn run_session(
         tokio::time::sleep(Duration::from_millis(40)).await;
     }
 }
+
+/// The stored session once its row is closed: the analytics writer runs behind the live state.
+pub async fn stored(addr: SocketAddr, id: &str) -> Value {
+    let until = Instant::now() + Duration::from_secs(20);
+    loop {
+        let (status, v) = http(addr, "GET", &format!("training/sessions/{id}"), Value::Null).await;
+        if status == 200 && v["data"]["session"]["status"] != "active" {
+            return v["data"].clone();
+        }
+        assert!(Instant::now() < until, "session {id} not stored: {v}");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}

@@ -66,7 +66,7 @@ async fn guided_roundhouse_session_is_counted_stored_and_reviewable() {
     assert_eq!(s["phase"], "completed", "{s}");
     assert_eq!(s["totals"]["reps_completed"], 3, "{s}");
     // Stored rows: session, repetitions, provenance, events.
-    let detail = ok(addr, "GET", &format!("training/sessions/{id}"), Value::Null).await;
+    let detail = stored(addr, &id).await;
     assert_eq!(detail["session"]["status"], "completed");
     assert_eq!(detail["session"]["origin"], "simulated");
     assert_eq!(detail["session"]["reps_completed"], 3);
@@ -243,7 +243,8 @@ async fn recorded_session_is_reviewable_and_reanalyses_are_identical() {
     for _ in 0..100 {
         detail = ok(addr, "GET", &format!("training/sessions/{id}"), Value::Null).await;
         let rec = ok(addr, "GET", "state", Value::Null).await;
-        if detail["session"]["has_inputs"] == true && rec["recording"].is_null() {
+        // Stored (all events written) and the input recording closed.
+        if detail["session"]["status"] == "completed" && rec["recording"].is_null() {
             break;
         }
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -353,4 +354,79 @@ async fn recorded_session_is_reviewable_and_reanalyses_are_identical() {
     );
     assert!(!dir.path().join("sessions").join(&id).exists());
     engine.shutdown().await.unwrap();
+}
+
+/// Acceptance 4 (18 §3): a second session appears beside the first, and a session run with a
+/// different pose-model id is a separate series rather than a continuation.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_second_session_and_a_different_pose_model_appear_in_progress() {
+    let dir = tempfile::tempdir().unwrap();
+    let q = "progress/series?athlete_id=ana&technique=taekwondo.dollyeo_chagi&metric=kick.total_time&side=right&origin=simulated";
+    let engine = engine(&rig(dir.path(), "")).await;
+    let addr = engine.bound_addr();
+    athlete(addr, "ana", true).await;
+    // A session point needs at least three values (12 §6).
+    run_session(addr, 1, 3, 0, async |_: &Value| {}).await;
+    run_session(addr, 1, 3, 0, async |_: &Value| {}).await;
+    let s = series(addr, q, |s| points(s) == 2).await;
+    assert_eq!(s["classes"].as_array().unwrap().len(), 1, "{s}");
+    engine.shutdown().await.unwrap();
+    // Same data directory, another pose model.
+    let other = rig(dir.path(), "").replace(
+        "detector_id: simulated-projection",
+        "detector_id: simulated-projection-b",
+    );
+    let engine = self::engine(&other).await;
+    let addr = engine.bound_addr();
+    ok(
+        addr,
+        "PUT",
+        "athletes/active",
+        json!({ "athlete_id": "ana" }),
+    )
+    .await;
+    run_session(addr, 1, 3, 0, async |_: &Value| {}).await;
+    let s = series(addr, q, |s| points(s) == 3).await;
+    let classes = s["classes"].as_array().unwrap();
+    assert_eq!(classes.len(), 2, "{s}");
+    let detectors: Vec<&str> = classes
+        .iter()
+        .map(|c| c["detector_id"].as_str().unwrap())
+        .collect();
+    assert!(
+        detectors.contains(&"simulated-projection-b"),
+        "{detectors:?}"
+    );
+    assert!(classes.iter().all(|c| c["points"].as_array().unwrap().len()
+        == if c["detector_id"] == "simulated-projection-b" {
+            1
+        } else {
+            2
+        }));
+    engine.shutdown().await.unwrap();
+}
+
+fn points(s: &Value) -> usize {
+    s["classes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["points"].as_array().unwrap().len())
+        .sum()
+}
+
+/// Session points are written when the session closes, after the state reports completion.
+async fn series(addr: std::net::SocketAddr, q: &str, done: impl Fn(&Value) -> bool) -> Value {
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    loop {
+        let s = ok(addr, "GET", q, Value::Null).await;
+        if done(&s) {
+            return s;
+        }
+        assert!(
+            std::time::Instant::now() < until,
+            "series never filled: {s}"
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
 }

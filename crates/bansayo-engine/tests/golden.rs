@@ -33,7 +33,7 @@ async fn wait_closed(addr: std::net::SocketAddr, id: &str) {
     let until = Instant::now() + Duration::from_secs(20);
     loop {
         let d = ok(addr, "GET", &format!("training/sessions/{id}"), Value::Null).await;
-        if d["session"]["has_inputs"] == true
+        if d["session"]["status"] != "active"
             && ok(addr, "GET", "state", Value::Null).await["recording"].is_null()
         {
             return;
