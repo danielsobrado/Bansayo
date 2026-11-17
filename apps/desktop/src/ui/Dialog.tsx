@@ -24,7 +24,16 @@ export function Dialog({ open, title, description, children, onClose, className,
   }, [open]);
   return <dialog ref={ref} className={[styles.dialog, className].filter(Boolean).join(" ")} aria-labelledby={`${id}-title`} aria-describedby={description ? `${id}-description` : undefined}
     onCancel={event => { event.preventDefault(); onClose(); }}
-    onClose={() => { if (open) onClose(); }}>
+    onClose={() => { if (open && ref.current && !ref.current.open) onClose(); }}
+    onKeyDown={event => {
+      if (event.key !== "Tab") return;
+      const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button, a[href], input, select, textarea, [tabindex]'))
+        .filter(element => element.tabIndex >= 0 && !element.matches(":disabled") && element.getClientRects().length > 0);
+      const first = controls[0];
+      const last = controls.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    }}>
     <h2 id={`${id}-title`} className={styles.title}>{title}</h2>
     {description && <p id={`${id}-description`} className={styles.description}>{description}</p>}
     <div className={styles.body}>{children}</div>
