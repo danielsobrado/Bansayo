@@ -27,6 +27,7 @@ fn recorded_simulator_joint_values_keep_their_bits() {
         serde_json::from_slice(&std::fs::read(dir.join("before-frames.json")).unwrap()).unwrap();
     let after = frames(reader::load(&dir, &id).unwrap());
     assert_eq!(before.len(), after.len());
+    let mut reconciled_trunk = false;
     for (old, new) in before.iter().zip(&after) {
         if let (
             ServerMessage::Frame {
@@ -42,6 +43,9 @@ fn recorded_simulator_joint_values_keep_their_bits() {
         ) = (old, new)
         {
             assert_eq!(a, b);
+            assert_eq!(old.len(), new.len());
+            reconciled_trunk |=
+                old[8].value.is_some_and(|v| v < -0.01) && new[8].value.is_some_and(|v| v > 0.01);
             for (i, (a, b)) in old.iter().zip(new).enumerate() {
                 if i == 8 {
                     continue;
@@ -54,4 +58,8 @@ fn recorded_simulator_joint_values_keep_their_bits() {
             }
         }
     }
+    assert!(
+        reconciled_trunk,
+        "frozen forward-lean samples must change from negative to positive"
+    );
 }

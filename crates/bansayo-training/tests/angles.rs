@@ -67,3 +67,18 @@ fn left_right_reflection_preserves_flexion_elevation_and_forward_lean() {
         );
     }
 }
+
+#[test]
+fn degenerate_axes_keep_the_legacy_zero_and_trunk_suppresses_an_undefined_plane() {
+    assert_eq!(
+        axis_angle(&Q::identity(), &V::zeros(), &Q::identity(), &V::y()),
+        0.0
+    );
+    assert!(
+        trunk_forward_lean(
+            &Q::from_euler_angles(0.0, 0.0, std::f64::consts::FRAC_PI_2),
+            &Q::identity()
+        )
+        .is_none()
+    );
+}
