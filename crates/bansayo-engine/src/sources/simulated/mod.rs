@@ -228,6 +228,9 @@ impl Scheduler {
         self.update_clock(now_us);
         if next.generation != self.control.generation {
             self.sim_s = 0.0;
+            for slot in &mut self.devices {
+                slot.previous_rotation = None;
+            }
             if !self.spec.scenario.is_empty() {
                 self.faults_dirty = true;
             }
@@ -313,6 +316,7 @@ impl Scheduler {
                 .replace(fault.connected)
                 .is_some_and(|old| old != fault.connected)
             {
+                slot.previous_rotation = None;
                 emit(
                     &slot.id,
                     SourceEvent::DeviceLink {
