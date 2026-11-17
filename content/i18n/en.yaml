@@ -1,0 +1,25 @@
+# English texts. Wording rules: docs/architecture/martial-arts/17-security-privacy-and-safety.md §4.2.
+instr.kick.clear_space: Clear at least two metres around you before you start.
+instr.taekwondo.fighting_stance: Stand in your fighting stance, guard up.
+instr.kick.rear_leg_kicks: Kick with the rear leg and return it to the stance.
+safety.kick.warm_up_first: Warm up your hips and legs before kicking.
+safety.kick.no_physical_target: Kick into the air only; do not kick a wall, furniture or a person.
+safety.kick.control_extension: Control the extension; do not snap the knee straight.
+cue.kick.pivot.observed: Supporting foot turned {deviation_deg} less than the selected reference.
+cue.kick.pivot.suggestion: Practise the pivot at reduced speed.
+cue.kick.retraction.observed: Retraction took longer over the last repetitions.
+cue.kick.retraction.suggestion: Bring the foot back along the path it travelled out.
+cue.kick.guard.observed: Lead hand was {deviation_cm} further from the head than the target at the strike.
+cue.kick.guard.suggestion: Keep the lead hand beside your chin while you kick.
+cue.kick.recovery.observed: Settling after the kick took longer than your recent median.
+cue.kick.recovery.suggestion: Land the foot back in the stance before the next kick.
+cue.resolved: This point now stays within the target range.
+prog.kick.low_slow: Kick low and slowly, focusing on the chamber.
+prog.kick.middle: Kick to the middle target at normal speed.
+prog.kick.high: Kick high and control the retraction.
+reason.calibration_missing: Not assessed: calibration needed ({subject}).
+status.observed: Observed
+status.estimated: Estimated
+status.indicative: Indicative
+status.not_assessed: Not assessed
+status.unavailable: Unavailable

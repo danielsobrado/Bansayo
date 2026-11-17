@@ -1,0 +1,11 @@
+# neutral_stance is omitted until a stance definition ships (13 §5 lists it; see docs/13).
+schema: bansayo.discipline/v1
+id: taekwondo
+version: 1
+status: draft
+names:
+  display: Taekwondo
+styles:
+  - { id: kukkiwon, display: Kukkiwon }
+default_style: kukkiwon
+uses_lead_rear: true

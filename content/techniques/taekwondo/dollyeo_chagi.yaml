@@ -1,0 +1,196 @@
+# Shipped from docs/architecture/martial-arts/examples/technique-roundhouse-kick.yaml.
+# Authored for active side = left; the engine mirrors it for the right side (05 §3).
+# Differences from the example: start_stance, end_stance and the taekwondo.yeop_chagi
+# distractor are omitted because no stance definition or side kick ships yet; the
+# stillness gate replaces the stance gate (06 §3).
+# Thresholds are initial detection values, deliberately wide. They are not statements of correct technique.
+schema: bansayo.technique/v1
+id: taekwondo.dollyeo_chagi
+version: 1
+status: draft
+names:
+  display: Roundhouse kick
+  native: Dollyeo chagi
+  aliases: [turning kick, round kick]
+discipline: taekwondo
+style: kukkiwon
+family: kick.roundhouse
+kind: dynamic
+sides: [left, right]
+active_limb: leg
+mirror_signed: true
+instructions:
+  - instr.kick.clear_space
+  - instr.taekwondo.fighting_stance
+  - instr.kick.rear_leg_kicks
+
+segmentation:
+  driver: ankle_speed.active
+  unit: leg_length_s
+  start_above: 1.2
+  end_below: 0.5
+  min_ms: 250
+  max_ms: 2500
+
+phases:
+  - id: chamber
+    label: Chamber
+    enter:
+      all:
+        - { obs: knee_height.active, op: rises_above, value: 0.20, unit: leg_length, ref: rest }
+    max_ms: 900
+
+  - id: pivot
+    label: Pivot and hip rotation
+    optional: true            # needs foot or pelvis heading; skipped when neither is observable
+    enter:
+      any:
+        - { obs: foot_yaw.support, op: changed_by, value: 0.35, unit: rad, ref: rep_start }
+        - { obs: pelvis_yaw, op: changed_by, value: 0.50, unit: rad, ref: rep_start }
+    max_ms: 600
+
+  - id: extension
+    label: Extension
+    enter:
+      all:
+        - { obs: knee_extension_rate.active, op: gt, value: 3.0, unit: rad_s, hold_ms: 20 }
+        - { obs: thigh_elevation.active, op: gt, value: 0.90, unit: rad }
+    max_ms: 500
+
+  - id: retraction
+    label: Retraction
+    enter:
+      all:
+        - { obs: knee_extension_rate.active, op: lt, value: -2.0, unit: rad_s, hold_ms: 20 }
+    max_ms: 700
+
+  - id: recovery
+    label: Recovery
+    enter:
+      all:
+        - { obs: ankle_height.active, op: falls_below, value: 0.15, unit: leg_length, ref: rest }
+    max_ms: 1200
+
+strike:
+  obs: ankle_speed.active
+  op: local_max
+  unit: leg_length_s
+  prominence: 1.0
+  in_phase: extension
+  keypoint: ankle.active
+
+complete:
+  all:
+    - { obs: ankle_height.active, op: lt, value: 0.10, unit: leg_length, ref: rest, hold_ms: 100 }
+    - { obs: ankle_speed.active, op: lt, value: 0.5, unit: leg_length_s }
+
+# Every required observable has an image-plane realisation, so the technique is detectable on one camera.
+required_observables:
+  - knee_height.active
+  - ankle_height.active
+  - ankle_speed.active
+  - knee_flexion.active
+  - knee_extension_rate.active
+  - thigh_elevation.active
+
+optional_observables:
+  - foot_yaw.support
+  - pelvis_yaw
+  - thigh_azimuth.active
+  - knee_flexion.support
+  - guard_distance.lead
+  - guard_distance.rear
+  - root_speed
+  - com_proxy_offset.support
+
+confusable_with:
+  - taekwondo.ap_chagi
+
+metrics:
+  - use: kick.total_time
+  - use: kick.extension_time
+  - use: kick.retraction_time
+  - use: kick.peak_knee_height
+  - use: kick.peak_ankle_height
+  - use: kick.peak_ankle_speed
+  - use: kick.hip_rotation_range
+  - use: kick.support_pivot
+  - use: kick.support_knee_range
+  - use: kick.recovery_settle_time
+  - use: kick.guard_at_strike
+
+scoring: scoring.kick.basic
+
+cues:
+  - id: pivot_more
+    category: technique
+    basis: reference
+    when: { component: pivot, below: 0.5 }
+    priority: 1
+    min_grade: B
+    observed: cue.kick.pivot.observed
+    suggestion: cue.kick.pivot.suggestion
+    focus: external
+    drill: { stage: slow }
+  - id: retraction_slowing
+    category: timing
+    basis: history
+    when: { trend: { metric: kick.retraction_time, worse_by: 0.15, over_reps: 3 } }
+    priority: 2
+    min_grade: B
+    observed: cue.kick.retraction.observed
+    suggestion: cue.kick.retraction.suggestion
+    focus: external
+  - id: guard_dropped
+    category: guard
+    basis: measurement
+    when: { component: guard, below: 0.5 }
+    priority: 1
+    min_grade: A
+    observed: cue.kick.guard.observed
+    suggestion: cue.kick.guard.suggestion
+    focus: external
+  - id: unsettled_recovery
+    category: balance
+    basis: history
+    when: { component: recovery, below: 0.5 }
+    priority: 1
+    min_grade: A
+    observed: cue.kick.recovery.observed
+    suggestion: cue.kick.recovery.suggestion
+    focus: external
+
+target:
+  level: middle
+  distance: 0.95
+  unit: leg_length
+  radius_m: 0.15
+
+tempo:
+  slow_scale: 0.5
+
+max_gap_ms: 80
+
+safety:
+  notes:
+    - safety.kick.warm_up_first
+    - safety.kick.no_physical_target
+    - safety.kick.control_extension
+  min_clear_radius_m: 2.0
+  max_reps_per_set: 20
+  max_sets_per_session: 8
+  warmup_required: true
+
+progression:
+  - level: 1
+    label: Low and slow
+    description: prog.kick.low_slow
+    constraints: { stage: slow, target_level: low }
+  - level: 2
+    label: Middle, normal speed
+    description: prog.kick.middle
+    constraints: { stage: normal, target_level: middle }
+  - level: 3
+    label: High, controlled retraction
+    description: prog.kick.high
+    constraints: { stage: normal, target_level: high }

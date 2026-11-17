@@ -1,0 +1,81 @@
+# Shipped from docs/architecture/martial-arts/examples/scoring-kick-basic.yaml, unchanged.
+# Selected by a technique (`scoring: scoring.kick.basic`) or per session (`plan.scoring`).
+# Components are scored against SELECTED targets. There is no absolute technique-quality number (07 §7).
+schema: bansayo.scoring/v1
+id: scoring.kick.basic
+version: 1
+status: draft
+names:
+  display: Kick — basic components
+applies_to:
+  families: [kick.front, kick.roundhouse, kick.side]
+
+components:
+  - id: completion
+    label: Movement completion
+    source: { kind: outcome }
+    required: true
+    weight: 0
+
+  - id: height
+    label: Height
+    source: { metric: kick.peak_ankle_height, use: norm }
+    target: { from: personal, stat: median, window_sessions: 5 }
+    direction: at_least
+    tolerance: { inner: 0.03, outer: 0.15 }
+    min_grade: B
+    weight: 2
+
+  - id: chamber
+    label: Chamber height
+    source: { metric: kick.peak_knee_height, use: norm }
+    target: { from: reference }
+    direction: at_least
+    tolerance: { inner: 0.04, outer: 0.20 }
+    min_grade: B
+    weight: 1
+
+  - id: pivot
+    label: Support-foot pivot
+    source: { metric: kick.support_pivot, use: value }
+    target: { from: reference }
+    direction: at_least
+    tolerance: { inner: 0.17, outer: 0.70 }
+    min_grade: B
+    weight: 2
+
+  - id: retraction
+    label: Retraction timing
+    source: { metric: kick.retraction_time, use: value }
+    target: { from: personal, stat: median, window_sessions: 5 }
+    direction: at_most
+    tolerance: { inner: 40, outer: 200 }
+    min_grade: B
+    weight: 1
+
+  - id: recovery
+    label: Recovery
+    source: { metric: kick.recovery_settle_time, use: value }
+    target: { from: personal, stat: median, window_sessions: 5 }
+    direction: at_most
+    tolerance: { inner: 100, outer: 500 }
+    min_grade: A
+    weight: 1
+
+  - id: guard
+    label: Guard position
+    source: { metric: kick.guard_at_strike, use: norm }
+    target:
+      from: definition
+      value: 0.60
+      rationale: >-
+        Structural, not stylistic: the lead hand stays within 0.6 arm lengths of the head.
+        Chosen as the same bound the fighting-stance predicate uses; adjust per style by extending the model.
+    direction: at_most
+    tolerance: { inner: 0.05, outer: 0.40 }
+    min_grade: A
+    weight: 1
+
+composite:
+  id: reference_match
+  min_coverage: 0.7
