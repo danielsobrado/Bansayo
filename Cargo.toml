@@ -21,7 +21,7 @@ humantime = "2"
 nalgebra = "0.35"
 rand = { version = "0.9", default-features = false }
 rand_chacha = { version = "0.9", default-features = false }
-serde-saphyr = { version = "2", default-features = false, features = ["deserialize"] }
+serde-saphyr = { version = "2", default-features = false, features = ["deserialize", "serialize"] }
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync", "signal"] }
 tokio-util = "0.7"

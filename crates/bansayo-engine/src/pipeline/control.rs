@@ -5,7 +5,7 @@ use super::{
 };
 use crate::{
     recording::{Recorder, reader, replay::Replay},
-    registry::persistence::{persist_states, save_assignments},
+    registry::persistence::{remove_legacy_profile_file, save_runtime_snapshot},
     sources::simulated::camera::DECLARED_BY_SIMULATOR,
 };
 use bansayo_contracts::*;
@@ -104,16 +104,9 @@ impl Runtime {
                 }) {
                     stale.insert(p.id.clone());
                 }
-                let known = engine
-                    .registry
-                    .entries
-                    .keys()
-                    .chain(engine.config.assignments.keys())
-                    .cloned()
-                    .collect::<Vec<_>>();
+                let snapshot = engine.snapshot_with(&assignments, &stale, &engine.store.profiles);
                 self.background(reply, move || {
-                    persist_states(&dir, &stale).map_err(unavailable)?;
-                    save_assignments(&dir, &assignments, known.into_iter()).map_err(unavailable)?;
+                    save_runtime_snapshot(&dir, &snapshot).map_err(unavailable)?;
                     Ok(Completion::Assignment(assignments, stale, id))
                 });
             }
@@ -175,17 +168,29 @@ impl Runtime {
                         reply,
                     ));
                 }
-                if !engine.store.profiles.contains_key(&id)
-                    && !engine.store.invalid.iter().any(|p| p.id == id)
-                {
+                let in_profiles = engine.store.profiles.contains_key(&id);
+                if !in_profiles && !engine.store.invalid.iter().any(|p| p.id == id) {
                     return Err((
                         error(ApiErrorCode::NotFound, "Calibration profile was not found."),
                         reply,
                     ));
                 }
+                let mut profiles = engine.store.profiles.clone();
+                profiles.remove(&id);
+                let mut stale = engine.store.stale.clone();
+                stale.remove(&id);
+                let snapshot =
+                    engine.snapshot_with(&engine.registry.assignments, &stale, &profiles);
                 self.background(reply, move || {
-                    std::fs::remove_file(dir.join("calibration").join(format!("{id}.json")))
-                        .map_err(unavailable)?;
+                    save_runtime_snapshot(&dir, &snapshot).map_err(unavailable)?;
+                    if in_profiles {
+                        if let Err(error) = remove_legacy_profile_file(&dir, &id) {
+                            tracing::warn!(profile=%id, %error, "Runtime snapshot deleted profile, but legacy file could not be removed");
+                        }
+                    } else {
+                        std::fs::remove_file(dir.join("calibration").join(format!("{id}.json")))
+                            .map_err(unavailable)?;
+                    }
                     Ok(Completion::Deleted(id))
                 });
             }
@@ -366,11 +371,18 @@ impl Runtime {
                     engine.placements.send_replace(assignments.clone());
                     engine.registry.assignments = assignments;
                     engine.store.stale = stale;
+                    if engine.store.stale.is_empty() {
+                        engine.store.warnings.clear();
+                    }
                     self.record_context(engine);
                     device(engine, &id)
                 }
                 Completion::Deleted(id) => {
                     engine.store.profiles.remove(&id);
+                    engine.store.stale.remove(&id);
+                    if engine.store.stale.is_empty() {
+                        engine.store.warnings.clear();
+                    }
                     engine.store.invalid.retain(|p| p.id != id);
                     self.record_context(engine);
                     json!({"deleted":true})

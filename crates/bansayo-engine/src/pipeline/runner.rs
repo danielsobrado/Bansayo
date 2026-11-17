@@ -144,6 +144,26 @@ impl Runner {
             simulation: self.simulation(),
         }
     }
+    pub(super) fn snapshot_with(
+        &self,
+        assignments: &BTreeMap<DeviceId, SegmentId>,
+        stale: &std::collections::BTreeSet<ProfileId>,
+        profiles: &BTreeMap<ProfileId, CalibrationProfile>,
+    ) -> crate::registry::persistence::RuntimeSnapshot {
+        let known = self
+            .registry
+            .entries
+            .iter()
+            .filter(|(_, entry)| entry.descriptor.kind == DeviceKind::ImuTracker)
+            .map(|(id, _)| id.clone())
+            .chain(self.config.assignments.keys().cloned());
+        crate::registry::persistence::RuntimeSnapshot::from_state(
+            assignments,
+            known,
+            stale,
+            profiles,
+        )
+    }
     pub(super) fn update_simulation(
         &mut self,
         r: SimulationUpdateRequest,

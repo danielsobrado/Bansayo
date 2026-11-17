@@ -1,6 +1,5 @@
 use crate::{
     api::{self, Api},
-    calibration::Store,
     clock::SessionClock,
     config::Validated,
     pipeline::Runner,
@@ -46,12 +45,17 @@ impl Drop for EngineHandle {
 pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
     let listener = tokio::net::TcpListener::bind(config.bind).await?;
     let address = listener.local_addr()?;
-    let dir = config.config.engine.data_dir.clone();
-    let mut store = tokio::task::spawn_blocking(move || Store::load(&dir)).await??;
     let skeleton = Skeleton::builtin(
         &config.config.skeleton.model,
         config.config.skeleton.height_m,
     )?;
+    let dir = config.config.engine.data_dir.clone();
+    let initial_assignments = config.assignments.clone();
+    let sk_clone = skeleton.clone();
+    let (mut store, assignments) = tokio::task::spawn_blocking(move || {
+        crate::registry::persistence::load_runtime(&dir, &initial_assignments, &sk_clone)
+    })
+    .await??;
     let clock = SessionClock::start();
     let cancel = CancellationToken::new();
     let (events_tx, events_rx) = mpsc::channel(2048);
@@ -60,11 +64,6 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
     let mut descriptors = vec![];
     let mut controls = vec![];
     let mut drops = DropCounters::new();
-    let assignments = crate::registry::persistence::load_assignments(
-        &config.config.engine.data_dir,
-        &config.assignments,
-        &skeleton,
-    )?;
     let (placements, placements_rx) = watch::channel(assignments.clone());
     for spec in &config.simulated {
         let source = SimulatedSource {

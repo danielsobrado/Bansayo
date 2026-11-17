@@ -12,62 +12,6 @@ pub struct Store {
     pub invalid: Vec<CalibrationProfileSummary>,
 }
 impl Store {
-    pub fn load(data_dir: &Path) -> std::io::Result<Self> {
-        let mut store = Self::default();
-        let dir = data_dir.join("calibration");
-        std::fs::create_dir_all(&dir)?;
-        for entry in std::fs::read_dir(dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.extension().is_none_or(|e| e != "json") {
-                continue;
-            }
-            let Some(id) = path
-                .file_stem()
-                .and_then(|v| v.to_str())
-                .and_then(|v| ProfileId::new(v).ok())
-            else {
-                continue;
-            };
-            let profile = std::fs::read(&path)
-                .ok()
-                .and_then(|bytes| serde_json::from_slice::<CalibrationProfile>(&bytes).ok());
-            match profile {
-                Some(p) if valid(&p) && p.id == id => {
-                    store.profiles.insert(id, p);
-                }
-                other => {
-                    tracing::warn!(profile=%id,"Ignoring invalid calibration profile");
-                    let mut invalid =
-                        other
-                            .as_ref()
-                            .map(summary)
-                            .unwrap_or(CalibrationProfileSummary {
-                                id: id.clone(),
-                                kind: CalibrationKind::Mounting,
-                                state: CalibrationState::Invalid,
-                                device_id: None,
-                                segment_id: None,
-                                method: "invalid_file".into(),
-                                created_utc: None,
-                                data: Default::default(),
-                            });
-                    invalid.id = id;
-                    invalid.state = CalibrationState::Invalid;
-                    store.invalid.push(invalid);
-                }
-            }
-        }
-        match crate::registry::persistence::load_states(data_dir) {
-            Ok(stale) => store.stale = stale,
-            Err(e) => {
-                tracing::error!(%e,"Calibration state file is invalid; recapture required");
-                store.stale.extend(store.profiles.keys().cloned());
-                store.warnings.push(crate::registry::reason("calibration_state_invalid",None,"Saved calibration state could not be read. Recapture the reference pose to repair it."));
-            }
-        }
-        Ok(store)
-    }
     pub fn mounting(&self, device: &DeviceId, segment: &SegmentId) -> Option<Rot> {
         self.profiles
             .values()
@@ -165,7 +109,7 @@ impl Store {
         }
     }
 }
-fn valid(p: &CalibrationProfile) -> bool {
+pub(crate) fn valid_profile(p: &CalibrationProfile) -> bool {
     p.schema_version == CALIBRATION_PROFILE_SCHEMA_VERSION
         && p.kind == CalibrationKind::Mounting
         && p.subject.device_id.is_some()
@@ -173,6 +117,70 @@ fn valid(p: &CalibrationProfile) -> bool {
         && serde_json::from_value::<MountingData>(p.data.clone().into())
             .ok()
             .is_some_and(|d| rot_from_wire(d.q_sensor_from_segment).is_some())
+}
+pub(crate) struct LegacyProfiles {
+    pub valid: Vec<(PathBuf, CalibrationProfile)>,
+    pub invalid: Vec<CalibrationProfileSummary>,
+}
+
+pub(crate) fn scan_legacy_profiles(data_dir: &Path) -> std::io::Result<LegacyProfiles> {
+    let dir = data_dir.join("calibration");
+    if !dir.exists() {
+        return Ok(LegacyProfiles {
+            valid: vec![],
+            invalid: vec![],
+        });
+    }
+    let mut valid = vec![];
+    let mut invalid_list = vec![];
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().is_none_or(|e| e != "json") {
+            continue;
+        }
+        let Some(id) = path
+            .file_stem()
+            .and_then(|v| v.to_str())
+            .and_then(|v| ProfileId::new(v).ok())
+        else {
+            continue;
+        };
+        let profile = std::fs::read(&path)
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<CalibrationProfile>(&bytes).ok());
+        match profile {
+            Some(p) if valid_profile(&p) && p.id == id => {
+                valid.push((path, p));
+            }
+            other => {
+                tracing::warn!(profile=%id, "Ignoring invalid calibration profile");
+                let mut invalid =
+                    other
+                        .as_ref()
+                        .map(summary)
+                        .unwrap_or(CalibrationProfileSummary {
+                            id: id.clone(),
+                            kind: CalibrationKind::Mounting,
+                            state: CalibrationState::Invalid,
+                            device_id: None,
+                            segment_id: None,
+                            method: "invalid_file".into(),
+                            created_utc: None,
+                            data: Default::default(),
+                        });
+                invalid.id = id;
+                invalid.state = CalibrationState::Invalid;
+                invalid_list.push(invalid);
+            }
+        }
+    }
+    valid.sort_by(|a, b| a.1.id.cmp(&b.1.id));
+    invalid_list.sort_by(|a, b| a.id.cmp(&b.id));
+    Ok(LegacyProfiles {
+        valid,
+        invalid: invalid_list,
+    })
 }
 pub fn summary(p: &CalibrationProfile) -> CalibrationProfileSummary {
     CalibrationProfileSummary {
@@ -188,14 +196,4 @@ pub fn summary(p: &CalibrationProfile) -> CalibrationProfileSummary {
             _ => Default::default(),
         },
     }
-}
-/// Called on the blocking pool. A profile becomes visible only after its complete file is renamed.
-pub fn persist(data_dir: PathBuf, profiles: &[CalibrationProfile]) -> std::io::Result<()> {
-    let dir = data_dir.join("calibration");
-    std::fs::create_dir_all(&dir)?;
-    for p in profiles {
-        let destination = dir.join(format!("{}.json", p.id));
-        crate::registry::persistence::atomic_write(&destination, &serde_json::to_vec_pretty(p)?)?;
-    }
-    Ok(())
 }

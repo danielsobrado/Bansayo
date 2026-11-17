@@ -12,7 +12,7 @@ use crate::{
     calibration::mounting::CAPTURE_WINDOW_US,
     math::rot_from_wire,
     recording::{Context, Item, Recorder, replay::Replay},
-    registry::persistence::persist_states,
+    registry::persistence::{remove_legacy_profile_file, save_runtime_snapshot},
 };
 use bansayo_contracts::*;
 use std::{sync::Arc, time::Duration};
@@ -374,6 +374,7 @@ impl Runtime {
                         Ok(()) => {
                             let summaries = profiles.iter().map(calibration::summary).collect();
                             engine.store.insert(profiles);
+                            self.record_context(&engine);
                             let _ = reply.send(Ok(summaries));
                         }
                         Err(_) => {
@@ -489,15 +490,28 @@ impl Runtime {
                 self.busy = true;
                 let dir = engine.config.config.engine.data_dir.clone();
                 let mut stale = engine.store.stale.clone();
+                let mut next_profiles = engine.store.profiles.clone();
                 for p in &profiles {
                     stale.remove(&p.id);
+                    next_profiles.insert(p.id.clone(), p.clone());
                 }
+                let snapshot =
+                    engine.snapshot_with(&engine.registry.assignments, &stale, &next_profiles);
+                let ids: Vec<ProfileId> = profiles.iter().map(|p| p.id.clone()).collect();
                 let tx = self.commands.clone();
                 tokio::spawn(async move {
-                    let cloned = profiles.clone();
                     let result = tokio::task::spawn_blocking(move || {
-                        calibration::persist(dir.clone(), &cloned)?;
-                        persist_states(&dir, &stale)
+                        save_runtime_snapshot(&dir, &snapshot)?;
+                        for id in &ids {
+                            if let Err(error) = remove_legacy_profile_file(&dir, id) {
+                                tracing::warn!(
+                                    profile=%id,
+                                    %error,
+                                    "Calibration committed, but legacy file could not be removed"
+                                );
+                            }
+                        }
+                        Ok::<(), std::io::Error>(())
                     })
                     .await
                     .map_err(|e| e.to_string())
