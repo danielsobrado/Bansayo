@@ -587,3 +587,117 @@ pub struct CreateSessionRequest {
     #[ts(optional)]
     pub level: Option<u32>,
 }
+
+/// The running training session as listed in `SystemState`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct TrainingRef {
+    pub session_id: SessionId,
+    pub phase: SessionPhase,
+    pub title: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum StorageStateKind {
+    Ok,
+    Degraded,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct StorageStatus {
+    pub state: StorageStateKind,
+    pub reasons: Vec<Reason>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionStatus {
+    Active,
+    Completed,
+    Aborted,
+    Interrupted,
+}
+
+/// One stored training session (`GET /training/sessions`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct TrainingSessionSummary {
+    pub id: SessionId,
+    pub athlete_id: AthleteId,
+    pub started_utc: String,
+    pub ended_utc: Option<String>,
+    pub status: SessionStatus,
+    pub plan_kind: PlanKind,
+    pub plan_ref: Option<String>,
+    pub title: String,
+    pub origin: crate::Origin,
+    pub capability_profile: CapabilityProfileId,
+    pub reps_completed: u32,
+    pub reps_other: u32,
+    pub sets: u32,
+    pub analysis_rev: u32,
+    pub reanalysis_of: Option<SessionId>,
+    pub has_inputs: bool,
+    pub has_motion: bool,
+    pub rpe: Option<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct TrainingSessionDetail {
+    pub session: TrainingSessionSummary,
+    pub plan: Plan,
+    #[ts(type = "Record<string, unknown> | null")]
+    pub summary: Option<serde_json::Value>,
+    pub sets: Vec<SetRecord>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct SetRecord {
+    pub set_index: u32,
+    pub content_ref: Option<String>,
+    pub side: Option<Side>,
+    pub status: String,
+    pub started_t_us: TimeUs,
+    pub ended_t_us: Option<TimeUs>,
+    #[ts(type = "Record<string, unknown> | null")]
+    pub summary: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct ProvenanceRecord {
+    pub id: String,
+    pub first_used_utc: String,
+    #[ts(type = "Record<string, unknown>")]
+    pub body: serde_json::Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct ContentSnapshotRef {
+    pub hash: String,
+    pub kind: String,
+    pub id: String,
+    pub version: u32,
+}
+
+/// `GET /training/sessions/{id}/provenance` (32 §3).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct SessionProvenance {
+    pub session_id: SessionId,
+    pub engine_version: String,
+    pub observables_rev: u32,
+    pub analysis_rev: u32,
+    pub origin: crate::Origin,
+    pub capability_profile: CapabilityProfileId,
+    pub tracking_config: ProvenanceRecord,
+    pub calibration_set: ProvenanceRecord,
+    pub calibration_qa: String,
+    pub content: Vec<ContentRef>,
+    pub snapshots: Vec<ContentSnapshotRef>,
+    pub reanalysis_of: Option<SessionId>,
+    pub validation_reports: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct RpeRequest {
+    pub rpe: u8,
+}

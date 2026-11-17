@@ -96,6 +96,8 @@ async fn stream(socket: WebSocket, mut api: Api, topics: Vec<String>, rate: f64)
         conventions: Conventions::default(),
         skeleton: api.streams.skeleton.borrow().clone(),
         state: api.streams.state.borrow().clone(),
+        capabilities: None,
+        observables_rev: None,
     };
     if !send(&mut sink, &hello).await {
         return;

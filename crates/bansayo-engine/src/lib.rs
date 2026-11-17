@@ -11,5 +11,6 @@ pub mod recording;
 pub mod registry;
 pub mod skeleton;
 pub mod sources;
+pub mod store;
 mod ticker;
 pub use app::{EngineHandle, run, start};

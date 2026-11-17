@@ -392,6 +392,10 @@ pub fn recording_session() -> RecordingSession {
 
 pub fn system_state() -> SystemState {
     SystemState {
+        athlete: None,
+        training: None,
+        content_rev: None,
+        storage: None,
         capability_report: Some(super::examples::capability_report()),
         rev: 412,
         engine: EngineInfo {
@@ -412,6 +416,10 @@ pub fn system_state() -> SystemState {
 
 pub fn system_state_replay() -> SystemState {
     SystemState {
+        athlete: None,
+        training: None,
+        content_rev: None,
+        storage: None,
         capability_report: Some(super::examples::capability_report()),
         rev: 431,
         engine: EngineInfo {

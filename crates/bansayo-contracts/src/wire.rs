@@ -70,6 +70,14 @@ pub enum ServerMessage {
         conventions: Conventions,
         skeleton: SkeletonDefinition,
         state: SystemState,
+        /// Engine feature flags, e.g. `training`, `content`, `athletes`, `progress`. Additive.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        capabilities: Option<Vec<String>>,
+        /// Observable catalogue revision. Additive.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        observables_rev: Option<u32>,
     },
     /// Sent when the skeleton `rev` changes, before the first frame that refers to it.
     Skeleton { skeleton: SkeletonDefinition },
@@ -95,5 +103,18 @@ pub enum ServerMessage {
         level: NoticeLevel,
         code: String,
         message: String,
+    },
+    /// Topic `training`: authoritative session state; `null` when no session exists.
+    TrainingState { state: Option<crate::TrainingState> },
+    /// Topic `training`: one increment; `event_seq` increases by exactly 1 per session.
+    TrainingEvent {
+        session_id: crate::SessionId,
+        event: crate::TrainingEvent,
+    },
+    /// Topic `observables`: latest values, at most `max_rate_hz`.
+    Observables {
+        seq: u64,
+        t_us: TimeUs,
+        values: Vec<crate::ObservableValue>,
     },
 }

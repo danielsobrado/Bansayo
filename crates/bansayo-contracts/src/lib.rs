@@ -10,6 +10,7 @@
 #![forbid(unsafe_code)]
 
 pub mod api;
+pub mod athlete;
 pub mod calibration;
 pub mod capability;
 pub mod content;
@@ -30,6 +31,7 @@ pub mod training;
 pub mod wire;
 
 pub use api::*;
+pub use athlete::*;
 pub use calibration::*;
 pub use capability::*;
 pub use content::*;

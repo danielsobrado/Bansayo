@@ -28,6 +28,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 ort.workspace = true
 image.workspace = true
+rusqlite.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 nokhwa.workspace = true

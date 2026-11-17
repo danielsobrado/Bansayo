@@ -28,6 +28,22 @@ pub struct SystemState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub capability_report: Option<crate::CapabilityReport>,
+    /// Active athlete (martial-arts 14 §4). Additive.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub athlete: Option<crate::AthleteRef>,
+    /// Running training session. Additive.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub training: Option<crate::TrainingRef>,
+    /// Increments on every successful content rescan. Additive.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub content_rev: Option<u64>,
+    /// Analytics store health. Additive.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub storage: Option<crate::StorageStatus>,
     pub engine: EngineInfo,
     pub devices: Vec<DeviceStatus>,
     pub calibration: Vec<CalibrationProfileSummary>,

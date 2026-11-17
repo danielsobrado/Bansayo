@@ -52,6 +52,13 @@ fn hello() -> ServerMessage {
         conventions: Conventions::default(),
         skeleton: skeleton::definition(),
         state: state::system_state(),
+        capabilities: Some(vec![
+            "training".into(),
+            "content".into(),
+            "athletes".into(),
+            "progress".into(),
+        ]),
+        observables_rev: Some(1),
     }
 }
 

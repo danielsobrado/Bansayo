@@ -133,6 +133,10 @@ impl Runner {
         );
         let features = features(&devices, &solved);
         SystemState {
+            athlete: None,
+            training: None,
+            content_rev: None,
+            storage: None,
             capability_report: Some(super::features::capability_report(
                 &self.skeleton,
                 &self.registry,
