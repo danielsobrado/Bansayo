@@ -10,7 +10,10 @@ use crate::{
 };
 use bansayo_contracts::*;
 use motions::Motion;
-use std::{collections::BTreeMap, sync::atomic::Ordering, time::Duration};
+use std::{collections::BTreeMap, sync::atomic::Ordering};
+
+const MICROSECONDS_PER_SECOND: f64 = 1e6;
+const MIN_SCENARIO_STEP_US: u64 = 1;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Control {
@@ -88,155 +91,370 @@ impl SimulatedSource {
 /// Next emission time. Counted from the previous deadline so wake-up jitter does not lower
 /// the rate; after a stall, or for the first sample, counted from now so nothing bursts.
 fn next_due(previous: u64, now: u64, rate_hz: f64) -> u64 {
-    let period = (1e6 / rate_hz) as u64;
+    let period = (MICROSECONDS_PER_SECOND / rate_hz) as u64;
     if previous + period > now {
         previous + period
     } else {
         now + period
     }
 }
-impl Source for SimulatedSource {
-    async fn run(self, context: SourceContext) -> Result<(), crate::sources::SourceError> {
-        let mut timer = crate::ticker::ticker(Duration::from_millis(1));
-        let mut devices: BTreeMap<DeviceId, (u64, u64)> = BTreeMap::new();
-        let mut last_us = context.clock.now_us();
-        let mut sim_s = 0.0;
-        let mut generation = 0;
-        let mut links: BTreeMap<DeviceId, bool> = BTreeMap::new();
-        loop {
-            tokio::select! { _=context.cancel.cancelled()=>break, _=timer.recv()=>{} }
-            let now = context.clock.now_us();
-            let control = *context.control.borrow();
-            if control.generation != generation {
-                sim_s = 0.0;
-                generation = control.generation;
-            } else if !control.paused && !control.suspended {
-                sim_s += (now - last_us) as f64 / 1e6 * control.speed;
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct StepMetrics {
+    pub body_pose_evals: u64,
+    pub fault_rebuilds: u64,
+    pub emitted_observations: u64,
+    pub emitted_links: u64,
+}
+
+enum DeviceKindState {
+    Tracker {
+        noise_deg: f64,
+        heading_offset_deg: f64,
+    },
+    Camera {
+        spec_index: usize,
+    },
+}
+
+struct DeviceSlot {
+    id: DeviceId,
+    rate_hz: f64,
+    seq: u64,
+    next_due_us: u64,
+    connected: Option<bool>,
+    fault: FaultSetting,
+    kind: DeviceKindState,
+}
+
+/// Deadline-driven simulator scheduler. Decouples device timing and ground-truth evaluation
+/// from fixed polling so idle wake-ups perform zero pose or fault calculations.
+pub struct Scheduler {
+    spec: SimulatedSpec,
+    skeleton: Skeleton,
+    devices: Vec<DeviceSlot>,
+    last_us: u64,
+    sim_s: f64,
+    control: Control,
+    faults_dirty: bool,
+    next_scenario_sim_s: Option<f64>,
+    fault_scratch: BTreeMap<DeviceId, FaultSetting>,
+}
+
+impl Scheduler {
+    pub fn new(spec: SimulatedSpec, skeleton: Skeleton, now_us: u64, control: Control) -> Self {
+        let mut devices = Vec::with_capacity(spec.trackers.len() + spec.cameras.len());
+        for tracker in &spec.trackers {
+            devices.push(DeviceSlot {
+                id: tracker.id.clone(),
+                rate_hz: tracker.rate_hz,
+                seq: 0,
+                next_due_us: 0,
+                connected: None,
+                fault: FaultSetting::default(),
+                kind: DeviceKindState::Tracker {
+                    noise_deg: tracker.noise_deg,
+                    heading_offset_deg: tracker.heading_offset_deg,
+                },
+            });
+        }
+        for (spec_index, camera) in spec.cameras.iter().enumerate() {
+            devices.push(DeviceSlot {
+                id: camera.id.clone(),
+                rate_hz: camera.rate_hz,
+                seq: 0,
+                next_due_us: 0,
+                connected: None,
+                fault: FaultSetting::default(),
+                kind: DeviceKindState::Camera { spec_index },
+            });
+        }
+        Self {
+            spec,
+            skeleton,
+            devices,
+            last_us: now_us,
+            sim_s: 0.0,
+            control,
+            faults_dirty: true,
+            next_scenario_sim_s: None,
+            fault_scratch: BTreeMap::new(),
+        }
+    }
+
+    fn update_clock(&mut self, now_us: u64) {
+        if !self.control.paused && !self.control.suspended {
+            self.sim_s += now_us.saturating_sub(self.last_us) as f64 / MICROSECONDS_PER_SECOND
+                * self.control.speed;
+        }
+        self.last_us = now_us;
+    }
+
+    pub fn on_control(&mut self, now_us: u64, next: Control) {
+        self.update_clock(now_us);
+        if next.generation != self.control.generation {
+            self.sim_s = 0.0;
+            if !self.spec.scenario.is_empty() {
+                self.faults_dirty = true;
             }
-            last_us = now;
-            if control.suspended {
-                continue;
-            }
-            let mut faults: BTreeMap<DeviceId, FaultSetting> = BTreeMap::new();
+        }
+        self.control = next;
+    }
+
+    pub fn on_faults(&mut self, now_us: u64) {
+        self.update_clock(now_us);
+        self.faults_dirty = true;
+    }
+
+    pub fn next_deadline_us(&self) -> Option<u64> {
+        if self.control.suspended {
+            return None;
+        }
+        let device_due = self
+            .devices
+            .iter()
+            .filter(|d| d.fault.connected)
+            .map(|d| d.next_due_us)
+            .min();
+        let scenario_due = if !self.control.paused && self.control.speed > 0.0 {
+            self.next_scenario_sim_s.map(|target_sim_s| {
+                let delta_sim_s = (target_sim_s - self.sim_s).max(0.0);
+                let delta_us = (delta_sim_s / self.control.speed * MICROSECONDS_PER_SECOND)
+                    .ceil()
+                    .max(MIN_SCENARIO_STEP_US as f64) as u64;
+                self.last_us.saturating_add(delta_us)
+            })
+        } else {
+            None
+        };
+        match (device_due, scenario_due) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (Some(a), None) => Some(a),
+            (None, Some(b)) => Some(b),
+            (None, None) => None,
+        }
+    }
+
+    fn rebuild_faults(
+        &mut self,
+        now_us: u64,
+        manual_faults: &BTreeMap<DeviceId, FaultSetting>,
+        emit: &mut impl FnMut(&DeviceId, SourceEvent),
+        metrics: &mut StepMetrics,
+    ) {
+        self.fault_scratch.clear();
+        let scenario = &self.spec.scenario;
+        if !scenario.is_empty() {
             let phase = self
                 .spec
                 .scenario_period_s
-                .map_or(sim_s, |period| sim_s.rem_euclid(period));
-            for step in &self.spec.scenario {
+                .map_or(self.sim_s, |period| self.sim_s.rem_euclid(period));
+            for step in scenario {
                 if step.at_s <= phase
                     && let Ok(id) = DeviceId::new(step.device.as_str())
                 {
-                    faults
+                    self.fault_scratch
                         .entry(id)
                         .or_default()
                         .apply(step.action, step.quality);
                 }
             }
-            faults.extend(
-                context
-                    .faults
-                    .borrow()
-                    .iter()
-                    .map(|(id, s)| (id.clone(), *s)),
-            );
-            for id in self
-                .spec
-                .trackers
-                .iter()
-                .map(|t| &t.id)
-                .chain(self.spec.cameras.iter().map(|c| &c.id))
+            self.next_scenario_sim_s =
+                next_scenario_transition(scenario, self.spec.scenario_period_s, self.sim_s, phase);
+        } else {
+            self.next_scenario_sim_s = None;
+        }
+        for (id, setting) in manual_faults {
+            self.fault_scratch.insert(id.clone(), *setting);
+        }
+        for slot in &mut self.devices {
+            let fault = self
+                .fault_scratch
+                .get(&slot.id)
+                .copied()
+                .unwrap_or_default();
+            slot.fault = fault;
+            if slot
+                .connected
+                .replace(fault.connected)
+                .is_some_and(|old| old != fault.connected)
             {
-                let connected = faults.get(id).copied().unwrap_or_default().connected;
-                if links
-                    .insert(id.clone(), connected)
-                    .is_some_and(|old| old != connected)
-                {
-                    send(
-                        &context,
-                        id,
-                        SourceEvent::DeviceLink {
-                            device_id: id.clone(),
-                            connected,
-                            t_us: now,
-                        },
-                    );
-                }
-            }
-            let truth = body::body_pose(&self.skeleton, control.motion, sim_s);
-            for tracker in &self.spec.trackers {
-                let fault = faults.get(&tracker.id).copied().unwrap_or_default();
-                if !fault.connected {
-                    continue;
-                }
-                let (seq, next) = devices.entry(tracker.id.clone()).or_default();
-                if now < *next {
-                    continue;
-                }
-                *seq += 1;
-                *next = next_due(*next, now, tracker.rate_hz);
-                let index = self
-                    .assignments
-                    .borrow()
-                    .get(&tracker.id)
-                    .and_then(|s| self.skeleton.index_of(s))
-                    .unwrap_or(0);
-                let q = trackers::reading(
-                    &tracker.id,
-                    self.spec.seed,
-                    *seq,
-                    tracker.noise_deg,
-                    tracker.heading_offset_deg,
-                    truth.rotations[index],
+                emit(
+                    &slot.id,
+                    SourceEvent::DeviceLink {
+                        device_id: slot.id.clone(),
+                        connected: fault.connected,
+                        t_us: now_us,
+                    },
                 );
-                let event = SourceEvent::Observation {
-                    observation: SensorObservation {
-                        device_id: tracker.id.clone(),
-                        source_id: self.spec.id.clone(),
-                        origin: Origin::Simulated,
-                        seq: *seq,
-                        t_us: now,
-                        device_time_us: Some(now),
-                        time_quality: TimeQuality::Synchronized,
-                        calibration_ref: None,
-                        confidence: Some(fault.quality),
-                        data: ObservationData::Orientation {
-                            frame: FrameRef::SensorReference {
-                                id: tracker.id.clone(),
-                            },
-                            q,
-                        },
-                    },
-                };
-                send(&context, &tracker.id, event);
+                metrics.emitted_links += 1;
             }
-            for camera in &self.spec.cameras {
-                let fault = faults.get(&camera.id).copied().unwrap_or_default();
-                if !fault.connected {
-                    continue;
+        }
+        metrics.fault_rebuilds += 1;
+        self.faults_dirty = false;
+    }
+
+    pub fn step(
+        &mut self,
+        now_us: u64,
+        assignments: &BTreeMap<DeviceId, SegmentId>,
+        manual_faults: &BTreeMap<DeviceId, FaultSetting>,
+        mut emit: impl FnMut(&DeviceId, SourceEvent),
+    ) -> StepMetrics {
+        self.update_clock(now_us);
+        let mut metrics = StepMetrics::default();
+        if self.control.suspended {
+            return metrics;
+        }
+        let scenario_due = self
+            .next_scenario_sim_s
+            .is_some_and(|target| self.sim_s >= target);
+        if self.faults_dirty || scenario_due {
+            self.rebuild_faults(now_us, manual_faults, &mut emit, &mut metrics);
+        }
+        let mut truth: Option<body::BodyPose> = None;
+        for slot in &mut self.devices {
+            if !slot.fault.connected || now_us < slot.next_due_us {
+                continue;
+            }
+            let pose = truth.get_or_insert_with(|| {
+                metrics.body_pose_evals += 1;
+                body::body_pose(&self.skeleton, self.control.motion, self.sim_s)
+            });
+            slot.seq += 1;
+            slot.next_due_us = next_due(slot.next_due_us, now_us, slot.rate_hz);
+            let event = match slot.kind {
+                DeviceKindState::Tracker {
+                    noise_deg,
+                    heading_offset_deg,
+                } => {
+                    let index = assignments
+                        .get(&slot.id)
+                        .and_then(|s| self.skeleton.index_of(s))
+                        .unwrap_or(0);
+                    let q = trackers::reading(
+                        &slot.id,
+                        self.spec.seed,
+                        slot.seq,
+                        noise_deg,
+                        heading_offset_deg,
+                        pose.rotations[index],
+                    );
+                    SourceEvent::Observation {
+                        observation: SensorObservation {
+                            device_id: slot.id.clone(),
+                            source_id: self.spec.id.clone(),
+                            origin: Origin::Simulated,
+                            seq: slot.seq,
+                            t_us: now_us,
+                            device_time_us: Some(now_us),
+                            time_quality: TimeQuality::Synchronized,
+                            calibration_ref: None,
+                            confidence: Some(slot.fault.quality),
+                            data: ObservationData::Orientation {
+                                frame: FrameRef::SensorReference {
+                                    id: slot.id.clone(),
+                                },
+                                q,
+                            },
+                        },
+                    }
                 }
-                let (seq, next) = devices.entry(camera.id.clone()).or_default();
-                if now < *next {
-                    continue;
+                DeviceKindState::Camera { spec_index } => {
+                    let camera = &self.spec.cameras[spec_index];
+                    let landmarks =
+                        camera::project(camera, self.spec.seed, slot.seq, now_us, &pose.positions);
+                    SourceEvent::Observation {
+                        observation: SensorObservation {
+                            device_id: slot.id.clone(),
+                            source_id: self.spec.id.clone(),
+                            origin: Origin::Simulated,
+                            seq: slot.seq,
+                            t_us: now_us,
+                            device_time_us: Some(now_us),
+                            time_quality: TimeQuality::Synchronized,
+                            calibration_ref: None,
+                            confidence: Some(1.0),
+                            data: ObservationData::Landmarks2d { landmarks },
+                        },
+                    }
                 }
-                *seq += 1;
-                *next = next_due(*next, now, camera.rate_hz);
-                let landmarks =
-                    camera::project(camera, self.spec.seed, *seq, now, &truth.positions);
-                let event = SourceEvent::Observation {
-                    observation: SensorObservation {
-                        device_id: camera.id.clone(),
-                        source_id: self.spec.id.clone(),
-                        origin: Origin::Simulated,
-                        seq: *seq,
-                        t_us: now,
-                        device_time_us: Some(now),
-                        time_quality: TimeQuality::Synchronized,
-                        calibration_ref: None,
-                        confidence: Some(1.0),
-                        data: ObservationData::Landmarks2d { landmarks },
-                    },
-                };
-                send(&context, &camera.id, event);
+            };
+            emit(&slot.id, event);
+            metrics.emitted_observations += 1;
+        }
+        metrics
+    }
+}
+
+fn next_scenario_transition(
+    scenario: &[crate::config::ScenarioStep],
+    period_s: Option<f64>,
+    sim_s: f64,
+    phase: f64,
+) -> Option<f64> {
+    if let Some(period) = period_s {
+        let next_phase = scenario
+            .iter()
+            .map(|step| step.at_s)
+            .filter(|&at| at > phase && at < period)
+            .fold(period, f64::min);
+        Some(sim_s + (next_phase - phase))
+    } else {
+        scenario
+            .iter()
+            .map(|step| step.at_s)
+            .filter(|&at| at > sim_s)
+            .reduce(f64::min)
+    }
+}
+
+impl Source for SimulatedSource {
+    async fn run(self, mut context: SourceContext) -> Result<(), crate::sources::SourceError> {
+        let start_us = context.clock.now_us();
+        let initial_control = *context.control.borrow();
+        let mut scheduler = Scheduler::new(self.spec, self.skeleton, start_us, initial_control);
+        let mut timer = crate::ticker::DeadlineTimer::new();
+        let mut control_open = true;
+        let mut faults_open = true;
+        loop {
+            let now_us = context.clock.now_us();
+            {
+                let assignments = self.assignments.borrow();
+                let faults = context.faults.borrow();
+                scheduler.step(now_us, &assignments, &faults, |id, event| {
+                    send(&context, id, event);
+                });
+            }
+            let next_deadline = scheduler
+                .next_deadline_us()
+                .map(|t| context.clock.instant_at(t));
+            tokio::select! {
+                _ = context.cancel.cancelled() => break,
+                res = context.control.changed(), if control_open => {
+                    match res {
+                        Ok(()) => {
+                            let now = context.clock.now_us();
+                            let control = *context.control.borrow_and_update();
+                            scheduler.on_control(now, control);
+                        }
+                        Err(_) => control_open = false,
+                    }
+                }
+                res = context.faults.changed(), if faults_open => {
+                    match res {
+                        Ok(()) => {
+                            let now = context.clock.now_us();
+                            scheduler.on_faults(now);
+                        }
+                        Err(_) => faults_open = false,
+                    }
+                }
+                _ = async {
+                    if let Some(deadline) = next_deadline {
+                        timer.wait_until(deadline).await;
+                    }
+                }, if next_deadline.is_some() => {}
             }
         }
         Ok(())
