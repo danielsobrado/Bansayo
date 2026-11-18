@@ -161,6 +161,27 @@ pub struct ReferencePoseRequest {
     pub device_ids: Option<Vec<DeviceId>>,
 }
 
+/// `PUT /cameras/{id}/settings` body (martial-arts 14 §5.5). Absent fields are left unchanged.
+/// `resolution_px` and `rate_hz` are accepted in the schema but refused by this engine: camera
+/// calibration depends on them (09 §9), so they change in the configuration with a restart.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, TS)]
+pub struct CameraSettingsRequest {
+    /// Manual exposure, seconds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub exposure_s: Option<f64>,
+    /// Manual gain, device units.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub gain: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub resolution_px: Option<[u32; 2]>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub rate_hz: Option<f64>,
+}
+
 /// `PUT /simulation` body. Absent fields are left unchanged.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, TS)]
 pub struct SimulationUpdateRequest {

@@ -96,10 +96,12 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
         sources.push(ConfiguredSource::Simulated(Box::new(source), receiver));
     }
     let previews = Previews::default();
+    let camera_settings = crate::sources::camera::CameraSettings::default();
     for spec in &config.cameras {
         let source = CameraSource {
             spec: spec.clone(),
             previews: previews.clone(),
+            settings: camera_settings.clone(),
         };
         for d in source.descriptors() {
             drops.insert(d.id.clone(), Arc::new(AtomicU64::new(0)));
@@ -185,6 +187,7 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
         publish_rate: config.config.engine.publish_rate_hz,
         cancel: cancel.clone(),
         previews,
+        camera_settings,
         training: training_client,
         training_streams,
         content,

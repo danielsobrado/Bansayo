@@ -55,6 +55,7 @@ pub fn project(
             device_time_us: Some(t_us),
             time_quality: TimeQuality::Synchronized,
             image_size_px: c.resolution_px,
+            settings: None,
         },
         frame: FrameRef::Image { id: c.id.clone() },
         origin: Origin::Simulated,

@@ -25,6 +25,7 @@ pub struct Api {
     pub publish_rate: f64,
     pub cancel: CancellationToken,
     pub previews: crate::sources::camera::Previews,
+    pub camera_settings: crate::sources::camera::CameraSettings,
     pub training: crate::training::TrainingClient,
     pub training_streams: crate::training::TrainingStreams,
     pub content: Arc<crate::content_store::ContentStore>,
@@ -42,6 +43,7 @@ pub fn router(api: Api) -> Router {
         .route("/api/v1/calibration/profiles", post(import_profiles))
         .route("/api/v1/stream", get(ws::upgrade))
         .route("/api/v1/cameras/{id}/preview.jpg", get(preview))
+        .route("/api/v1/cameras/{id}/settings", put(camera_settings))
         .route("/api/v1/devices/{id}/assignment", put(control::assignment))
         .route(
             "/api/v1/simulation/devices/{id}/fault",
@@ -184,6 +186,76 @@ async fn preview(
             ApiErrorCode::NotFound,
             "No preview: the device is not a physical camera or has not delivered a frame yet.",
         ),
+    }
+}
+/// `PUT /cameras/{id}/settings` (14 §5.5): manual exposure and gain, applied by the capture thread
+/// on its next frame. Answers the camera's status once frames taken after the change arrive.
+async fn camera_settings(
+    State(api): State<Api>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+    body: Result<Json<CameraSettingsRequest>, JsonRejection>,
+) -> Response {
+    let Ok(Json(request)) = body else {
+        return failure(
+            ApiErrorCode::InvalidRequest,
+            "Provide a JSON object with exposure_s and/or gain.",
+        );
+    };
+    let Ok(id) = DeviceId::new(id.as_str()) else {
+        return failure(ApiErrorCode::NotFound, "No camera with this id.");
+    };
+    if request.resolution_px.is_some() || request.rate_hz.is_some() {
+        return failure(
+            ApiErrorCode::InvalidRequest,
+            "resolution_px and rate_hz are changed in the configuration with a restart: camera calibration depends on them.",
+        );
+    }
+    if let Some(e) = request.exposure_s
+        && !(e.is_finite() && (1e-5..=1.0).contains(&e))
+    {
+        return failure(
+            ApiErrorCode::InvalidRequest,
+            "exposure_s must be between 0.00001 and 1 second.",
+        );
+    }
+    if request.gain.is_some_and(|g| !g.is_finite()) {
+        return failure(ApiErrorCode::InvalidRequest, "gain must be a number.");
+    }
+    let changed = api.camera_settings.write().ok().and_then(|mut all| {
+        let s = all.get_mut(&id)?;
+        s.generation += 1;
+        s.exposure_s = request.exposure_s.or(s.exposure_s);
+        s.gain = request.gain.or(s.gain);
+        Some(())
+    });
+    if changed.is_none() {
+        return failure(
+            ApiErrorCode::NotFound,
+            "No physical or image-folder camera with this id.",
+        );
+    }
+    let seen = |api: &Api| {
+        api.streams
+            .state
+            .borrow()
+            .devices
+            .iter()
+            .find(|d| d.descriptor.id == id)
+            .cloned()
+    };
+    let before = seen(&api).and_then(|d| d.stream.last_seen_t_us);
+    // Two frames after the change carry the new settings; a stalled camera answers after 2 s.
+    for _ in 0..20 {
+        if let (Some(a), Some(b)) = (before, seen(&api).and_then(|d| d.stream.last_seen_t_us))
+            && b > a + 70_000
+        {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    match seen(&api) {
+        Some(status) => Json(ApiResponse::ok(status)).into_response(),
+        None => failure(ApiErrorCode::NotFound, "No camera with this id."),
     }
 }
 async fn import_profiles(

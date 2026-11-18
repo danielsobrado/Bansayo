@@ -191,6 +191,16 @@ impl Registry {
                     }
                     _ => 0.0,
                 };
+                let settings =
+                    e.latest
+                        .get(&ObservationKind::Landmarks2d)
+                        .and_then(|o| match &o.data {
+                            ObservationData::Landmarks2d { landmarks } => {
+                                landmarks.frame_meta.settings.clone()
+                            }
+                            _ => None,
+                        });
+                let unapplied = settings.as_ref().is_some_and(|s| !s.problems.is_empty());
                 let state = if e.failure.is_some() {
                     TrackingState::Unavailable
                 } else if !e.connected
@@ -199,7 +209,8 @@ impl Registry {
                     TrackingState::Disconnected
                 } else if last.is_none() {
                     TrackingState::Acquiring
-                } else if e.reported_quality < quality.degraded_quality as f32
+                } else if unapplied
+                    || e.reported_quality < quality.degraded_quality as f32
                     || e.received > 2
                         && e.descriptor
                             .nominal_rate_hz
@@ -216,6 +227,10 @@ impl Registry {
                         Some(e.descriptor.id.to_string()),
                         "Device is disconnected. Waiting for fresh data.",
                     )),
+                    // Settings problems name their property (08 §3.2) and stand in for the generic reason.
+                    TrackingState::Degraded if unapplied => {
+                        reasons.extend(settings.iter().flat_map(|s| s.problems.iter().cloned()))
+                    }
                     TrackingState::Degraded => reasons.push(reason(
                         "device_degraded",
                         Some(e.descriptor.id.to_string()),
@@ -277,6 +292,7 @@ impl Registry {
                     signal: None,
                     quality: last.map(|_| e.reported_quality),
                     calibration,
+                    camera_settings: settings,
                 }
             })
             .collect()

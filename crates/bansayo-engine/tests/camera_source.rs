@@ -213,3 +213,115 @@ async fn camera_profiles_import_validate_persist_and_survive_a_failing_detector(
     assert!(cam2.iter().all(|(_, s)| s == "valid"), "{cam2:?}");
     engine.shutdown().await.unwrap();
 }
+
+/// A standing person in COCO-17 order on a 64×48 image, pixels.
+fn standing_row() -> String {
+    let p: [[f32; 2]; 17] = [
+        [32.0, 6.0],
+        [33.0, 5.0],
+        [31.0, 5.0],
+        [34.0, 6.0],
+        [30.0, 6.0],
+        [36.0, 11.0],
+        [28.0, 11.0],
+        [37.0, 17.0],
+        [27.0, 17.0],
+        [37.0, 22.0],
+        [27.0, 22.0],
+        [35.0, 24.0],
+        [29.0, 24.0],
+        [35.0, 33.0],
+        [29.0, 33.0],
+        [35.0, 42.0],
+        [29.0, 42.0],
+    ];
+    serde_json::to_string(&p.map(|[x, y]| [x, y, 0.9])).unwrap()
+}
+
+/// 08 §3.2 / D2: a requested setting the backend cannot apply makes the camera `degraded` with a
+/// reason naming the property; the camera keeps delivering; settings are changed over HTTP.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn unapplied_camera_settings_degrade_the_camera_with_the_property_named() {
+    let dir = tempfile::tempdir().unwrap();
+    let frames = dir.path().join("frames");
+    std::fs::create_dir_all(&frames).unwrap();
+    let mut rows = String::new();
+    for i in 0..10 {
+        image::RgbImage::new(64, 48)
+            .save(frames.join(format!("{i:04}.png")))
+            .unwrap();
+        rows.push_str(&standing_row());
+        rows.push('\n');
+    }
+    std::fs::write(frames.join("landmarks.jsonl"), rows).unwrap();
+    let yaml = format!(
+        r#"schema_version: 1
+engine: {{ data_dir: {data:?} }}
+api: {{ bind: "127.0.0.1:0" }}
+sources:
+  - id: cams
+    kind: camera
+    models_dir: {models:?}
+    cameras:
+      - {{ id: CAM1, frames_dir: {frames:?}, rate_hz: 20, exposure_s: 0.004 }}
+"#,
+        data = dir.path().join("data").display().to_string(),
+        models = dir.path().join("no-models").display().to_string(),
+        frames = frames.display().to_string(),
+    );
+    let engine = bansayo_engine::start(config::parse(&yaml).unwrap())
+        .await
+        .unwrap();
+    let addr = engine.bound_addr();
+    let cam = |state: &Value| {
+        state["data"]["devices"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|d| d["descriptor"]["id"] == "CAM1")
+            .unwrap()
+            .clone()
+    };
+    let mut status = Value::Null;
+    for _ in 0..50 {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        status = cam(&request(addr, "GET", "state", "").await.1);
+        if status["state"] == "degraded" {
+            break;
+        }
+    }
+    assert_eq!(status["state"], "degraded", "{status}");
+    assert_eq!(status["reasons"][0]["code"], "camera_setting_not_applied");
+    assert_eq!(status["reasons"][0]["subject"], "exposure_s");
+    assert!(
+        status["camera_settings"]["exposure_s"].is_null(),
+        "{status}"
+    );
+    assert!(status["stream"]["received"].as_u64().unwrap() > 0);
+
+    let (code, body) = request(addr, "PUT", "cameras/CAM1/settings", r#"{"gain": 4}"#).await;
+    assert_eq!(code, 200, "{body}");
+    let subjects: Vec<&str> = body["data"]["reasons"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|r| r["subject"].as_str())
+        .collect();
+    assert_eq!(subjects, ["exposure_s", "gain"], "{body}");
+    for (body, want) in [
+        (r#"{"resolution_px": [640, 480]}"#, 400),
+        (r#"{"exposure_s": 5}"#, 400),
+    ] {
+        assert_eq!(
+            request(addr, "PUT", "cameras/CAM1/settings", body).await.0,
+            want
+        );
+    }
+    assert_eq!(
+        request(addr, "PUT", "cameras/NOPE/settings", r#"{"gain": 1}"#)
+            .await
+            .0,
+        404
+    );
+    engine.shutdown().await.unwrap();
+}

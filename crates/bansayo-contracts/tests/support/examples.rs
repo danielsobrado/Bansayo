@@ -171,6 +171,11 @@ fn frame_meta() -> CameraFrameMetadata {
         device_time_us: Some(303_712_345),
         time_quality: TimeQuality::Estimated,
         image_size_px: [1280, 720],
+        settings: Some(CameraSettingsStatus {
+            exposure_s: Some(0.003_906_25),
+            gain: None,
+            problems: vec![],
+        }),
     }
 }
 
@@ -447,6 +452,15 @@ fn api() -> Vec<Example> {
                 motion: Some("squat".into()),
                 speed: Some(0.5),
                 paused: Some(false),
+            },
+        ),
+        ex(
+            "api_request_camera_settings",
+            CameraSettingsRequest {
+                exposure_s: Some(0.004),
+                gain: None,
+                resolution_px: None,
+                rate_hz: None,
             },
         ),
         ex(

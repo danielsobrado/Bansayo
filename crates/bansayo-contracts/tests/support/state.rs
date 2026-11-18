@@ -132,6 +132,7 @@ fn tracker(index: usize, state: TrackingState, mounting: CalibrationState) -> De
         }),
         signal: connected.then_some(SignalStatus { rssi_dbm: -54 }),
         quality: connected.then_some(if degraded { 0.3 } else { 0.97 }),
+        camera_settings: None,
         calibration: vec![
             cal(CalibrationKind::Mounting, mounting, profile_ref),
             cal(
@@ -159,6 +160,7 @@ pub fn camera_status() -> DeviceStatus {
         battery: None,
         signal: None,
         quality: None,
+        camera_settings: None,
         calibration: vec![
             cal(
                 CalibrationKind::CameraIntrinsics,

@@ -67,6 +67,8 @@ pub struct LiveCameraSpec {
     pub rate_hz: f64,
     pub resolution_px: [u32; 2],
     pub latency_us: u64,
+    pub exposure_s: Option<f64>,
+    pub gain: Option<f64>,
 }
 
 /// An enabled camera source with validated identities and present model files.
@@ -601,7 +603,13 @@ fn check_camera_source(
     devices: &mut HashMap<String, (String, bool)>,
 ) -> Option<CameraSourceSpec> {
     use crate::sources::camera::{capture, pose};
-    if k.enabled {
+    // Image folders with recorded landmarks need no pose models.
+    let replayed = |cam: &crate::config::LiveCameraConfig| {
+        cam.frames_dir
+            .as_ref()
+            .is_some_and(|d| d.join(capture::RECORDED_LANDMARKS).is_file())
+    };
+    if k.enabled && !k.cameras.iter().all(replayed) {
         for model in [pose::DETECTOR_MODEL, pose::POSE_MODEL] {
             let file = k.models_dir.join(model);
             if !file.is_file() {
@@ -638,6 +646,9 @@ fn check_camera_source(
         c.range(&format!("{p}.latency_ms"), cam.latency_ms, 0.0, 1000.0);
         for (axis, v) in ["width", "height"].iter().zip(cam.resolution_px) {
             c.range(&format!("{p}.resolution_px.{axis}"), v.into(), 16.0, 8192.0);
+        }
+        if let Some(e) = cam.exposure_s {
+            c.range(&format!("{p}.exposure_s"), e, 1e-5, 1.0);
         }
         let mut resolution = cam.resolution_px;
         let backend = match (&cam.device, &cam.frames_dir) {
@@ -683,6 +694,8 @@ fn check_camera_source(
                 rate_hz: cam.rate_hz,
                 resolution_px: resolution,
                 latency_us: (cam.latency_ms * 1000.0) as u64,
+                exposure_s: cam.exposure_s,
+                gain: cam.gain,
             });
         }
     }

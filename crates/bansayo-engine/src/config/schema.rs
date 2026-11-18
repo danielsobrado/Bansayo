@@ -367,6 +367,13 @@ pub struct LiveCameraConfig {
     /// Capture-to-arrival latency subtracted from arrival time, milliseconds.
     #[serde(default)]
     pub latency_ms: f64,
+    /// Manual exposure, seconds (08 §3.2); automatic exposure is switched off. Unset on a
+    /// physical camera: the camera's automatic exposure, reported `degraded`.
+    #[serde(default)]
+    pub exposure_s: Option<f64>,
+    /// Manual gain in the device's own units; unset leaves the camera's setting.
+    #[serde(default)]
+    pub gain: Option<f64>,
 }
 
 fn camera_rate_default() -> f64 {

@@ -16,7 +16,7 @@ pub struct LandmarkSchema {
 }
 
 /// Timing and size of the camera frame landmarks were detected in.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct CameraFrameMetadata {
     pub device_id: DeviceId,
     pub frame_seq: u64,
@@ -27,6 +27,22 @@ pub struct CameraFrameMetadata {
     pub time_quality: TimeQuality,
     /// Image width and height, pixels.
     pub image_size_px: [u32; 2],
+    /// Exposure and gain in effect, and why requested values are not (08 §3.2). Additive under
+    /// protocol version 1; absent for simulated cameras and older recordings.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub settings: Option<CameraSettingsStatus>,
+}
+
+/// Manual capture settings of a physical camera as read back from the device.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, TS)]
+pub struct CameraSettingsStatus {
+    /// Exposure in effect, seconds; `null` while the camera runs on automatic exposure.
+    pub exposure_s: Option<f32>,
+    /// Gain in effect, device units; `null` while automatic or not requested.
+    pub gain: Option<f32>,
+    /// One reason per requested setting the device or backend could not apply, naming it.
+    pub problems: Vec<crate::Reason>,
 }
 
 /// One detected 2D landmark, pixels in the image frame.

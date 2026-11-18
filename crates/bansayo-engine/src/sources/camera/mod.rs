@@ -32,10 +32,78 @@ const PREVIEW_MAX_WIDTH: u32 = 640;
 const PREVIEW_PERIOD_US: u64 = 100_000;
 const REOPEN_AFTER: Duration = Duration::from_secs(2);
 
+/// Manual capture settings requested per camera; `PUT /cameras/{id}/settings` changes them and
+/// bumps `generation`, and the capture thread applies them on its next frame.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct RequestedSettings {
+    pub generation: u64,
+    pub exposure_s: Option<f64>,
+    pub gain: Option<f64>,
+}
+pub type CameraSettings = Arc<RwLock<BTreeMap<DeviceId, RequestedSettings>>>;
+
+/// Applies requested settings and says what is in effect (08 §3.2, ADR-020). A setting the device
+/// or backend cannot apply leaves the camera running and adds a reason naming the property.
+pub fn apply_settings(backend: &Backend, r: &RequestedSettings) -> CameraSettingsStatus {
+    let problem = |property: &str, message: String| Reason {
+        code: "camera_setting_not_applied".into(),
+        subject: Some(property.into()),
+        message,
+    };
+    match backend {
+        Backend::Frames(_) => CameraSettingsStatus {
+            exposure_s: None,
+            gain: None,
+            problems: [("exposure_s", r.exposure_s), ("gain", r.gain)]
+                .into_iter()
+                .filter(|(_, v)| v.is_some())
+                .map(|(p, _)| problem(p, format!("{p}: an image folder has no capture settings.")))
+                .collect(),
+        },
+        Backend::Device(index) => {
+            let mut problems = vec![];
+            if r.exposure_s.is_none() {
+                problems.push(Reason {
+                    code: "exposure_automatic".into(),
+                    subject: Some("exposure_s".into()),
+                    message:
+                        "exposure_s is not set: automatic exposure blurs fast limbs (08 §3.2)."
+                            .into(),
+                });
+            }
+            let requested = r.exposure_s.is_some() || r.gain.is_some();
+            let result = if requested {
+                controls::apply(*index, r.exposure_s, r.gain)
+            } else {
+                Ok(Default::default())
+            };
+            let applied = match result {
+                Ok(a) => a,
+                Err(e) => {
+                    let property = if e.starts_with("gain") {
+                        "gain"
+                    } else {
+                        "exposure_s"
+                    };
+                    problems.push(problem(property, e));
+                    // Exposure may have been set before gain failed; read what the device says.
+                    controls::apply(*index, r.exposure_s, None).unwrap_or_default()
+                }
+            };
+            CameraSettingsStatus {
+                exposure_s: applied.exposure_s.map(|v| v as f32),
+                gain: applied.gain.map(|v| v as f32),
+                problems,
+            }
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct CameraSource {
     pub spec: CameraSourceSpec,
     pub previews: Previews,
+    pub settings: CameraSettings,
 }
 
 impl CameraSource {
@@ -79,6 +147,8 @@ impl CameraSource {
 struct Frame {
     image: RgbImage,
     t_us: u64,
+    settings: Option<CameraSettingsStatus>,
+    recorded: Option<Vec<Option<Landmark2D>>>,
 }
 
 /// Newest frame per camera plus a wake-up for the inference thread.
@@ -107,11 +177,23 @@ impl Source for CameraSource {
             wake: Condvar::new(),
         });
         for (index, camera) in self.spec.cameras.iter().enumerate() {
-            let (camera, slots, stop, context) =
-                (camera.clone(), slots.clone(), stop.clone(), context.clone());
+            if let Ok(mut s) = self.settings.write() {
+                s.entry(camera.id.clone()).or_insert(RequestedSettings {
+                    generation: 0,
+                    exposure_s: camera.exposure_s,
+                    gain: camera.gain,
+                });
+            }
+            let (camera, slots, stop, context, settings) = (
+                camera.clone(),
+                slots.clone(),
+                stop.clone(),
+                context.clone(),
+                self.settings.clone(),
+            );
             std::thread::Builder::new()
                 .name(format!("capture-{}", camera.id))
-                .spawn(move || capture_loop(index, &camera, &slots, &stop, &context))
+                .spawn(move || capture_loop(index, &camera, &slots, &stop, &context, &settings))
                 .map_err(|e| SourceError(e.to_string()))?;
         }
         let (fatal_tx, fatal_rx) = tokio::sync::oneshot::channel();
@@ -165,14 +247,32 @@ fn capture_loop(
     slots: &Slots,
     stop: &AtomicBool,
     context: &SourceContext,
+    settings: &CameraSettings,
 ) {
     let mut connected = true;
     let mut time = crate::clock::SourceTime::default();
+    let requested = || {
+        settings
+            .read()
+            .ok()
+            .and_then(|s| s.get(&camera.id).copied())
+            .unwrap_or_default()
+    };
     while !stop.load(Ordering::Relaxed) {
         let failure = match capture::open(&camera.backend, camera.resolution_px, camera.rate_hz) {
             Ok(mut capture) => {
                 tracing::info!(camera=%camera.id, format=%capture.describe(), "Camera opened");
+                // Applied after the stream is open: the device then holds them while streaming.
+                let mut applied: Option<(u64, CameraSettingsStatus)> = None;
                 loop {
+                    let r = requested();
+                    if applied.as_ref().is_none_or(|(g, _)| *g != r.generation) {
+                        let status = apply_settings(&camera.backend, &r);
+                        let problems: Vec<&str> =
+                            status.problems.iter().map(|p| p.message.as_str()).collect();
+                        tracing::info!(camera=%camera.id, exposure_s=?status.exposure_s, gain=?status.gain, ?problems, "Camera settings");
+                        applied = Some((r.generation, status));
+                    }
                     if stop.load(Ordering::Relaxed) {
                         return;
                     }
@@ -199,7 +299,18 @@ fn capture_loop(
                                 link(context, &camera.id, true);
                             }
                             if let Ok(mut slot) = slots.frames[index].lock() {
-                                *slot = Some(Frame { image, t_us });
+                                // A frame replaced before inference took it is dropped (08 §3).
+                                if slot.is_some()
+                                    && let Some(c) = context.dropped.get(&camera.id)
+                                {
+                                    c.fetch_add(1, Ordering::Relaxed);
+                                }
+                                *slot = Some(Frame {
+                                    image,
+                                    t_us,
+                                    settings: applied.as_ref().map(|(_, s)| s.clone()),
+                                    recorded: capture.recorded_landmarks(),
+                                });
                             }
                             if let Ok(mut fresh) = slots.fresh.lock() {
                                 *fresh = true;
@@ -228,13 +339,8 @@ fn inference_loop(
     context: &SourceContext,
 ) -> Result<(), String> {
     let spec = &source.spec;
-    let mut detector = pose::Detector::load(
-        &spec.models_dir,
-        spec.execution,
-        spec.min_person_score,
-        spec.min_keypoint_score,
-    )?;
-    tracing::info!(source=%spec.id, "Pose models loaded");
+    // Loaded on the first frame without recorded landmarks.
+    let mut detector: Option<pose::Detector> = None;
     let n = spec.cameras.len();
     let mut tracks: Vec<pose::Track> = (0..n).map(|_| pose::Track::default()).collect();
     let mut seqs = vec![0u64; n];
@@ -261,7 +367,33 @@ fn inference_loop(
         };
         next = i + 1;
         let camera = &spec.cameras[i];
-        let detection = detector.track(&frame.image, &mut tracks[i])?;
+        let detection = match frame.recorded.clone() {
+            Some(points) => Some(pose::Detection {
+                bbox: [
+                    0.0,
+                    0.0,
+                    frame.image.width() as f32,
+                    frame.image.height() as f32,
+                ],
+                score: 1.0,
+                points,
+            }),
+            None => {
+                if detector.is_none() {
+                    detector = Some(pose::Detector::load(
+                        &spec.models_dir,
+                        spec.execution,
+                        spec.min_person_score,
+                        spec.min_keypoint_score,
+                    )?);
+                    tracing::info!(source=%spec.id, "Pose models loaded");
+                }
+                match detector.as_mut() {
+                    Some(d) => d.track(&frame.image, &mut tracks[i])?,
+                    None => None,
+                }
+            }
+        };
         seqs[i] += 1;
         let observation = landmarks_observation(
             camera,
@@ -270,6 +402,7 @@ fn inference_loop(
             frame.t_us,
             [frame.image.width(), frame.image.height()],
             detection.as_ref(),
+            frame.settings.clone(),
         );
         if context
             .events
@@ -300,6 +433,7 @@ pub fn landmarks_observation(
     t_us: u64,
     image_size_px: [u32; 2],
     detection: Option<&pose::Detection>,
+    settings: Option<CameraSettingsStatus>,
 ) -> SensorObservation {
     let points = detection.map_or_else(|| vec![None; 17], |d| d.points.clone());
     let seen: Vec<f32> = points.iter().flatten().map(|p| p.confidence).collect();
@@ -328,6 +462,7 @@ pub fn landmarks_observation(
                     device_time_us: None,
                     time_quality: TimeQuality::ReceiveTime,
                     image_size_px,
+                    settings,
                 },
                 frame: FrameRef::Image {
                     id: camera.id.clone(),
@@ -370,6 +505,8 @@ mod tests {
             rate_hz: 30.0,
             resolution_px: [640, 480],
             latency_us: 0,
+            exposure_s: None,
+            gain: None,
         };
         let source = SourceId::new("cams").unwrap();
         for (k, jitter) in [0.0f32, 3.5, -2.25, 7.0, 0.125].into_iter().enumerate() {
@@ -394,6 +531,7 @@ mod tests {
                 k as u64 * 33_333,
                 [640, 480],
                 Some(&detection),
+                None,
             );
             let ObservationData::Landmarks2d { landmarks } = o.data else {
                 panic!("landmarks");

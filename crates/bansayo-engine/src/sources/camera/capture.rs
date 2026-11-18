@@ -18,6 +18,10 @@ pub enum Backend {
 /// dropped on its camera's capture thread.
 pub trait Capture {
     fn next(&mut self) -> Result<RgbImage, String>;
+    /// Recorded landmarks of the frame `next` just returned, when the source carries them.
+    fn recorded_landmarks(&self) -> Option<Vec<Option<bansayo_contracts::Landmark2D>>> {
+        None
+    }
     /// Negotiated format, for the log.
     fn describe(&self) -> String;
 }
@@ -51,16 +55,76 @@ pub fn frame_files(dir: &Path) -> Result<Vec<PathBuf>, String> {
     Ok(files)
 }
 
+/// File in an image folder holding recorded COCO-17 landmarks, one JSON line per image in name
+/// order: an array of 17 entries, each `null` or `[x_px, y_px, confidence]`. With it the camera
+/// replays those landmarks instead of running pose inference, so footage annotated or recorded
+/// elsewhere, and the tests, need no model weights.
+pub const RECORDED_LANDMARKS: &str = "landmarks.jsonl";
+
+type Points = Vec<Option<bansayo_contracts::Landmark2D>>;
+
+/// Rows of an image folder's `landmarks.jsonl`, or `None` when the folder has none.
+pub fn recorded_landmarks(dir: &Path) -> Result<Option<Vec<Points>>, String> {
+    let path = dir.join(RECORDED_LANDMARKS);
+    let text = match std::fs::read_to_string(&path) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(format!("{}: {e}", path.display())),
+    };
+    text.lines()
+        .filter(|l| !l.trim().is_empty())
+        .enumerate()
+        .map(|(i, line)| {
+            let row: Vec<Option<[f32; 3]>> = serde_json::from_str(line)
+                .map_err(|e| format!("{} line {}: {e}", path.display(), i + 1))?;
+            if row.len() != 17 {
+                return Err(format!(
+                    "{} line {}: 17 COCO-17 entries expected, found {}",
+                    path.display(),
+                    i + 1,
+                    row.len()
+                ));
+            }
+            Ok(row
+                .into_iter()
+                .map(|p| {
+                    p.map(|[x, y, c]| bansayo_contracts::Landmark2D {
+                        x_px: x,
+                        y_px: y,
+                        confidence: c,
+                    })
+                })
+                .collect())
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map(Some)
+}
+
 struct Frames {
     files: Vec<PathBuf>,
+    landmarks: Option<Vec<Points>>,
     index: usize,
     period: Duration,
     due: Instant,
 }
 impl Frames {
     fn open(dir: &Path, rate_hz: f64) -> Result<Self, String> {
+        let files = frame_files(dir)?;
+        let landmarks = recorded_landmarks(dir)?;
+        if let Some(rows) = &landmarks
+            && rows.len() != files.len()
+        {
+            return Err(format!(
+                "{}: {} has {} rows for {} images",
+                dir.display(),
+                RECORDED_LANDMARKS,
+                rows.len(),
+                files.len()
+            ));
+        }
         Ok(Self {
-            files: frame_files(dir)?,
+            files,
+            landmarks,
             index: 0,
             period: Duration::from_secs_f64(1.0 / rate_hz),
             due: Instant::now(),
@@ -80,6 +144,11 @@ impl Capture for Frames {
         Ok(image::open(path)
             .map_err(|e| format!("{}: {e}", path.display()))?
             .to_rgb8())
+    }
+    fn recorded_landmarks(&self) -> Option<Points> {
+        let rows = self.landmarks.as_ref()?;
+        rows.get((self.index + rows.len() - 1) % rows.len())
+            .cloned()
     }
     fn describe(&self) -> String {
         format!(

@@ -20,7 +20,12 @@
         "image_size_px": [
           1280,
           720
-        ]
+        ],
+        "settings": {
+          "exposure_s": 0.00390625,
+          "gain": null,
+          "problems": []
+        }
       },
       "frame": {
         "type": "image",

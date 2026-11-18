@@ -29,6 +29,8 @@ export type { CameraExtrinsicsData } from "./CameraExtrinsicsData";
 export type { CameraFrameMetadata } from "./CameraFrameMetadata";
 export type { CameraInfo } from "./CameraInfo";
 export type { CameraIntrinsicsData } from "./CameraIntrinsicsData";
+export type { CameraSettingsRequest } from "./CameraSettingsRequest";
+export type { CameraSettingsStatus } from "./CameraSettingsStatus";
 export type { CapabilityProfileId } from "./CapabilityProfileId";
 export type { CapabilityReport } from "./CapabilityReport";
 export type { ChangeClass } from "./ChangeClass";

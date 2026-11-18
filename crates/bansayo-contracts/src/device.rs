@@ -129,4 +129,8 @@ pub struct DeviceStatus {
     pub quality: Option<f32>,
     /// The calibration kinds relevant to this device.
     pub calibration: Vec<CalibrationRef>,
+    /// Physical cameras: the capture settings in effect. Additive under protocol version 1.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub camera_settings: Option<crate::CameraSettingsStatus>,
 }
