@@ -104,6 +104,7 @@ pub struct CameraSource {
     pub spec: CameraSourceSpec,
     pub previews: Previews,
     pub settings: CameraSettings,
+    pub timing: crate::diagnostics::Timings,
 }
 
 impl CameraSource {
@@ -184,16 +185,19 @@ impl Source for CameraSource {
                     gain: camera.gain,
                 });
             }
-            let (camera, slots, stop, context, settings) = (
+            let (camera, slots, stop, context, settings, timing) = (
                 camera.clone(),
                 slots.clone(),
                 stop.clone(),
                 context.clone(),
                 self.settings.clone(),
+                self.timing.clone(),
             );
             std::thread::Builder::new()
                 .name(format!("capture-{}", camera.id))
-                .spawn(move || capture_loop(index, &camera, &slots, &stop, &context, &settings))
+                .spawn(move || {
+                    capture_loop(index, &camera, &slots, &stop, &context, &settings, &timing)
+                })
                 .map_err(|e| SourceError(e.to_string()))?;
         }
         let (fatal_tx, fatal_rx) = tokio::sync::oneshot::channel();
@@ -248,6 +252,7 @@ fn capture_loop(
     stop: &AtomicBool,
     context: &SourceContext,
     settings: &CameraSettings,
+    timing: &crate::diagnostics::Timing,
 ) {
     let mut connected = true;
     let mut time = crate::clock::SourceTime::default();
@@ -292,8 +297,13 @@ fn capture_loop(
                         }
                         Ok(image) => {
                             // Arrival is the closest instant to acquisition this API exposes.
-                            let (t_us, _) =
-                                time.map(None, context.clock.now_us(), camera.latency_us);
+                            let now = context.clock.now_us();
+                            timing.record(
+                                crate::diagnostics::Stage::Decode,
+                                now,
+                                capture.decode_us(),
+                            );
+                            let (t_us, _) = time.map(None, now, camera.latency_us);
                             if !connected {
                                 connected = true;
                                 link(context, &camera.id, true);
@@ -367,6 +377,7 @@ fn inference_loop(
         };
         next = i + 1;
         let camera = &spec.cameras[i];
+        let started = source.timing.on().then(std::time::Instant::now);
         let detection = match frame.recorded.clone() {
             Some(points) => Some(pose::Detection {
                 bbox: [
@@ -405,6 +416,14 @@ fn inference_loop(
                 found
             }
         };
+        if let Some(s) = started {
+            let now = context.clock.now_us();
+            let d = s.elapsed().as_micros() as u64;
+            source
+                .timing
+                .record(crate::diagnostics::Stage::Inference, now, d);
+            source.timing.ready(&camera.id, now);
+        }
         seqs[i] += 1;
         let observation = landmarks_observation(
             camera,

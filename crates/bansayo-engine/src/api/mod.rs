@@ -26,6 +26,8 @@ pub struct Api {
     pub cancel: CancellationToken,
     pub previews: crate::sources::camera::Previews,
     pub camera_settings: crate::sources::camera::CameraSettings,
+    /// Latest `diagnostics` message; `None` while timing is off or before the first window.
+    pub diagnostics: tokio::sync::watch::Receiver<Option<Arc<crate::pipeline::encoded::Encoded>>>,
     pub training: crate::training::TrainingClient,
     pub training_streams: crate::training::TrainingStreams,
     pub content: Arc<crate::content_store::ContentStore>,

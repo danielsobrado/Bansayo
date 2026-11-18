@@ -411,6 +411,8 @@ impl Runtime {
                             }
                         }
                     } else {
+                        engine.timing.tick(now);
+                        let started = engine.timing.on().then(std::time::Instant::now);
                         let solved = solve(
                             &engine.skeleton,
                             &engine.registry,
@@ -446,6 +448,12 @@ impl Runtime {
                             engine.config.config.engine.stale_after_ms * 1000,
                         );
                         self.pending_motion = Some(sample);
+                        if let Some(s) = started {
+                            let d = s.elapsed().as_micros() as u64;
+                            engine
+                                .timing
+                                .record(crate::diagnostics::Stage::Solve, now, d);
+                        }
                         let mut joints =
                             measure(&engine.skeleton, &solved.rotations, &solved.observed);
                         super::joints::confidence(
@@ -456,6 +464,7 @@ impl Runtime {
                         if let Some(landmarks) = solved.landmarks_3d {
                             self.publish(vec![ServerMessage::Landmarks3d { landmarks }]);
                         }
+                        let started = engine.timing.on().then(std::time::Instant::now);
                         self.publish_frame(ServerMessage::Frame {
                             seq: 0,
                             t_us: now,
@@ -468,6 +477,12 @@ impl Runtime {
                             pose: solved.pose,
                             quality: solved.quality,
                         });
+                        if let Some(s) = started {
+                            let d = s.elapsed().as_micros() as u64;
+                            engine
+                                .timing
+                                .record(crate::diagnostics::Stage::Publish, now, d);
+                        }
                     }
                     let next = self.current_state(&engine);
                     let changed = {

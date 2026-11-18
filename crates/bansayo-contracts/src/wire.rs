@@ -117,4 +117,32 @@ pub enum ServerMessage {
         t_us: TimeUs,
         values: Vec<crate::ObservableValue>,
     },
+    /// Topic `diagnostics`: every 10 s while `diagnostics.timing` is on, per-stage latency
+    /// percentiles over the window and drop counters (martial-arts 15 §4.1).
+    Diagnostics {
+        window_s: u32,
+        stages: Vec<StageTiming>,
+        dropped: Vec<DropCount>,
+    },
+}
+
+/// Latency of one pipeline stage over a diagnostics window, microseconds.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct StageTiming {
+    pub stage: String,
+    pub p50_us: u64,
+    pub p95_us: u64,
+    pub p99_us: u64,
+    pub max_us: u64,
+    /// Samples in the window.
+    pub count: u64,
+    /// The stage's budget (15 §2.1).
+    pub budget_us: u64,
+}
+
+/// Items a bounded channel or one-slot buffer dropped since the engine started.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct DropCount {
+    pub channel: String,
+    pub count: u64,
 }

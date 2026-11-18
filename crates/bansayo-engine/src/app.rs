@@ -95,6 +95,10 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
         controls.push(control);
         sources.push(ConfiguredSource::Simulated(Box::new(source), receiver));
     }
+    let timing = crate::diagnostics::Timing::new(
+        config.config.diagnostics().timing,
+        (1e6 / config.config.engine.publish_rate_hz) as u64,
+    );
     let previews = Previews::default();
     let camera_settings = crate::sources::camera::CameraSettings::default();
     for spec in &config.cameras {
@@ -102,6 +106,7 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
             spec: spec.clone(),
             previews: previews.clone(),
             settings: camera_settings.clone(),
+            timing: timing.clone(),
         };
         for d in source.descriptors() {
             drops.insert(d.id.clone(), Arc::new(AtomicU64::new(0)));
@@ -147,6 +152,7 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
         controls,
         faults: faults_tx,
         placements,
+        timing: timing.clone(),
     };
     let (client, streams, runner_task) = runner.spawn(cancel.clone());
     let training = crate::training::Runner {
@@ -158,6 +164,7 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
         clock: clock.clone(),
         samples: samples_rx,
         system: streams.state.clone(),
+        timing: timing.clone(),
     };
     let (training_client, training_streams, training_task) =
         training.spawn(status_tx, cancel.clone());
@@ -171,6 +178,14 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
             Ok(())
         }),
     ];
+    let diagnostics = spawn_diagnostics(
+        &mut tasks,
+        timing,
+        streams.notices.clone(),
+        drops.clone(),
+        clock.clone(),
+        cancel.clone(),
+    );
     for source in sources {
         let common = SourceContext {
             events: events_tx.clone(),
@@ -188,6 +203,7 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
         cancel: cancel.clone(),
         previews,
         camera_settings,
+        diagnostics,
         training: training_client,
         training_streams,
         content,
@@ -213,6 +229,78 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
         tasks,
     })
 }
+/// Publishes stage timings every 10 s on the `diagnostics` topic, raises a notice when a stage
+/// stays over budget for 5 s, and logs the last window at shutdown (15 §4.1).
+fn spawn_diagnostics(
+    tasks: &mut Vec<JoinHandle<Result<(), EngineError>>>,
+    timing: crate::diagnostics::Timings,
+    notices: tokio::sync::broadcast::Sender<Arc<crate::pipeline::encoded::Encoded>>,
+    drops: DropCounters,
+    clock: SessionClock,
+    cancel: CancellationToken,
+) -> watch::Receiver<Option<Arc<crate::pipeline::encoded::Encoded>>> {
+    use crate::pipeline::encoded::Encoded;
+    use bansayo_contracts::{DropCount, NoticeLevel, ServerMessage};
+    let (tx, rx) = watch::channel(None);
+    if !timing.on() {
+        return rx;
+    }
+    tasks.push(tokio::spawn(async move {
+        let dropped = || -> Vec<DropCount> {
+            drops
+                .iter()
+                .map(|(id, c)| DropCount {
+                    channel: format!("camera_frames:{id}"),
+                    count: c.load(std::sync::atomic::Ordering::Relaxed),
+                })
+                .collect()
+        };
+        let mut second = tokio::time::interval(std::time::Duration::from_secs(1));
+        let mut ticks = 0u64;
+        loop {
+            tokio::select! {
+                _ = cancel.cancelled() => break,
+                _ = second.tick() => {}
+            }
+            let now = clock.now_us();
+            for s in timing.newly_over_budget(now) {
+                let message = format!(
+                    "Stage {} has run over its budget for 5 s: p95 {:.1} ms, budget {:.1} ms.",
+                    s.stage,
+                    s.p95_us as f64 / 1000.0,
+                    s.budget_us as f64 / 1000.0
+                );
+                tracing::warn!(stage = %s.stage, p95_us = s.p95_us, budget_us = s.budget_us, "stage over budget");
+                let _ = notices.send(Encoded::new(
+                    &ServerMessage::Notice {
+                        level: NoticeLevel::Warning,
+                        code: "stage_over_budget".into(),
+                        message,
+                    },
+                    0,
+                ));
+            }
+            ticks += 1;
+            if ticks.is_multiple_of(10) {
+                let message = ServerMessage::Diagnostics {
+                    window_s: 10,
+                    stages: timing.summary(now),
+                    dropped: dropped(),
+                };
+                tx.send_replace(Some(Encoded::new(&message, ticks)));
+            }
+        }
+        for s in timing.summary(clock.now_us()) {
+            tracing::info!(stage = %s.stage, p50_us = s.p50_us, p95_us = s.p95_us, p99_us = s.p99_us, max_us = s.max_us, count = s.count, budget_us = s.budget_us, "stage timing over the last 10 s");
+        }
+        for d in dropped() {
+            tracing::info!(channel = %d.channel, count = d.count, "dropped");
+        }
+        Ok(())
+    }));
+    rx
+}
+
 pub async fn run(
     config: Validated,
     shutdown: impl std::future::Future<Output = ()>,

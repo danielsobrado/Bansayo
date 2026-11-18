@@ -169,6 +169,7 @@ pub struct Runner {
     pub clock: crate::clock::SessionClock,
     pub samples: mpsc::Receiver<TrainingSample>,
     pub system: watch::Receiver<SystemState>,
+    pub timing: crate::diagnostics::Timings,
 }
 
 struct Outputs {
@@ -502,9 +503,16 @@ impl Actor {
         if let Some(report) = self.r.system.borrow().capability_report.clone() {
             c.session.capability(&report);
         }
+        let started = self.r.timing.on().then(std::time::Instant::now);
         let out = c.session.sample(sample);
         events.extend(out.events);
         events.extend(c.session.tick(sample.t_us));
+        if let Some(s) = started {
+            let d = s.elapsed().as_micros() as u64;
+            self.r
+                .timing
+                .record(crate::diagnostics::Stage::Training, sample.t_us, d);
+        }
         if let Some(m) = c.motion.as_mut() {
             m.push(crate::recording::motion::MotionItem::Frame(Arc::new(
                 sample.clone(),

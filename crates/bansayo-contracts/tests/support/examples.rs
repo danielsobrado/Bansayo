@@ -844,6 +844,36 @@ fn training_examples() -> Vec<Example> {
             },
         ),
         ex("observables", observables),
+        ex(
+            "diagnostics",
+            ServerMessage::Diagnostics {
+                window_s: 10,
+                stages: vec![
+                    StageTiming {
+                        stage: "decode".into(),
+                        p50_us: 2_100,
+                        p95_us: 2_900,
+                        p99_us: 3_400,
+                        max_us: 4_100,
+                        count: 300,
+                        budget_us: 4_000,
+                    },
+                    StageTiming {
+                        stage: "inference".into(),
+                        p50_us: 3_700,
+                        p95_us: 4_600,
+                        p99_us: 6_200,
+                        max_us: 9_800,
+                        count: 300,
+                        budget_us: 12_000,
+                    },
+                ],
+                dropped: vec![DropCount {
+                    channel: "camera_frames:CAM-FRONT".into(),
+                    count: 3,
+                }],
+            },
+        ),
         ex("repetition_result", result),
         ex(
             "metric_measurement_suppressed",

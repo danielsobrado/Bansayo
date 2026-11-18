@@ -148,6 +148,7 @@ fn check_training_sections(c: &mut Check, config: &Config) {
         ("coaching", config.coaching.is_some()),
         ("progress", config.progress.is_some()),
         ("storage", config.storage.is_some()),
+        ("diagnostics", config.diagnostics.is_some()),
     ];
     if config.schema_version < 2 {
         for (key, present) in v2 {

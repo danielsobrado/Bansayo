@@ -54,6 +54,15 @@ pub struct Config {
     pub progress: Option<ProgressSection>,
     #[serde(default)]
     pub storage: Option<StorageSection>,
+    /// `diagnostics.timing`: per-stage latency histograms (15 §4.1). Schema version 2.
+    #[serde(default)]
+    pub diagnostics: Option<DiagnosticsConfig>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct DiagnosticsConfig {
+    pub timing: bool,
 }
 
 impl Config {
@@ -77,6 +86,9 @@ impl Config {
     }
     pub fn storage(&self) -> StorageSection {
         self.storage.clone().unwrap_or_default()
+    }
+    pub fn diagnostics(&self) -> DiagnosticsConfig {
+        self.diagnostics.clone().unwrap_or_default()
     }
 }
 

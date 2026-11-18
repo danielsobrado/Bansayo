@@ -22,7 +22,7 @@ pub struct StreamQuery {
 }
 
 /// Feature flags announced in `hello` (14 §4).
-pub const CAPABILITIES: &[&str] = &["training", "content", "athletes", "progress"];
+pub const CAPABILITIES: &[&str] = &["training", "content", "athletes", "progress", "diagnostics"];
 pub async fn upgrade(
     State(api): State<Api>,
     query: Result<Query<StreamQuery>, QueryRejection>,
@@ -40,12 +40,18 @@ pub async fn upgrade(
     if topics.iter().any(|t| {
         !matches!(
             t.as_str(),
-            "frame" | "state" | "landmarks_2d" | "landmarks_3d" | "training" | "observables"
+            "frame"
+                | "state"
+                | "landmarks_2d"
+                | "landmarks_3d"
+                | "training"
+                | "observables"
+                | "diagnostics"
         )
     }) {
         return failure(
             ApiErrorCode::InvalidRequest,
-            "Stream topics must be frame, state, landmarks_2d, landmarks_3d, training or observables.",
+            "Stream topics must be frame, state, landmarks_2d, landmarks_3d, training, observables or diagnostics.",
         );
     }
     let extra: Vec<String> = query
@@ -149,6 +155,7 @@ async fn stream(
     let wants_state = topics.iter().any(|t| t == "state");
     let wants_2d = topics.iter().any(|t| t == "landmarks_2d");
     let wants_3d = topics.iter().any(|t| t == "landmarks_3d");
+    let wants_diagnostics = topics.iter().any(|t| t == "diagnostics");
     let mut landmarks = api.streams.landmarks.subscribe();
     let mut notices = api.streams.notices.subscribe();
     // shortcut: one ticker thread per socket, fine for a few local clients; share one ticker
@@ -172,6 +179,7 @@ async fn stream(
             TrainingIncrement(
                 Result<Arc<(SessionId, TrainingEvent)>, tokio::sync::broadcast::error::RecvError>,
             ),
+            Diagnostics(Result<(), tokio::sync::watch::error::RecvError>),
         }
         let event = tokio::select! {
             _=api.cancel.cancelled()=>Event::Stop,
@@ -182,6 +190,7 @@ async fn stream(
             changed=api.training_streams.state.changed(),if wants_training=>Event::Training(changed),
             e=training_events.recv(),if wants_training=>Event::TrainingIncrement(e),
             point=landmarks.recv(),if wants_2d || wants_3d=>Event::Landmark(point),
+            changed=api.diagnostics.changed(),if wants_diagnostics=>Event::Diagnostics(changed),
         };
         match event {
             Event::Notice(Ok(message)) => {
@@ -190,6 +199,15 @@ async fn stream(
                 }
             }
             Event::Notice(Err(_)) => {}
+            Event::Diagnostics(Err(_)) => break,
+            Event::Diagnostics(Ok(())) => {
+                let packet = api.diagnostics.borrow_and_update().clone();
+                if let Some(p) = packet
+                    && !send_encoded(&mut sink, &p).await
+                {
+                    break;
+                }
+            }
             Event::Stop => {
                 let _ = tokio::time::timeout(
                     Duration::from_millis(200),

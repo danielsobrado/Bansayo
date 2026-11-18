@@ -18,6 +18,10 @@ pub enum Backend {
 /// dropped on its camera's capture thread.
 pub trait Capture {
     fn next(&mut self) -> Result<RgbImage, String>;
+    /// How long decoding the frame `next` just returned took, microseconds (15 §4.1).
+    fn decode_us(&self) -> u64 {
+        0
+    }
     /// Recorded landmarks of the frame `next` just returned, when the source carries them.
     fn recorded_landmarks(&self) -> Option<Vec<Option<bansayo_contracts::Landmark2D>>> {
         None
@@ -102,6 +106,7 @@ pub fn recorded_landmarks(dir: &Path) -> Result<Option<Vec<Points>>, String> {
 
 struct Frames {
     files: Vec<PathBuf>,
+    decode_us: u64,
     landmarks: Option<Vec<Points>>,
     index: usize,
     period: Duration,
@@ -124,6 +129,7 @@ impl Frames {
         }
         Ok(Self {
             files,
+            decode_us: 0,
             landmarks,
             index: 0,
             period: Duration::from_secs_f64(1.0 / rate_hz),
@@ -141,9 +147,15 @@ impl Capture for Frames {
         self.due = (self.due + self.period).max(now);
         let path = &self.files[self.index % self.files.len()];
         self.index += 1;
-        Ok(image::open(path)
+        let started = Instant::now();
+        let image = image::open(path)
             .map_err(|e| format!("{}: {e}", path.display()))?
-            .to_rgb8())
+            .to_rgb8();
+        self.decode_us = started.elapsed().as_micros() as u64;
+        Ok(image)
+    }
+    fn decode_us(&self) -> u64 {
+        self.decode_us
     }
     fn recorded_landmarks(&self) -> Option<Points> {
         let rows = self.landmarks.as_ref()?;
@@ -217,7 +229,7 @@ mod device {
             .collect())
     }
 
-    struct Device(Camera);
+    struct Device(Camera, u64);
 
     pub fn open(index: u32, [w, h]: [u32; 2], rate_hz: f64) -> Result<Box<dyn Capture>, String> {
         // MJPEG keeps 720p/1080p at full rate over USB 2; decoded here, not by nokhwa.
@@ -235,23 +247,27 @@ mod device {
         })
         .map_err(|e| e.to_string())?;
         camera.open_stream().map_err(|e| e.to_string())?;
-        Ok(Box::new(Device(camera)))
+        Ok(Box::new(Device(camera, 0)))
     }
 
     impl Capture for Device {
         fn next(&mut self) -> Result<RgbImage, String> {
             let buffer = self.0.frame().map_err(|e| e.to_string())?;
-            if buffer.source_frame_format() == FrameFormat::MJPEG {
-                return image::load_from_memory_with_format(
-                    buffer.buffer(),
-                    image::ImageFormat::Jpeg,
-                )
-                .map(|i| i.to_rgb8())
-                .map_err(|e| format!("MJPEG decode: {e}"));
-            }
-            buffer
-                .decode_image::<RgbFormat>()
-                .map_err(|e| e.to_string())
+            let started = std::time::Instant::now();
+            let image = if buffer.source_frame_format() == FrameFormat::MJPEG {
+                image::load_from_memory_with_format(buffer.buffer(), image::ImageFormat::Jpeg)
+                    .map(|i| i.to_rgb8())
+                    .map_err(|e| format!("MJPEG decode: {e}"))
+            } else {
+                buffer
+                    .decode_image::<RgbFormat>()
+                    .map_err(|e| e.to_string())
+            };
+            self.1 = started.elapsed().as_micros() as u64;
+            image
+        }
+        fn decode_us(&self) -> u64 {
+            self.1
         }
         fn describe(&self) -> String {
             // nokhwa 0.10 reports the rate's denominator ("@1FPS") for Media Foundation formats.

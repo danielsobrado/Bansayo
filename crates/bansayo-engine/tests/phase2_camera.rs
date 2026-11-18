@@ -282,3 +282,49 @@ async fn guided_roundhouse_on_one_image_folder_camera() {
     }
     engine.shutdown().await.unwrap();
 }
+
+/// 15 §4.1: with `diagnostics.timing` on, the `diagnostics` topic carries per-stage percentiles
+/// of the camera path and the frame drop counters every 10 s.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn stage_timings_reach_the_diagnostics_topic() {
+    use futures_util::StreamExt;
+    let dir = tempfile::tempdir().unwrap();
+    let frames = dir.path().join("frames");
+    write_kicks(&frames);
+    let yaml = yaml(dir.path(), &frames) + "diagnostics: { timing: true }\n";
+    let engine = engine(&yaml).await;
+    let addr = engine.bound_addr();
+    let (mut ws, _) =
+        tokio_tungstenite::connect_async(format!("ws://{addr}/api/v1/stream?topics=diagnostics"))
+            .await
+            .unwrap();
+    let until = Instant::now() + Duration::from_secs(25);
+    let stages = loop {
+        assert!(Instant::now() < until, "no diagnostics message");
+        let Ok(Some(Ok(m))) = tokio::time::timeout(Duration::from_secs(12), ws.next()).await else {
+            continue;
+        };
+        let v: Value = serde_json::from_str(m.to_text().unwrap()).unwrap();
+        if v["type"] == "diagnostics" {
+            assert_eq!(v["window_s"], 10);
+            assert!(
+                v["dropped"][0]["channel"]
+                    .as_str()
+                    .unwrap()
+                    .starts_with("camera_frames:")
+            );
+            break v["stages"].as_array().unwrap().clone();
+        }
+    };
+    let names: Vec<&str> = stages
+        .iter()
+        .map(|s| s["stage"].as_str().unwrap())
+        .collect();
+    for want in ["decode", "inference", "tick_wait", "solve", "publish"] {
+        assert!(names.contains(&want), "{names:?}");
+    }
+    for s in &stages {
+        assert!(s["count"].as_u64().unwrap() > 0 && s["p50_us"].as_u64() <= s["max_us"].as_u64());
+    }
+    engine.shutdown().await.unwrap();
+}

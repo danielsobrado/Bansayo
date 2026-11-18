@@ -42,6 +42,8 @@ pub struct Runner {
     pub training: Option<mpsc::Sender<super::command::TrainingSample>>,
     /// Athlete, session, content and storage status published by the training runner.
     pub training_status: Option<watch::Receiver<crate::training::TrainingStatus>>,
+    /// Per-stage latency instrumentation (15 §4.1).
+    pub timing: crate::diagnostics::Timings,
 }
 impl Runner {
     pub fn spawn(
