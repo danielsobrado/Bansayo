@@ -6,6 +6,7 @@ import type {
   SystemState,
 } from "@contracts";
 import { CameraPreview } from "./CameraPreview";
+import { Icon } from "../../ui/Icon";
 import {
   calibratedCameras,
   type CameraPose,
@@ -48,6 +49,7 @@ export function Cameras({ state }: { state: SystemState | null }) {
     state?.devices.filter((d) => d.descriptor.kind === "camera") ?? [];
   const [selected, setSelected] = useState<string | null>(null);
   const [landmark, setLandmark] = useState<number | null>(null);
+  const [viewMode, setViewMode] = useState<"split" | "camera" | "reconstruction">("split");
   const [showAprilTags, setShowAprilTags] = useState(false);
   const camera =
     cameras.find((d) => d.descriptor.id === selected) ?? cameras[0];
@@ -107,9 +109,22 @@ export function Cameras({ state }: { state: SystemState | null }) {
               />
               {" "}Show AprilTag markers
             </label>
-            <div className="camera-views">
-              <CameraPreview device={camera} highlight={landmark} showAprilTags={showAprilTags} />
-              <Reconstruction
+            <div className="camera-mode-toolbar" role="toolbar" aria-label="Camera workspace view">
+              <button type="button" aria-pressed={viewMode === "split"} onClick={() => setViewMode("split")}>
+                <Icon name="grid" size={14} /> Split
+              </button>
+              <button type="button" aria-pressed={viewMode === "camera"} onClick={() => setViewMode("camera")}>
+                <Icon name="video" size={14} /> Camera
+              </button>
+              <button type="button" aria-pressed={viewMode === "reconstruction"} onClick={() => setViewMode("reconstruction")}>
+                <Icon name="rotate" size={14} /> 3D reconstruction
+              </button>
+            </div>
+            <div className={`camera-views camera-mode-${viewMode}`}>
+              {viewMode !== "reconstruction" && (
+                <CameraPreview device={camera} highlight={landmark} showAprilTags={showAprilTags} />
+              )}
+              {viewMode !== "camera" && <Reconstruction
                 feature={state?.features.find(
                   (f) => f.id === "landmarks_3d_triangulated",
                 )}
@@ -120,7 +135,7 @@ export function Cameras({ state }: { state: SystemState | null }) {
                 sampled={sampled}
                 landmark={landmark}
                 onSelect={setLandmark}
-              />
+              />}
             </div>
           </section>
           <aside className="camera-detail dock">

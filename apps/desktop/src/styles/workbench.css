@@ -249,3 +249,19 @@
   .studio-toolstrip { overflow-x: auto; }
   .studio-toolstrip button, .studio-layout-select { flex-shrink: 0; }
 }
+
+.camera-main { padding: 12px; justify-content: flex-start; }
+.camera-mode-toolbar { display: flex; gap: 4px; padding: 2px 0 8px; }
+.camera-mode-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  font-size: 11px;
+}
+.camera-mode-toolbar button[aria-pressed="true"] {
+  background: var(--surface-3);
+  color: var(--accent);
+}
+.camera-views.camera-mode-camera,
+.camera-views.camera-mode-reconstruction { grid-template-columns: minmax(0, 1fr); }

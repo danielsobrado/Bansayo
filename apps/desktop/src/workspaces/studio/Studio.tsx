@@ -264,18 +264,7 @@ export function Studio({
                 ),
               )}
             </div>
-            <div className="view-presets" aria-label="View presets">
-              {VIEWS.map((preset) => (
-                <button
-                  key={preset}
-                  aria-pressed={view === preset}
-                  onClick={() => setView(preset)}
-                  title={`${preset} view (${preset === "Front" ? "F" : preset === "Side" ? "L" : preset === "Top" ? "T" : "P"})`}
-                >
-                  {preset}
-                </button>
-              ))}
-            </div>
+
           </div>
           {!sampled.hasPose && (
             <div className="no-pose">
