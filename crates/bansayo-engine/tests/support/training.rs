@@ -122,6 +122,9 @@ pub async fn run_session(
         ok(addr, "POST", "training/command", json!({ "command": "ack_safety", "args": { "content_refs": ["taekwondo.dollyeo_chagi@1"] } })).await;
     }
     wait_state(addr, 20, |s| s["phase"] == "ready").await;
+    // As a person would: a start within ~100 ms of creating the session can precede the input
+    // recorder's first frames, and a re-analysis then cannot reproduce it (docs/13, Phase 2).
+    tokio::time::sleep(Duration::from_secs(1)).await;
     ok(
         addr,
         "POST",

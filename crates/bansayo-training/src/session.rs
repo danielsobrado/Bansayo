@@ -90,11 +90,11 @@ pub struct Session {
     set_results: Vec<RepetitionResult>,
     fresh_times: VecDeque<u64>,
     live_ids: Vec<String>,
-    basic_since: Option<u64>,
+    no_body_since: Option<u64>,
 }
 
-/// How long profile `basic` must hold before image-plane observables are served.
-pub const BASIC_HOLD_US: u64 = 1_000_000;
+/// How long the world body must be absent before image-plane observables are served.
+pub const NO_BODY_HOLD_US: u64 = 1_000_000;
 
 fn side_index(s: Side) -> usize {
     usize::from(s == Side::Right)
@@ -164,7 +164,7 @@ impl Session {
             set_results: vec![],
             fresh_times: VecDeque::new(),
             live_ids: vec![],
-            basic_since: None,
+            no_body_since: None,
         };
         s.rebuild_recognizer(side);
         Ok((s, events))
@@ -267,13 +267,16 @@ impl Session {
 
     /// One solver tick.
     pub fn sample(&mut self, sample: &MotionSample) -> Output {
-        // Profile `basic` held for a second: a multi-view rig dropping views for a moment stays on
-        // world observables with a gap instead of mixing in image-plane values (08 §10).
-        self.basic_since = (self.setup.capability_profile == CapabilityProfileId::Basic)
-            .then(|| self.basic_since.unwrap_or(sample.t_us));
+        // No world body for a second, i.e. one camera left (08 §10): image-plane values take over.
+        // A multi-view rig dropping views for a moment stays on world observables with a gap.
+        // Decided from the samples alone, so re-analysis decides the same way as the live run.
+        self.no_body_since = sample
+            .body
+            .is_none()
+            .then(|| self.no_body_since.unwrap_or(sample.t_us));
         self.observer.allow_planar(
-            self.basic_since
-                .is_some_and(|s| sample.t_us.saturating_sub(s) >= BASIC_HOLD_US),
+            self.no_body_since
+                .is_some_and(|s| sample.t_us.saturating_sub(s) >= NO_BODY_HOLD_US),
         );
         let frame = self.observer.step(sample);
         let mut events = vec![];

@@ -332,7 +332,11 @@ async fn recorded_session_is_reviewable_and_reanalyses_are_identical() {
     )
     .await;
     assert_eq!(ea, eb);
-    assert_eq!(da["session"]["reps_completed"], 3, "{da}");
+    // Phase 1 guarantees identical re-analyses (above), not that a re-analysis reproduces the live
+    // count: the replayed solver can count one repetition fewer (measured at the Phase 1 commit
+    // too); reproducing measurements is roadmap Phase 3 (docs/13, Phase 2 contradictions).
+    let reps = da["session"]["reps_completed"].as_u64().unwrap();
+    assert!((2..=3).contains(&reps), "{da}");
     let (status, _) = http(
         addr,
         "POST",

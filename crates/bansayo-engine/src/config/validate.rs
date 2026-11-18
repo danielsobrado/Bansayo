@@ -917,7 +917,7 @@ sources:
         assert!(
             has(
                 "sources[0].cameras[2]",
-                "exactly one of device and frames_dir"
+                "exactly one of device, frames_dir and network: true"
             ),
             "{p:#?}"
         );
