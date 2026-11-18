@@ -27,13 +27,12 @@ desktop.ini
 .vscode/
 *.swp
 *~
-debug.log
 .history/
 .history/
-debug.log
 
 # Python
 __pycache__/
 
 # Machine-specific configurations written by scripts/setup.py cameras
 /config/local-*.yaml
+*.log
