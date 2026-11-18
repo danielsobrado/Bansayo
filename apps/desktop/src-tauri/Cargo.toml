@@ -21,3 +21,7 @@ debug = "line-tables-only"
 
 [profile.dev.package."*"]
 debug = false
+
+# Unoptimised MJPEG decoding capped a 30 fps webcam at 7-10 fps in debug builds (root Cargo.toml).
+[profile.dev.package.zune-jpeg]
+opt-level = 3

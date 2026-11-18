@@ -51,3 +51,7 @@ debug = "line-tables-only"
 
 [profile.dev.package."*"]
 debug = false
+
+# Unoptimised MJPEG decoding capped a 30 fps webcam at 7-10 fps in debug builds (18 Nov 2026).
+[profile.dev.package.zune-jpeg]
+opt-level = 3
