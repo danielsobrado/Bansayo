@@ -26,6 +26,11 @@ pub struct Api {
     pub cancel: CancellationToken,
     pub previews: crate::sources::camera::Previews,
     pub camera_settings: crate::sources::camera::CameraSettings,
+    /// Frames of network cameras (phones), by camera id (ADR-042).
+    pub feeds: crate::sources::camera::capture::NetworkFeeds,
+    /// LAN mode token; `None` when LAN mode is off (loopback only).
+    pub lan_token: Option<Arc<str>>,
+    pub bind: std::net::SocketAddr,
     /// Latest `diagnostics` message; `None` while timing is off or before the first window.
     pub diagnostics: tokio::sync::watch::Receiver<Option<Arc<crate::pipeline::encoded::Encoded>>>,
     pub training: crate::training::TrainingClient,
@@ -46,6 +51,8 @@ pub fn router(api: Api) -> Router {
         .route("/api/v1/stream", get(ws::upgrade))
         .route("/api/v1/cameras/{id}/preview.jpg", get(preview))
         .route("/api/v1/cameras/{id}/settings", put(camera_settings))
+        .route("/api/v1/lan/pairing", get(lan_pairing))
+        .route("/api/v1/ingest/camera/{id}", get(ingest_camera))
         .route("/api/v1/devices/{id}/assignment", put(control::assignment))
         .route(
             "/api/v1/simulation/devices/{id}/fault",
@@ -126,6 +133,7 @@ pub fn router(api: Api) -> Router {
         })
         .layer(DefaultBodyLimit::max(16 * 1024))
         .layer(middleware::from_fn_with_state(api.clone(), origin))
+        .layer(middleware::from_fn_with_state(api.clone(), lan_auth))
         .with_state(api)
 }
 async fn health() -> impl IntoResponse {
@@ -289,6 +297,112 @@ pub fn failure(code: ApiErrorCode, message: &str) -> Response {
 fn control_error(e: ControlError) -> Response {
     failure(e.code, &e.message)
 }
+/// Peers on this machine; requests served without connection info (in-process) count as local.
+fn local_peer(request: &Request) -> bool {
+    request
+        .extensions()
+        .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
+        .is_none_or(|c| c.0.ip().is_loopback())
+}
+
+/// LAN mode (ADR-031, ADR-042): a request from another machine needs the bearer token; the
+/// engine never falls back to open access (17 §5).
+async fn lan_auth(State(api): State<Api>, request: Request, next: Next) -> Response {
+    let Some(token) = api.lan_token.as_deref() else {
+        return next.run(request).await;
+    };
+    if local_peer(&request) {
+        return next.run(request).await;
+    }
+    let given = request
+        .headers()
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "));
+    if given.is_some_and(|g| crate::lan::matches(g.trim(), token)) {
+        next.run(request).await
+    } else {
+        failure(
+            ApiErrorCode::Unauthorized,
+            "This engine is in LAN mode: pair the device with the code shown on the desktop (Devices).",
+        )
+    }
+}
+
+/// `GET /ingest/camera/{id}` (ADR-042): a phone streams one JPEG per binary WebSocket message to
+/// a camera configured with `network: true`. The engine sends nothing; closing the socket (or
+/// 2 s without a frame) makes the camera `disconnected`.
+async fn ingest_camera(
+    State(api): State<Api>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+    ws: Result<
+        axum::extract::WebSocketUpgrade,
+        axum::extract::ws::rejection::WebSocketUpgradeRejection,
+    >,
+) -> Response {
+    let Some(feed) = api.feeds.get(&id).cloned() else {
+        return failure(
+            ApiErrorCode::NotFound,
+            "No camera with this id is configured with network: true.",
+        );
+    };
+    let Ok(ws) = ws else {
+        return failure(
+            ApiErrorCode::InvalidRequest,
+            "A WebSocket upgrade is required.",
+        );
+    };
+    let cancel = api.cancel.clone();
+    ws.max_message_size(8 << 20)
+        .on_upgrade(move |mut socket| async move {
+            use axum::extract::ws::Message;
+            loop {
+                let message = tokio::select! {
+                    _ = cancel.cancelled() => break,
+                    m = socket.recv() => m,
+                };
+                match message {
+                    Some(Ok(Message::Binary(jpeg))) => feed.push(jpeg),
+                    Some(Ok(Message::Close(_))) | None | Some(Err(_)) => break,
+                    Some(Ok(_)) => {}
+                }
+            }
+        })
+        .into_response()
+}
+
+/// `GET /lan/pairing` (ADR-042): the pairing link for the desktop to show as text and QR code.
+/// Answered only to this machine, so the token never leaves it except by the user's hand.
+async fn lan_pairing(State(api): State<Api>, request: Request) -> Response {
+    if !local_peer(&request) {
+        return failure(
+            ApiErrorCode::ForbiddenOrigin,
+            "Pairing is shown only on the engine's own machine.",
+        );
+    }
+    let Some(token) = api.lan_token.as_deref() else {
+        return Json(ApiResponse::ok(serde_json::json!({
+            "enabled": false,
+            "message": "LAN mode is off. Set api.bind to 0.0.0.0:7700 and api.lan.enabled: true, then restart.",
+        })))
+        .into_response();
+    };
+    let host = crate::lan::lan_address(api.bind).map(|ip| ip.to_string());
+    let port = api.bind.port();
+    let uri = host
+        .as_ref()
+        .map(|h| format!("bansayo://pair?host={h}&port={port}&token={token}"));
+    Json(ApiResponse::ok(serde_json::json!({
+        "enabled": true,
+        "host": host,
+        "port": port,
+        "token": token,
+        "uri": uri,
+        "warning": "LAN mode has no encryption: use it on a trusted home network only.",
+    })))
+    .into_response()
+}
+
 async fn origin(State(api): State<Api>, request: Request, next: Next) -> Response {
     let origin = request.headers().get(header::ORIGIN).cloned();
     if let Some(value) = origin.as_ref()
@@ -320,7 +434,7 @@ async fn origin(State(api): State<Api>, request: Request, next: Next) -> Respons
         );
         response.headers_mut().insert(
             header::ACCESS_CONTROL_ALLOW_HEADERS,
-            HeaderValue::from_static("Content-Type"),
+            HeaderValue::from_static("Content-Type, Authorization"),
         );
     }
     response

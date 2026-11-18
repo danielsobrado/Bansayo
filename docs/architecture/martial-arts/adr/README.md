@@ -50,4 +50,4 @@ records state their decision criteria; **Proposed** records describe work not ye
 | 11 Desktop application integration | ADR-006, ADR-007, [032](ADR-032-desktop-integration.md) |
 | 12 VR runtime and rendering | ADR-010, [033](ADR-033-vr-runtime.md) |
 | 13 Configuration and content management | ADR-012, [030](ADR-030-configuration-and-content.md), [037](ADR-037-technique-authoring-and-review.md) |
-| 14 Local-first versus networked execution | [031](ADR-031-local-first-execution.md), [041](ADR-041-coaching-exchange-by-bundles.md) |
+| 14 Local-first versus networked execution | [031](ADR-031-local-first-execution.md), [041](ADR-041-coaching-exchange-by-bundles.md), [042](ADR-042-android-client.md) |

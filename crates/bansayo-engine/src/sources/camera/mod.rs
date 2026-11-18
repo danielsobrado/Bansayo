@@ -51,6 +51,8 @@ pub fn apply_settings(backend: &Backend, r: &RequestedSettings) -> CameraSetting
         message,
     };
     match backend {
+        // Set on the phone; validation refuses exposure_s and gain for network cameras.
+        Backend::Network(_) => CameraSettingsStatus::default(),
         Backend::Frames(_) => CameraSettingsStatus {
             exposure_s: None,
             gain: None,
@@ -105,6 +107,7 @@ pub struct CameraSource {
     pub previews: Previews,
     pub settings: CameraSettings,
     pub timing: crate::diagnostics::Timings,
+    pub feeds: capture::NetworkFeeds,
 }
 
 impl CameraSource {
@@ -113,7 +116,7 @@ impl CameraSource {
             .cameras
             .iter()
             .map(|c| {
-                let device = matches!(c.backend, Backend::Device(_));
+                let device = matches!(c.backend, Backend::Device(_) | Backend::Network(_));
                 DeviceDescriptor {
                     id: c.id.clone(),
                     source_id: self.spec.id.clone(),
@@ -126,12 +129,13 @@ impl CameraSource {
                     model: Some(match &c.backend {
                         Backend::Device(i) => format!("System camera {i}"),
                         Backend::Frames(dir) => format!("Image folder {}", dir.display()),
+                        Backend::Network(_) => "Network camera (phone)".into(),
                     }),
                     firmware: None,
-                    transport: if device {
-                        Transport::Usb
-                    } else {
-                        Transport::File
+                    transport: match c.backend {
+                        Backend::Device(_) => Transport::Usb,
+                        Backend::Frames(_) => Transport::File,
+                        Backend::Network(_) => Transport::Websocket,
                     },
                     capabilities: vec![SensorCapability::Landmarks2d],
                     nominal_rate_hz: Some(c.rate_hz as f32),
@@ -185,18 +189,24 @@ impl Source for CameraSource {
                     gain: camera.gain,
                 });
             }
-            let (camera, slots, stop, context, settings, timing) = (
+            let (camera, slots, stop, context, settings, timing, feeds) = (
                 camera.clone(),
                 slots.clone(),
                 stop.clone(),
                 context.clone(),
                 self.settings.clone(),
                 self.timing.clone(),
+                self.feeds.clone(),
             );
             std::thread::Builder::new()
                 .name(format!("capture-{}", camera.id))
                 .spawn(move || {
-                    capture_loop(index, &camera, &slots, &stop, &context, &settings, &timing)
+                    let shared = Shared {
+                        settings: &settings,
+                        timing: &timing,
+                        feeds: &feeds,
+                    };
+                    capture_loop(index, &camera, &slots, &stop, &context, &shared)
                 })
                 .map_err(|e| SourceError(e.to_string()))?;
         }
@@ -245,15 +255,27 @@ fn link(context: &SourceContext, id: &DeviceId, connected: bool) {
         }));
 }
 
+/// What a capture thread shares with the rest of the engine.
+struct Shared<'a> {
+    settings: &'a CameraSettings,
+    timing: &'a crate::diagnostics::Timing,
+    feeds: &'a capture::NetworkFeeds,
+}
+
 fn capture_loop(
     index: usize,
     camera: &LiveCameraSpec,
     slots: &Slots,
     stop: &AtomicBool,
     context: &SourceContext,
-    settings: &CameraSettings,
-    timing: &crate::diagnostics::Timing,
+    shared: &Shared,
 ) {
+    let Shared {
+        settings,
+        timing,
+        feeds,
+    } = *shared;
+    let mut last_failure = String::new();
     let mut connected = true;
     let mut time = crate::clock::SourceTime::default();
     let requested = || {
@@ -264,9 +286,12 @@ fn capture_loop(
             .unwrap_or_default()
     };
     while !stop.load(Ordering::Relaxed) {
-        let failure = match capture::open(&camera.backend, camera.resolution_px, camera.rate_hz) {
+        let opened =
+            capture::open_with(&camera.backend, camera.resolution_px, camera.rate_hz, feeds);
+        let failure = match opened {
             Ok(mut capture) => {
                 tracing::info!(camera=%camera.id, format=%capture.describe(), "Camera opened");
+                last_failure.clear();
                 // Applied after the stream is open: the device then holds them while streaming.
                 let mut applied: Option<(u64, CameraSettingsStatus)> = None;
                 loop {
@@ -333,7 +358,11 @@ fn capture_loop(
             }
             Err(e) => e,
         };
-        tracing::warn!(camera=%camera.id, error=%failure, "Camera unavailable; retrying");
+        // Said once per distinct failure: a phone that is not connected yet is not news every 2 s.
+        if failure != last_failure {
+            tracing::warn!(camera=%camera.id, error=%failure, "Camera unavailable; retrying");
+            last_failure = failure;
+        }
         if connected {
             connected = false;
             link(context, &camera.id, false);
@@ -467,7 +496,7 @@ pub fn landmarks_observation(
 ) -> SensorObservation {
     let points = detection.map_or_else(|| vec![None; 17], |d| d.points.clone());
     let seen: Vec<f32> = points.iter().flatten().map(|p| p.confidence).collect();
-    let origin = if matches!(camera.backend, Backend::Device(_)) {
+    let origin = if matches!(camera.backend, Backend::Device(_) | Backend::Network(_)) {
         Origin::Live
     } else {
         Origin::Fixture

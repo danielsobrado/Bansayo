@@ -404,10 +404,21 @@ fn check_api(c: &mut Check, api: &ApiConfig) -> Option<SocketAddr> {
     match api.bind.parse::<SocketAddr>() {
         Ok(addr) => {
             if !addr.ip().is_loopback() {
-                c.warn(
-                    "api.bind",
-                    format!("{addr} exposes the engine to the network"),
-                );
+                if api.lan.enabled {
+                    c.warn(
+                        "api.bind",
+                        format!(
+                            "{addr}: LAN mode; other machines need the pairing token; no TLS, use on a trusted home network only"
+                        ),
+                    );
+                } else {
+                    c.err(
+                        "api.bind",
+                        format!(
+                            "{addr} is not a loopback address; set api.lan.enabled: true to serve the network with a token (ADR-031)"
+                        ),
+                    );
+                }
             }
             Some(addr)
         }
@@ -668,7 +679,18 @@ fn check_camera_source(
             c.range(&format!("{p}.exposure_s"), e, 1e-5, 1.0);
         }
         let mut resolution = cam.resolution_px;
+        if cam.network && (cam.exposure_s.is_some() || cam.gain.is_some()) {
+            c.err(
+                &p,
+                "exposure_s and gain of a network camera are set on the phone, not here",
+            );
+        }
         let backend = match (&cam.device, &cam.frames_dir) {
+            (None, None) if cam.network => Some(capture::Backend::Network(cam.id.clone())),
+            (Some(_), _) | (_, Some(_)) if cam.network => {
+                c.err(&p, "a network camera has no device or frames_dir");
+                None
+            }
             (Some(index), None) => {
                 if let Some(prev) = indices.insert(*index, j) {
                     c.err(
@@ -699,7 +721,10 @@ fn check_camera_source(
                 }
             },
             _ => {
-                c.err(&p, "set exactly one of device and frames_dir");
+                c.err(
+                    &p,
+                    "set exactly one of device, frames_dir and network: true",
+                );
                 None
             }
         };

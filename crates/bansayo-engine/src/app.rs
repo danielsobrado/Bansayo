@@ -101,12 +101,26 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
     );
     let previews = Previews::default();
     let camera_settings = crate::sources::camera::CameraSettings::default();
+    let feeds: crate::sources::camera::capture::NetworkFeeds = std::sync::Arc::new(
+        config
+            .cameras
+            .iter()
+            .flat_map(|s| &s.cameras)
+            .filter_map(|c| match &c.backend {
+                crate::sources::camera::capture::Backend::Network(id) => {
+                    Some((id.clone(), std::sync::Arc::default()))
+                }
+                _ => None,
+            })
+            .collect(),
+    );
     for spec in &config.cameras {
         let source = CameraSource {
             spec: spec.clone(),
             previews: previews.clone(),
             settings: camera_settings.clone(),
             timing: timing.clone(),
+            feeds: feeds.clone(),
         };
         for d in source.descriptors() {
             drops.insert(d.id.clone(), Arc::new(AtomicU64::new(0)));
@@ -195,6 +209,17 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
         };
         tasks.push(source.spawn(common, faults_rx.clone()));
     }
+    let lan_token = if config.config.api.lan.enabled {
+        let path = crate::lan::token_path(&config.config);
+        let token =
+            tokio::task::spawn_blocking(move || crate::lan::load_or_create(&path)).await??;
+        tracing::warn!(
+            "LAN mode: other machines need the pairing token (desktop, Devices); no TLS"
+        );
+        Some(Arc::<str>::from(token))
+    } else {
+        None
+    };
     let api = Api {
         client,
         streams,
@@ -204,6 +229,9 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
         previews,
         camera_settings,
         diagnostics,
+        lan_token,
+        bind: address,
+        feeds,
         training: training_client,
         training_streams,
         content,
@@ -214,9 +242,12 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
     let router = api::router(api);
     let stop = cancel.clone();
     tasks.push(tokio::spawn(async move {
-        axum::serve(listener, router)
-            .with_graceful_shutdown(stop.cancelled_owned())
-            .await?;
+        axum::serve(
+            listener,
+            router.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .with_graceful_shutdown(stop.cancelled_owned())
+        .await?;
         Ok(())
     }));
     for warning in &config.warnings {

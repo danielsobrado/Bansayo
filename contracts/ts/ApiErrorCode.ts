@@ -3,4 +3,4 @@
 /**
  * Error category; the HTTP status is noted on each variant.
  */
-export type ApiErrorCode = "invalid_request" | "forbidden_origin" | "not_found" | "conflict" | "unavailable" | "internal";
+export type ApiErrorCode = "invalid_request" | "forbidden_origin" | "not_found" | "conflict" | "unavailable" | "internal" | "unauthorized";

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | **Accepted**; the LAN mode is Proposed (P2) |
+| Status | **Accepted**; the LAN mode is implemented for the Android client ([ADR-042](ADR-042-android-client.md), 18 November 2026) |
 | Date | 17 November 2026 |
 | Specified in | [17 §2](../17-security-privacy-and-safety.md), [14 §1](../14-runtime-and-api-contracts.md), [31](../31-deployment-and-device-lifecycle.md) |
 

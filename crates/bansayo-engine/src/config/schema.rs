@@ -118,6 +118,17 @@ impl Default for EngineConfig {
 pub struct ApiConfig {
     pub bind: String,
     pub allowed_origins: Vec<String>,
+    /// LAN mode (ADR-031, ADR-042): needed for a non-loopback bind; then every request from
+    /// another machine needs the bearer token.
+    pub lan: LanConfig,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct LanConfig {
+    pub enabled: bool,
+    /// File holding the token; default `<data_dir>/lan-token`, created on first start.
+    pub token_file: Option<PathBuf>,
 }
 
 impl Default for ApiConfig {
@@ -132,6 +143,7 @@ impl Default for ApiConfig {
             ]
             .map(String::from)
             .to_vec(),
+            lan: LanConfig::default(),
         }
     }
 }
@@ -371,6 +383,10 @@ pub struct LiveCameraConfig {
     /// A folder of images played as this camera, for testing and offline footage.
     #[serde(default)]
     pub frames_dir: Option<PathBuf>,
+    /// A phone or other network client sends this camera's JPEG frames to
+    /// `/api/v1/ingest/camera/{id}` (ADR-042). Exposure is set on the phone.
+    #[serde(default)]
+    pub network: bool,
     #[serde(default = "camera_rate_default")]
     pub rate_hz: f64,
     /// Requested capture size; the camera may negotiate another.

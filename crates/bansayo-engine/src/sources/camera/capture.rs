@@ -12,6 +12,70 @@ pub enum Backend {
     Device(u32),
     /// Images (`.jpg`, `.jpeg`, `.png`) in name order, played at the camera rate and looped.
     Frames(PathBuf),
+    /// JPEG frames sent by a network client to `/api/v1/ingest/camera/{id}` (ADR-042).
+    Network(String),
+}
+
+/// The newest JPEG frame a network client sent for one camera: a one-slot buffer, so a frame not
+/// yet taken is replaced and counted as dropped (08 §3).
+#[derive(Default)]
+pub struct NetworkFeed {
+    frame: std::sync::Mutex<Option<bytes::Bytes>>,
+    wake: std::sync::Condvar,
+    pub dropped: std::sync::atomic::AtomicU64,
+}
+
+impl NetworkFeed {
+    pub fn push(&self, jpeg: bytes::Bytes) {
+        if let Ok(mut f) = self.frame.lock() {
+            if f.is_some() {
+                self.dropped
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
+            *f = Some(jpeg);
+            self.wake.notify_one();
+        }
+    }
+    fn take(&self, timeout: Duration) -> Option<bytes::Bytes> {
+        let guard = self.frame.lock().ok()?;
+        let (mut guard, _) = self
+            .wake
+            .wait_timeout_while(guard, timeout, |f| f.is_none())
+            .ok()?;
+        guard.take()
+    }
+}
+
+/// Network feeds by camera id, shared by the API (producer) and the capture threads.
+pub type NetworkFeeds =
+    std::sync::Arc<std::collections::BTreeMap<String, std::sync::Arc<NetworkFeed>>>;
+
+/// No frame for this long: the network camera is disconnected.
+pub const NETWORK_TIMEOUT: Duration = Duration::from_secs(2);
+
+struct Network {
+    feed: std::sync::Arc<NetworkFeed>,
+    decode_us: u64,
+}
+impl Capture for Network {
+    fn next(&mut self) -> Result<RgbImage, String> {
+        let jpeg = self
+            .feed
+            .take(NETWORK_TIMEOUT)
+            .ok_or("no frame from the network client for 2 s")?;
+        let started = Instant::now();
+        let image = image::load_from_memory_with_format(&jpeg, image::ImageFormat::Jpeg)
+            .map_err(|e| format!("network frame: {e}"))?
+            .to_rgb8();
+        self.decode_us = started.elapsed().as_micros() as u64;
+        Ok(image)
+    }
+    fn decode_us(&self) -> u64 {
+        self.decode_us
+    }
+    fn describe(&self) -> String {
+        "JPEG frames over the network".into()
+    }
 }
 
 /// A blocking frame producer. `next` returns as soon as a frame is available. Opened, used and
@@ -35,9 +99,37 @@ pub fn open(
     resolution_px: [u32; 2],
     rate_hz: f64,
 ) -> Result<Box<dyn Capture>, String> {
+    open_with(backend, resolution_px, rate_hz, &NetworkFeeds::default())
+}
+
+/// As [`open`], with the network feeds a `Network` backend reads from. Opening a network camera
+/// waits for its first frame, so an absent phone is reported as unavailable, not as a stream.
+pub fn open_with(
+    backend: &Backend,
+    resolution_px: [u32; 2],
+    rate_hz: f64,
+    feeds: &NetworkFeeds,
+) -> Result<Box<dyn Capture>, String> {
     match backend {
         Backend::Frames(dir) => Ok(Box::new(Frames::open(dir, rate_hz)?)),
         Backend::Device(index) => device::open(*index, resolution_px, rate_hz),
+        Backend::Network(id) => {
+            let feed = feeds
+                .get(id)
+                .cloned()
+                .ok_or_else(|| format!("{id}: no network feed"))?;
+            {
+                let guard = feed.frame.lock().map_err(|e| e.to_string())?;
+                let (guard, _) = feed
+                    .wake
+                    .wait_timeout_while(guard, NETWORK_TIMEOUT, |f| f.is_none())
+                    .map_err(|e| e.to_string())?;
+                if guard.is_none() {
+                    return Err("waiting for the phone to connect and send frames".into());
+                }
+            }
+            Ok(Box::new(Network { feed, decode_us: 0 }))
+        }
     }
 }
 
@@ -323,6 +415,32 @@ mod tests {
             c.next().unwrap();
         }
         eprintln!("{:.1} frames/s", 60.0 / t.elapsed().as_secs_f64());
+    }
+
+    #[test]
+    fn network_frames_decode_replace_and_time_out() {
+        let feed = std::sync::Arc::new(NetworkFeed::default());
+        let feeds: NetworkFeeds = std::sync::Arc::new([("PHONE".to_owned(), feed.clone())].into());
+        let backend = Backend::Network("PHONE".into());
+        // Nobody sending: opening waits 2 s, then says so.
+        assert!(open_with(&backend, [8, 4], 30.0, &feeds).is_err());
+        let jpeg = |v: u8| {
+            let mut out = vec![];
+            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 95)
+                .encode_image(&RgbImage::from_pixel(8, 4, image::Rgb([v, v, v])))
+                .unwrap();
+            bytes::Bytes::from(out)
+        };
+        feed.push(jpeg(10));
+        let mut c = open_with(&backend, [8, 4], 30.0, &feeds).unwrap();
+        // The older frame is replaced by the newer one and counted as dropped.
+        feed.push(jpeg(200));
+        let img = c.next().unwrap();
+        assert_eq!(img.dimensions(), (8, 4));
+        assert!(img.get_pixel(0, 0)[0] > 150, "{:?}", img.get_pixel(0, 0));
+        assert_eq!(feed.dropped.load(std::sync::atomic::Ordering::Relaxed), 1);
+        assert!(c.next().is_err(), "no frame for 2 s");
+        assert!(open_with(&Backend::Network("OTHER".into()), [8, 4], 30.0, &feeds).is_err());
     }
 
     #[test]

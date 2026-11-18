@@ -92,6 +92,8 @@ pub enum ApiErrorCode {
     Unavailable,
     /// 500.
     Internal,
+    /// 401: LAN mode and the bearer token is missing or wrong (17 §5). Additive.
+    Unauthorized,
 }
 
 impl ApiErrorCode {
@@ -104,6 +106,7 @@ impl ApiErrorCode {
             Self::Conflict => 409,
             Self::Unavailable => 503,
             Self::Internal => 500,
+            Self::Unauthorized => 401,
         }
     }
 }
