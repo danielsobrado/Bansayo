@@ -109,6 +109,7 @@ pub fn run(
     let rate = recording.initial.config.engine.publish_rate_hz;
     let started = recording.initial.started_t_us;
     let mut replay = Replay::new(recording, 1.0, false)?;
+    replay.planar.capture_from(Some(original.created_t_us));
     let context = crate::pipeline::training_context_of(
         &replay.skeleton,
         &replay.registry,

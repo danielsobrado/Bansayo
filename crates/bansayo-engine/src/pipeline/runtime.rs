@@ -24,6 +24,8 @@ pub(super) struct Runtime {
     pub frame: watch::Sender<Arc<Encoded>>,
     pub motion: watch::Sender<Arc<MotionSample>>,
     pub pending_motion: Option<MotionSample>,
+    /// Per-camera planar reference (04 §4), captured after a training session is created.
+    pub planar: super::planar::PlanarState,
     pub landmarks: broadcast::Sender<Arc<Encoded>>,
     pub capture: Option<Capture>,
     pub busy: bool,
@@ -60,6 +62,7 @@ impl Runtime {
             frame: frames.0,
             motion: frames.1,
             pending_motion: None,
+            planar: Default::default(),
             landmarks,
             capture: None,
             busy: false,
@@ -273,7 +276,14 @@ impl Runtime {
                     self.accept(&mut engine, event);
                 }
                 Event::Input(None) => events_open = false,
-                Event::TrainingStatus => self.publish_state(&engine),
+                Event::TrainingStatus => {
+                    let from = engine
+                        .training_status
+                        .as_ref()
+                        .and_then(|s| s.borrow().planar_from_us);
+                    self.planar.capture_from(from);
+                    self.publish_state(&engine);
+                }
                 Event::Command(Some(Command::Simulation(request, reply))) => {
                     let result = if self.replay.is_some() {
                         Err(ControlError::new(
@@ -412,14 +422,20 @@ impl Runtime {
                             Origin::Simulated => 1,
                             Origin::Fixture => 2,
                         });
-                        self.pending_motion = Some(super::motion::sample(
+                        let mut sample = super::motion::sample(
                             &engine.skeleton,
                             &engine.registry,
                             &solved,
                             0,
                             now,
                             origins,
-                        ));
+                        );
+                        sample.planar = self.planar.update(
+                            &engine.registry,
+                            now,
+                            engine.config.config.engine.stale_after_ms * 1000,
+                        );
+                        self.pending_motion = Some(sample);
                         let mut joints =
                             measure(&engine.skeleton, &solved.rotations, &solved.observed);
                         super::joints::confidence(

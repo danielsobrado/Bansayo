@@ -342,3 +342,136 @@ fn zero_phase_refilter_removes_live_lag() {
         .fold(0.0, f64::max);
     assert!(speed > 0.5 && speed < 2.0, "{speed}");
 }
+
+/// A planar body in torso lengths: standing, left knee bent to a right angle, thigh horizontal.
+fn planar(scale: Option<f32>, view: PlanarView, t: u64) -> MotionSample {
+    let mut k = vec![None; 26];
+    let mut set = |name: &str, x: f32, y: f32| {
+        k[BODY_KEYPOINT_NAMES.iter().position(|n| *n == name).unwrap()] =
+            Some(bansayo_contracts::PlanarKeypoint {
+                x,
+                y,
+                confidence: 0.8,
+            })
+    };
+    set("pelvis", 0.0, 0.0);
+    set("neck", 0.0, 1.0);
+    set("left_shoulder", 0.1, 1.0);
+    set("right_shoulder", -0.1, 1.0);
+    set("left_hip", 0.05, 0.0);
+    set("right_hip", -0.05, 0.0);
+    set("left_knee", 0.85, 0.0);
+    set("left_ankle", 0.85, -0.8);
+    set("right_knee", -0.05, -0.8);
+    set("right_ankle", -0.05, -1.6);
+    MotionSample {
+        seq: t,
+        t_us: t,
+        origins: vec![],
+        body: None,
+        planar: vec![PlanarBody {
+            camera_id: DeviceId::new("CAM").unwrap(),
+            t_obs_us: t,
+            scale_px: scale,
+            keypoints: if scale.is_some() { k } else { vec![None; 26] },
+            view,
+        }],
+    }
+}
+
+#[test]
+fn image_plane_realisations_follow_04_6_and_publish_only_normalised_positions() {
+    let sk = skeleton(H);
+    let g = Geometry::new(&sk).unwrap();
+    // A first sample passes the live filter unchanged.
+    let f = Observer::new(&sk, Cutoffs::default())
+        .unwrap()
+        .step(&planar(Some(200.0), PlanarView::Lateral, 1000));
+    let v = |id: &str| f.get(index(id).unwrap()).clone();
+    let knee = v("knee_flexion.left");
+    assert!((knee.value.unwrap() - FRAC_PI_2).abs() < 1e-6, "{knee:?}");
+    assert_eq!(knee.evidence.method, MethodId::ImagePlane);
+    assert_eq!(knee.evidence.provenance, Provenance::Derived);
+    assert!(knee.evidence.sigma.is_none());
+    assert_eq!(knee.evidence.sources, [DeviceId::new("CAM").unwrap()]);
+    assert!((v("thigh_elevation.left").value.unwrap() - FRAC_PI_2).abs() < 1e-6);
+    assert!((v("hip_flexion.left").value.unwrap() - FRAC_PI_2).abs() < 1e-6);
+    assert!(v("knee_flexion.right").value.unwrap().abs() < 1e-6);
+    let height = v("ankle_height.right");
+    assert!(
+        height.value.is_none() && height.norm.is_some(),
+        "{height:?}"
+    );
+    // Heights above the floor captured with the reference, in leg lengths.
+    let sample = planar(Some(200.0), PlanarView::Lateral, 1000);
+    let p = Planar {
+        body: &sample.planar[0],
+        floor: -1.7,
+    };
+    let (raised, _) = planar_base(&p, &g, "ankle_height", 0).unwrap();
+    let (support, _) = planar_base(&p, &g, "ankle_height", 1).unwrap();
+    assert!((raised / g.torso - 0.9).abs() < 1e-6 && (support / g.torso - 0.1).abs() < 1e-6);
+    // No image-plane realisation, no feet in COCO-17, suppression by view.
+    assert_eq!(why(&f, "pelvis_yaw"), "needs_calibrated_cameras");
+    assert_eq!(why(&f, "thigh_azimuth.left"), "needs_calibrated_cameras");
+    assert_eq!(why(&f, "foot_yaw.right"), "detector_no_feet");
+    assert_eq!(why(&f, "toe_height.left"), "detector_no_feet");
+    assert_eq!(why(&f, "root_speed"), "needs_calibrated_cameras");
+    let f = Observer::new(&sk, Cutoffs::default())
+        .unwrap()
+        .step(&planar(Some(200.0), PlanarView::Frontal, 1000));
+    assert_eq!(why(&f, "hip_flexion.left"), "view_unsuitable");
+    let f = Observer::new(&sk, Cutoffs::default())
+        .unwrap()
+        .step(&planar(None, PlanarView::Unknown, 1000));
+    assert_eq!(why(&f, "knee_flexion.left"), "planar_scale_missing");
+}
+
+#[test]
+fn the_floor_is_the_ankle_level_of_the_first_frame_of_a_reference() {
+    let sk = skeleton(H);
+    let g = Geometry::new(&sk).unwrap();
+    let mut standing = planar(Some(200.0), PlanarView::Lateral, 1000);
+    for (k, y) in [(14, -0.8), (15, -1.6)] {
+        standing.planar[0].keypoints[k] = Some(bansayo_contracts::PlanarKeypoint {
+            x: 0.05,
+            y,
+            confidence: 0.8,
+        });
+    }
+    let f = Observer::new(&sk, Cutoffs::default())
+        .unwrap()
+        .step(&standing);
+    let rest = g.ankle_rest / g.lengths.leg_length;
+    for side in ["left", "right"] {
+        let v = f.get(index(&format!("ankle_height.{side}")).unwrap());
+        assert!((v.norm.unwrap() - rest).abs() < 1e-9, "{v:?}");
+    }
+}
+
+#[test]
+fn image_plane_speed_is_normalised_by_leg_length_per_second() {
+    let sk = skeleton(H);
+    let g = Geometry::new(&sk).unwrap();
+    let mut o = Observer::new(&sk, Cutoffs::default()).unwrap();
+    let mut last = None;
+    // The left ankle moves right at 2 torso lengths per second.
+    for k in 0..200u64 {
+        let t = 1000 + k * 10_000;
+        let mut s = planar(Some(200.0), PlanarView::Lateral, t);
+        if let Some(p) = s.planar[0].keypoints[15].as_mut() {
+            p.x += 0.02 * k as f32;
+        }
+        last = Some(o.step(&s));
+    }
+    let v = last
+        .unwrap()
+        .get(index("ankle_speed.left").unwrap())
+        .clone();
+    assert!(v.value.is_none());
+    let want = 2.0 * g.torso / g.lengths.leg_length;
+    assert!(
+        (v.norm.unwrap() - want).abs() < 0.02 * want,
+        "{v:?} vs {want}"
+    );
+}

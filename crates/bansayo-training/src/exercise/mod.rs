@@ -341,7 +341,7 @@ impl ExerciseEngine {
         let a: Vec<bool> = self
             .required()
             .iter()
-            .map(|i| i.is_some_and(|i| f.get(i).value.is_some()))
+            .map(|i| i.is_some_and(|i| crate::observables::present(f.get(i))))
             .collect();
         if self.available.as_ref() != Some(&a) {
             self.available = Some(a);

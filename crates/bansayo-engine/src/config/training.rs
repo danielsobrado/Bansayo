@@ -36,7 +36,7 @@ impl Default for Filters {
 #[serde(deny_unknown_fields, default)]
 pub struct AnalysisConfig {
     pub filters: Filters,
-    /// `auto` or a camera id; image-plane observables arrive in roadmap Phase 2.
+    /// `auto` or a camera id: the camera image-plane observables are served from (04 §6.4).
     pub planar_camera: String,
 }
 impl Default for AnalysisConfig {

@@ -530,7 +530,7 @@ impl Machine {
     fn observe(&mut self, frame: &ObservableFrame, now: u64) {
         for (k, obs) in self.tech.required.iter().enumerate() {
             let v = obs.index.map(|i| frame.get(i));
-            match v.filter(|v| v.value.is_some()) {
+            match v.filter(|v| crate::observables::present(v)) {
                 Some(v) => {
                     self.gaps[k] = None;
                     if let Some(c) = v.evidence.confidence {

@@ -169,6 +169,22 @@ fn check_training_sections(c: &mut Check, config: &Config) {
     let a = config.analysis();
     c.positive("analysis.filters.position_hz", a.filters.position_hz, 100.0);
     c.positive("analysis.filters.angle_hz", a.filters.angle_hz, 100.0);
+    if a.planar_camera != "auto" {
+        let known = config.sources.iter().any(|s| match s {
+            SourceConfig::Camera(k) => k.cameras.iter().any(|x| x.id == a.planar_camera),
+            SourceConfig::Simulated(s) => s.cameras.iter().any(|x| x.id == a.planar_camera),
+            _ => false,
+        });
+        if !known {
+            c.err(
+                "analysis.planar_camera",
+                format!(
+                    "{:?} is neither auto nor a configured camera",
+                    a.planar_camera
+                ),
+            );
+        }
+    }
     let r = config.recognition();
     c.range(
         "recognition.accept_confidence.free",

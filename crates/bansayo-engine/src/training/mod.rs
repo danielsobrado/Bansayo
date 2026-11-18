@@ -26,6 +26,9 @@ pub struct TrainingStatus {
     pub training: Option<TrainingRef>,
     pub content_rev: u64,
     pub storage: StorageStatus,
+    /// Creation time of the current session: the pipeline captures the planar reference from
+    /// then on (04 §4). Engine-internal, not on the wire.
+    pub planar_from_us: Option<u64>,
 }
 
 /// Latest observables of the session, for the `observables` topic.
@@ -136,11 +139,15 @@ pub fn session_config(c: &crate::config::Config) -> SessionConfig {
         strikes_per_session: t.limits.strikes_per_session,
         session_minutes: t.limits.session_minutes,
         cooldown_reps: c.coaching().cooldown_reps,
+        planar_camera: (a.planar_camera != "auto")
+            .then(|| DeviceId::new(a.planar_camera.as_str()).ok())
+            .flatten(),
     }
 }
 
 /// Everything about one running (or just finished) session.
 struct Current {
+    created_us: u64,
     motion: Option<crate::recording::motion::MotionRecorder>,
     inputs: bool,
     closed: bool,
@@ -187,6 +194,7 @@ impl Runner {
             athlete: None,
             training: None,
             content_rev,
+            planar_from_us: None,
             storage: StorageStatus {
                 state: if store_ok {
                     StorageStateKind::Ok
@@ -224,6 +232,7 @@ impl Runner {
             }),
             training: None,
             content_rev: self.content.rev,
+            planar_from_us: None,
             storage: StorageStatus {
                 state: if storage_reason.is_some() {
                     StorageStateKind::Unavailable
@@ -309,6 +318,11 @@ impl Actor {
                 }
             }),
             content_rev: self.r.content.rev,
+            planar_from_us: self
+                .current
+                .as_ref()
+                .filter(|c| !c.session.finished())
+                .map(|c| c.created_us),
             storage: StorageStatus {
                 state: if self.r.writer.is_none() {
                     StorageStateKind::Unavailable
@@ -734,7 +748,8 @@ impl Actor {
             .data_dir
             .join("sessions")
             .join(session_id.as_str());
-        let created = Session::new(session_config(&self.r.config), setup, self.now());
+        let created_us = self.now();
+        let created = Session::new(session_config(&self.r.config), setup, created_us);
         let (session, events) = match created {
             Ok(x) => x,
             Err(problems) => {
@@ -809,6 +824,7 @@ impl Actor {
             ));
         }
         self.current = Some(Current {
+            created_us,
             motion,
             inputs,
             closed: false,

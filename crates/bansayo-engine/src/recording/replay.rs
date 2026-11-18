@@ -18,6 +18,8 @@ pub struct Replay {
     pub looping: bool,
     pub position_us: u64,
     pub latest_motion: Option<MotionSample>,
+    /// Re-analysis opens the planar capture window at the session's creation (04 §4).
+    pub planar: crate::pipeline::planar::PlanarState,
     cursor: usize,
     next_tick: u64,
     clock_position: f64,
@@ -35,6 +37,7 @@ impl Replay {
             looping,
             position_us: 0,
             latest_motion: None,
+            planar: Default::default(),
             cursor: 0,
             next_tick: 0,
             clock_position: 0.0,
@@ -58,12 +61,19 @@ impl Replay {
         self.position_us = position;
         self.clock_position = position as f64;
         self.apply_until(self.recording.initial.started_t_us + position, None)?;
-        self.latest_motion = Some(
-            self.solve_at(self.recording.initial.started_t_us + position)
-                .1,
-        );
+        let time = self.recording.initial.started_t_us + position;
+        let sample = self.solve_at(time).1;
+        self.latest_motion = Some(self.with_planar(sample, time));
         self.next_tick = (position as f64 * self.rate() / 1e6).ceil() as u64;
         Ok(())
+    }
+    fn with_planar(&mut self, mut sample: MotionSample, time: u64) -> MotionSample {
+        sample.planar = self.planar.update(
+            &self.registry,
+            time,
+            self.recording.initial.config.engine.stale_after_ms * 1000,
+        );
+        sample
     }
     fn rate(&self) -> f64 {
         self.recording.initial.config.engine.publish_rate_hz
@@ -178,7 +188,7 @@ impl Replay {
             }
             self.apply_until(started + offset, Some(&mut messages))?;
             let (frames, sample) = self.solve_at(started + offset);
-            self.latest_motion = Some(sample);
+            self.latest_motion = Some(self.with_planar(sample, started + offset));
             messages.extend(frames);
             self.position_us = offset;
             self.next_tick += 1;

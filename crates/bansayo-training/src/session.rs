@@ -30,6 +30,8 @@ pub struct SessionConfig {
     pub strikes_per_session: u32,
     pub session_minutes: u32,
     pub cooldown_reps: u32,
+    /// `analysis.planar_camera`; `None` is `auto` (04 §6.4).
+    pub planar_camera: Option<DeviceId>,
 }
 
 impl Default for SessionConfig {
@@ -42,6 +44,7 @@ impl Default for SessionConfig {
             strikes_per_session: 400,
             session_minutes: 90,
             cooldown_reps: 3,
+            planar_camera: None,
         }
     }
 }
@@ -87,7 +90,11 @@ pub struct Session {
     set_results: Vec<RepetitionResult>,
     fresh_times: VecDeque<u64>,
     live_ids: Vec<String>,
+    basic_since: Option<u64>,
 }
+
+/// How long profile `basic` must hold before image-plane observables are served.
+pub const BASIC_HOLD_US: u64 = 1_000_000;
 
 fn side_index(s: Side) -> usize {
     usize::from(s == Side::Right)
@@ -114,13 +121,15 @@ impl Session {
             .map_or(setup.plan.technique.clone(), |t| t.names.display.clone());
         let workout = wrap(&setup.plan, &display);
         let (plan, techniques) = compile_workout(&workout, &setup.library, setup.stance)?;
-        let observer = Observer::new(&setup.skeleton, cfg.cutoffs).map_err(|e| {
-            vec![crate::content::validate::problem(
-                "skeleton",
-                "invalid_skeleton",
-                e,
-            )]
-        })?;
+        let observer =
+            Observer::with_planar_camera(&setup.skeleton, cfg.cutoffs, cfg.planar_camera.clone())
+                .map_err(|e| {
+                vec![crate::content::validate::problem(
+                    "skeleton",
+                    "invalid_skeleton",
+                    e,
+                )]
+            })?;
         let ctx = SessionContext {
             session_id: setup.session_id.clone(),
             athlete_id: setup.athlete_id.clone(),
@@ -155,6 +164,7 @@ impl Session {
             set_results: vec![],
             fresh_times: VecDeque::new(),
             live_ids: vec![],
+            basic_since: None,
         };
         s.rebuild_recognizer(side);
         Ok((s, events))
@@ -257,6 +267,14 @@ impl Session {
 
     /// One solver tick.
     pub fn sample(&mut self, sample: &MotionSample) -> Output {
+        // Profile `basic` held for a second: a multi-view rig dropping views for a moment stays on
+        // world observables with a gap instead of mixing in image-plane values (08 §10).
+        self.basic_since = (self.setup.capability_profile == CapabilityProfileId::Basic)
+            .then(|| self.basic_since.unwrap_or(sample.t_us));
+        self.observer.allow_planar(
+            self.basic_since
+                .is_some_and(|s| sample.t_us.saturating_sub(s) >= BASIC_HOLD_US),
+        );
         let frame = self.observer.step(sample);
         let mut events = vec![];
         let ctx_side = self.engine.recognition_context().side;
@@ -542,7 +560,7 @@ impl Session {
                         .iter()
                         .filter_map(|o| {
                             let v = frame.get(o.index?);
-                            if v.value.is_none() {
+                            if !crate::observables::present(v) {
                                 reasons.extend(v.reasons.iter().take(1).cloned());
                                 return None;
                             }

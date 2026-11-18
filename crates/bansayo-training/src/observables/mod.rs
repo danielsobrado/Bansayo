@@ -1,15 +1,16 @@
 //! Observable catalogue `bansayo.observables.v1` (04 §6): the observables the kick definitions,
-//! the kick metric pack and the segmenter reference, world realisations only. Image-plane
-//! realisations need `PlanarBody`, which roadmap Phase 2 builds; until then they report
-//! `image_plane_not_implemented`.
+//! the kick metric pack and the segmenter reference. World realisations are used whenever a
+//! `BodyState` exists; otherwise the image-plane realisations of 04 §6.1, §6.2 and §6.4 are served
+//! from one camera's `PlanarBody`, with `method: image_plane`, `provenance: derived` and no sigma.
+//! Image-plane positions and speeds carry only the normalised form (`value: null`).
 pub mod angles;
 pub mod filter;
 
 use crate::content::types::NormBy;
 use crate::evidence::{combine, reason, unavailable, usable};
 use bansayo_contracts::{
-    BODY_KEYPOINT_NAMES, BodyState, Evidence, MotionSample, ObservableValue, Provenance, Reason,
-    SkeletonDefinition,
+    BODY_KEYPOINT_NAMES, BodyState, DeviceId, Evidence, MethodId, MotionSample, ObservableValue,
+    PlanarBody, PlanarView, Provenance, Reason, SkeletonDefinition,
 };
 use filter::{CriticallyDamped, filtfilt};
 use nalgebra::{Matrix3, Quaternion, Rotation3, UnitQuaternion as Rot, Vector3 as V3};
@@ -260,6 +261,10 @@ impl Lengths {
 #[derive(Debug, Clone)]
 struct Geometry {
     lengths: Lengths,
+    /// Rest pelvis-to-neck length: the planar torso unit in metres (04 §6.2 image-plane form).
+    torso: f64,
+    /// Rest height of the ankle joint above the floor, metres.
+    ankle_rest: f64,
     /// `[pelvis, chest, l_thigh, l_shin, l_foot, r_thigh, r_shin, r_foot]` segment indices.
     seg: [usize; 8],
     thigh_tail: [V3<f64>; 2],
@@ -316,7 +321,13 @@ impl Geometry {
             (Some(h), Some(t)) => (v(*t) - v(*h)).norm(),
             _ => tail(seg[4]).norm(),
         };
+        let floor = foot
+            .iter()
+            .map(|c| (rest[seg[4]] + v(*c)).y)
+            .fold(rest[seg[4]].y, f64::min);
         Ok(Self {
+            torso: (rest[find("neck")?] - rest[seg[0]]).norm(),
+            ankle_rest: rest[seg[4]].y - floor,
             lengths: Lengths {
                 stature: sk.height_m.into(),
                 leg_length: tail(seg[2]).norm() + tail(seg[3]).norm(),
@@ -548,6 +559,132 @@ fn com_offset(body: &BodyState, side: &str) -> Value {
     ))
 }
 
+fn needs_world(what: &str) -> Reason {
+    reason(
+        "needs_calibrated_cameras",
+        Some(what),
+        "needs two calibrated cameras",
+    )
+}
+
+fn no_feet(what: &str) -> Reason {
+    reason(
+        "detector_no_feet",
+        Some(what),
+        "pose model has no foot points",
+    )
+}
+
+fn scale_missing() -> Reason {
+    reason(
+        "planar_scale_missing",
+        None,
+        "hold still in the start position so body size can be measured",
+    )
+}
+
+/// One camera's planar body with the floor level captured with its reference.
+#[derive(Debug, Clone, Copy)]
+struct Planar<'a> {
+    body: &'a PlanarBody,
+    /// Planar `y` of the floor, torso lengths.
+    floor: f64,
+}
+
+type P2 = nalgebra::Vector2<f64>;
+
+fn planar_point(p: &Planar, name: &str) -> Result<(P2, f32), Reason> {
+    p.body
+        .keypoints
+        .get(kp(name))
+        .and_then(Option::as_ref)
+        .map(|k| (P2::new(k.x.into(), k.y.into()), k.confidence))
+        .ok_or_else(|| missing(name))
+}
+
+fn planar_evidence(p: &Planar, confidences: &[f32]) -> Evidence {
+    Evidence {
+        provenance: Provenance::Derived,
+        method: MethodId::ImagePlane,
+        confidence: confidences.iter().copied().reduce(f32::min),
+        sigma: None,
+        sigma_basis: None,
+        t_obs_us: Some(p.body.t_obs_us),
+        sources: vec![p.body.camera_id.clone()],
+    }
+}
+
+fn angle_between(a: &P2, b: &P2) -> f64 {
+    (a.dot(b) / (a.norm() * b.norm()).max(1e-12))
+        .clamp(-1.0, 1.0)
+        .acos()
+}
+
+/// Image-plane realisation of a non-rate observable (04 §6.1, §6.2). Positions are returned in
+/// metres-equivalent (torso lengths × the rest torso length) so their normalised form divides
+/// by the usual length; the metre value itself is never published.
+fn planar_base(p: &Planar, g: &Geometry, name: &str, s: usize) -> Value {
+    let side = side_name(s);
+    let pt = |k: &str| planar_point(p, &format!("{side}_{k}"));
+    let feet = |k: &str| {
+        pt(k).map_err(|_| {
+            if p.body
+                .keypoints
+                .get(kp("left_heel"))
+                .is_some_and(Option::is_some)
+            {
+                needs_world(name)
+            } else {
+                no_feet(name)
+            }
+        })
+    };
+    let height = |(q, c): (P2, f32)| Ok(((q.y - p.floor) * g.torso, planar_evidence(p, &[c])));
+    match name {
+        "knee_flexion" => {
+            let ((h, ch), (k, ck), (a, ca)) = (pt("hip")?, pt("knee")?, pt("ankle")?);
+            Ok((
+                std::f64::consts::PI - angle_between(&(h - k), &(a - k)),
+                planar_evidence(p, &[ch, ck, ca]),
+            ))
+        }
+        "thigh_elevation" => {
+            let ((h, ch), (k, ck)) = (pt("hip")?, pt("knee")?);
+            Ok((
+                angle_between(&(k - h), &P2::new(0.0, -1.0)),
+                planar_evidence(p, &[ch, ck]),
+            ))
+        }
+        "hip_flexion" => {
+            if p.body.view != PlanarView::Lateral {
+                return Err(reason(
+                    "view_unsuitable",
+                    Some(name),
+                    "camera view unsuitable (needs a side view)",
+                ));
+            }
+            let ((h, ch), (k, ck)) = (pt("hip")?, pt("knee")?);
+            let (pelvis, cp) = planar_point(p, "pelvis")?;
+            let (neck, cn) = planar_point(p, "neck")?;
+            // shortcut: unsigned, because one side view does not say which way the athlete faces;
+            // sign it from a facing estimate (nose or toes) if a definition needs extension.
+            Ok((
+                angle_between(&(k - h), &(pelvis - neck)),
+                planar_evidence(p, &[ch, ck, cp, cn]),
+            ))
+        }
+        "ankle_height" => height(pt("ankle")?),
+        "knee_height" => height(pt("knee")?),
+        "toe_height" => height(feet("toe")?),
+        "heel_height" => height(feet("heel")?),
+        "foot_yaw" => Err(feet("toe")
+            .and(feet("heel"))
+            .map_or_else(|e| e, |_| needs_world(name))),
+        // Headings, twist, and distances that need depth have no image-plane realisation.
+        _ => Err(needs_world(name)),
+    }
+}
+
 /// Keypoints whose velocities define the speed observables.
 fn speed_points() -> &'static [(&'static str, &'static str)] {
     &[
@@ -567,15 +704,25 @@ fn is_heading(name: &str) -> bool {
     matches!(name, "pelvis_yaw" | "foot_yaw")
 }
 
-/// Every non-rate observable and every speed point of one body, raw.
-fn raw(body: Option<&BodyState>, g: &Geometry) -> (Vec<Option<Value>>, Vec<Point>) {
-    fn none<T>() -> Result<T, Reason> {
-        Err(reason(
+/// Where the observables of one tick come from (04 §6.4).
+#[derive(Debug, Clone, Copy)]
+enum Input<'a> {
+    World(&'a BodyState),
+    Planar(Planar<'a>),
+    /// A camera delivers landmarks but the planar reference is not captured yet.
+    ScaleMissing,
+    Nothing,
+}
+
+/// Every non-rate observable and every speed point of one tick, raw.
+fn raw(input: Input, g: &Geometry) -> (Vec<Option<Value>>, Vec<Point>) {
+    let none = || {
+        reason(
             "no_world_body",
             None,
-            "No world skeleton is available; image-plane realisations are not implemented yet.",
-        ))
-    }
+            "No body is observed: no world skeleton and no camera landmarks.",
+        )
+    };
     let values = ids()
         .iter()
         .map(|(id, i)| {
@@ -584,14 +731,43 @@ fn raw(body: Option<&BodyState>, g: &Geometry) -> (Vec<Option<Value>>, Vec<Point
                 return None;
             }
             let s = usize::from(id.ends_with(".right"));
-            Some(body.map_or_else(none, |b| base(b, g, e.name, s)))
+            Some(match input {
+                Input::World(b) => base(b, g, e.name, s),
+                Input::Planar(p) => planar_base(&p, g, e.name, s),
+                Input::ScaleMissing => Err(scale_missing()),
+                Input::Nothing => Err(none()),
+            })
         })
         .collect();
     let points = speed_points()
         .iter()
-        .map(|(_, k)| body.map_or_else(none, |b| point(b, k)))
+        .map(|(id, k)| match input {
+            Input::World(b) => point(b, k),
+            Input::Planar(_) if *id == "root_speed" => Err(needs_world("root_speed")),
+            Input::Planar(p) => planar_point(&p, k).map(|(q, c)| {
+                (
+                    V3::new(q.x * g.torso, q.y * g.torso, 0.0),
+                    planar_evidence(&p, &[c]),
+                )
+            }),
+            Input::ScaleMissing => Err(scale_missing()),
+            Input::Nothing => Err(none()),
+        })
         .collect();
     (values, points)
+}
+
+/// Image-plane positions and speeds publish only their normalised form (04 §6.2).
+fn published(mut v: ObservableValue, index: usize) -> ObservableValue {
+    if v.evidence.method == MethodId::ImagePlane && entry(index).norm.is_some() {
+        v.value = None;
+    }
+    v
+}
+
+/// Whether an observable has a usable value in either form.
+pub fn present(v: &ObservableValue) -> bool {
+    v.value.is_some() || v.norm.is_some()
 }
 
 #[derive(Debug, Clone)]
@@ -599,6 +775,14 @@ struct Row {
     t_obs: u64,
     values: Vec<Option<Value>>,
     points: Vec<Point>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct PlanarTrack {
+    confidence: f64,
+    t_us: u64,
+    /// `(scale_px, floor y)` of the current reference.
+    floor: Option<(f32, f64)>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -638,6 +822,13 @@ struct PointState {
 pub struct Observer {
     geometry: Geometry,
     cutoffs: Cutoffs,
+    /// `analysis.planar_camera`: `None` = auto (highest mean confidence over about a second).
+    planar_camera: Option<DeviceId>,
+    /// Image-plane realisations are served only while this holds: at profile `basic` (08 §10,
+    /// "only one camera left"). A multi-view rig's momentary loss of the world body stays a gap.
+    planar_allowed: bool,
+    /// Per camera: smoothed mean keypoint confidence and the floor captured with its reference.
+    planar: std::collections::BTreeMap<DeviceId, PlanarTrack>,
     scalars: Vec<ScalarState>,
     points: Vec<PointState>,
     held: Vec<ObservableValue>,
@@ -661,6 +852,14 @@ fn empty(id: &str, why: Reason) -> ObservableValue {
 
 impl Observer {
     pub fn new(skeleton: &SkeletonDefinition, cutoffs: Cutoffs) -> Result<Self, String> {
+        Self::with_planar_camera(skeleton, cutoffs, None)
+    }
+
+    pub fn with_planar_camera(
+        skeleton: &SkeletonDefinition,
+        cutoffs: Cutoffs,
+        planar_camera: Option<DeviceId>,
+    ) -> Result<Self, String> {
         let geometry = Geometry::new(skeleton)?;
         let scalars = ids()
             .iter()
@@ -689,6 +888,9 @@ impl Observer {
         Ok(Self {
             geometry,
             cutoffs,
+            planar_camera,
+            planar_allowed: true,
+            planar: Default::default(),
             scalars,
             points,
             held,
@@ -706,9 +908,77 @@ impl Observer {
             .map(|n| value / self.geometry.lengths.by(n))
     }
 
+    /// Whether image-plane realisations may stand in for a missing world body.
+    pub fn allow_planar(&mut self, allowed: bool) {
+        self.planar_allowed = allowed;
+    }
+
+    /// Picks the planar body observables are served from when there is no world body (04 §6.4).
+    fn input<'a>(&mut self, sample: &'a MotionSample) -> Input<'a> {
+        if let Some(b) = &sample.body {
+            return Input::World(b);
+        }
+        if !self.planar_allowed {
+            return Input::Nothing;
+        }
+        for b in &sample.planar {
+            let seen: Vec<f64> = b
+                .keypoints
+                .iter()
+                .flatten()
+                .map(|k| f64::from(k.confidence))
+                .collect();
+            let t = self.planar.entry(b.camera_id.clone()).or_default();
+            if b.t_obs_us != t.t_us && !seen.is_empty() {
+                let mean = seen.iter().sum::<f64>() / seen.len() as f64;
+                let dt = b.t_obs_us.saturating_sub(t.t_us) as f64 * 1e-6;
+                let a = if t.t_us == 0 {
+                    1.0
+                } else {
+                    (dt / 1.0).min(1.0)
+                };
+                t.confidence += a * (mean - t.confidence);
+                t.t_us = b.t_obs_us;
+            }
+        }
+        let chosen = match &self.planar_camera {
+            Some(id) => sample.planar.iter().find(|b| &b.camera_id == id),
+            None => sample.planar.iter().max_by(|a, b| {
+                let c =
+                    |x: &PlanarBody| self.planar.get(&x.camera_id).map_or(0.0, |t| t.confidence);
+                c(a).total_cmp(&c(b))
+                    .then_with(|| b.camera_id.cmp(&a.camera_id))
+            }),
+        };
+        let Some(body) = chosen else {
+            return Input::Nothing;
+        };
+        let Some(scale) = body.scale_px else {
+            return Input::ScaleMissing;
+        };
+        // The floor is taken from the first frame of a reference that shows both ankles, while
+        // the athlete still stands as captured.
+        let rest = self.geometry.ankle_rest / self.geometry.torso;
+        let track = self.planar.entry(body.camera_id.clone()).or_default();
+        if track.floor.is_none_or(|(s, _)| s != scale) {
+            let ankles: Vec<f64> = ["left_ankle", "right_ankle"]
+                .iter()
+                .filter_map(|n| body.keypoints.get(kp(n)).and_then(Option::as_ref))
+                .map(|k| f64::from(k.y))
+                .collect();
+            track.floor =
+                (ankles.len() == 2).then(|| (scale, (ankles[0] + ankles[1]) / 2.0 - rest));
+        }
+        match track.floor {
+            Some((_, floor)) => Input::Planar(Planar { body, floor }),
+            None => Input::ScaleMissing,
+        }
+    }
+
     /// Advances by one solver tick and returns every observable (latest held between inputs).
     pub fn step(&mut self, sample: &MotionSample) -> ObservableFrame {
-        let (values, points) = raw(sample.body.as_ref(), &self.geometry);
+        let input = self.input(sample);
+        let (values, points) = raw(input, &self.geometry);
         let mut fresh_any = false;
         let mut row_values = values.clone();
         for (i, v) in values.into_iter().enumerate() {
@@ -794,7 +1064,12 @@ impl Observer {
         }
         ObservableFrame {
             t_us: sample.t_us,
-            values: self.held.clone(),
+            values: self
+                .held
+                .iter()
+                .enumerate()
+                .map(|(i, v)| published(v.clone(), i))
+                .collect(),
         }
     }
 
@@ -994,7 +1269,11 @@ impl Observer {
             .zip(out)
             .map(|(r, values)| ObservableFrame {
                 t_us: r.t_obs,
-                values,
+                values: values
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, v)| published(v, i))
+                    .collect(),
             })
             .collect()
     }
