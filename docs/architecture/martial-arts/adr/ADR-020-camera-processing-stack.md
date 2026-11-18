@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | **Pending Validation** — the capture crate, decoder and manual exposure control are untested on the target machine |
+| Status | **Pending Validation** — validated on one webcam (18 November 2026, below); four cameras together not yet run |
 | Date | 17 November 2026 |
 | Extends | ADR-009 (camera path) in [docs/12](../../../12-decisions.md) |
 | Specified in | [08 §3](../08-tracking-and-sensor-fusion.md), [15 §2.1](../15-performance-and-latency.md) |
@@ -14,6 +14,18 @@ the decision below, plus image-folder cameras; see
 [08 §1.2](../08-tracking-and-sensor-fusion.md). No physical camera has been connected. Item 4,
 manual exposure, is not built. The status therefore stays Pending Validation, now on hardware
 rather than on a spike.
+
+## Evidence on the first physical camera (18 November 2026)
+
+Roadmap Phase 2, on the owner's Windows 11 PC with one UGREEN USB webcam (VID 0C45, PID 6369;
+offers MJPEG and NV12 up to 1920×1080, at most 30 fps). Commits `04dc99f`, `a11831f`, `56080aa`.
+
+| Criterion | Result |
+|---|---|
+| Manual exposure set and read back | **Met, through the fallback.** `nokhwa` 0.10 cannot switch a Media Foundation control from automatic to manual (its `set_camera_control` keeps the current flag), so item 2's fallback was built for controls only: `sources/camera/controls.rs` activates the device's media source beside nokhwa's stream and sets `IAMCameraControl` exposure (whole log2 seconds) and `IAMVideoProcAmp` gain to manual, then reads them back. 0.004 s requested → 1/256 s in effect; 0.002 s → 1/512 s; also changed live over `PUT /cameras/{id}/settings`. A setting the device or an image folder cannot take leaves the camera `degraded` with the property named. Capture itself stays on `nokhwa` |
+| Advertised rate within 5 % | **Met at 30 fps**: 30.0 frames/s raw capture and 30.0 Hz end to end (release build, manual exposure). `nokhwa`'s `Closest` request picked a 1 fps mode, and its reported rate is the ratio's denominator; the engine now requests the exact format first and does not log nokhwa's rate |
+| Four cameras together | Not run: one camera attached |
+| Decode budget (≤ 4 ms, 1280×720) | **Borderline**: p50 2.5 ms, p95 4.3 ms, p99 6.5 ms over 10 s (`image` crate with `zune-jpeg`). Consequence: the `turbojpeg` trigger of item 3 is reached at p95 only; it is not taken until four-camera load is measured, and the stage-over-budget notice reports it when it happens. In debug builds the decoder is compiled optimised (dev profile), without which capture fell to 7–10 fps |
 
 ## Context
 

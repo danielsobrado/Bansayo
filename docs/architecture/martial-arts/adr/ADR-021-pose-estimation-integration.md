@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | **Pending Validation** — model availability, licence and inference rate are unconfirmed |
+| Status | **Pending Validation** — Halpe-26 not adopted (terms unreadable, 18 November 2026); COCO-17 is the default; inference measured on one camera |
 | Date | 17 November 2026 |
 | Extends | ADR-009 in [docs/12](../../../12-decisions.md) |
 | Specified in | [08 §3–4](../08-tracking-and-sensor-fusion.md), [04 §2.2](../04-movement-domain-model.md) |
@@ -14,6 +14,37 @@ time and DirectML on Windows; `scripts/setup.py` downloads the models with SHA-2
 differences from this record remain open: the model has no foot keypoints (item 2), and the
 detector applies One-Euro smoothing to its output, which this architecture requires to be removed
 from the recorded and solved path ([08 §1.2](../08-tracking-and-sensor-fusion.md)).
+
+## Halpe-26 decision and measurements (18 November 2026)
+
+**Decision: no Halpe-26 model is adopted; COCO-17 remains the default** (the fallback in
+"Decision criteria" below). Foot-dependent observables stay unavailable with reason
+`detector_no_feet` ("pose model has no foot points").
+
+Evidence. OpenMMLab publishes RTMPose Halpe-26 models, including ONNX SDK packages (for example
+`rtmpose-m_simcc-body7_pt-body7-halpe26_700e-256x192-4d3e73dd_20230605.zip` under
+`download.openmmlab.com/mmpose/v1/projects/rtmposev1/onnx_sdk/`), listed on the RTMPose project
+page (github.com/open-mmlab/mmpose, `projects/rtmpose`). That page and the model zoo state no
+licence or terms for the weights; the MMPose code is Apache-2.0, which covers code, not trained
+weights. The weights are trained on "Body8", which includes Halpe-FullBody; its repository
+(github.com/Fang-Haoshu/Halpe-FullBody) has no licence file and states no terms for the dataset or
+annotations, and says its training images come from HICO-DET (validation from COCO). HICO-DET's own
+terms were not found at a primary source; secondary sources disagree. Under the task rule "do not
+download weights whose terms you cannot read and state", the weights were **not downloaded** and
+no schema map, processing profile or `setup.py` entry was added. Note that the COCO-17
+`rtmpose-m` body7 weights in use carry the same unreviewed dataset terms (existing R8) and are kept
+only as user-supplied local files (item 5, ADR-009).
+
+What would change it: a Halpe-26 (or other heel-and-toe) model whose weight terms are stated and
+compatible with an MIT application and the user-supplied rule; then add the 04 §2.2 Halpe-26 table
+to `pipeline/schema_map.rs`, its `setup.py` entry with SHA-256, and measure inference.
+
+Measured with the COCO-17 model (release build, DirectML, one 1280×720 camera at 30 fps, nobody
+followed so the person detector ran on every frame): pose stage p50 15.9 ms, p95 22.0 ms, p99
+27.7 ms, over the 12 ms budget; the stage-over-budget notice fired. With a followed subject the
+detector runs every tenth frame (3.7 ms per tracked frame measured on 17 November). Consequence:
+the 12 ms budget holds only while a subject is tracked; four cameras at 60 fps are not yet shown to
+fit. Item "smoothing removed from the recorded path" is done (`2963086`, O-20).
 
 ## Context
 
