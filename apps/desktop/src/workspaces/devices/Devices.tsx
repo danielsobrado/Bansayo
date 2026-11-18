@@ -10,6 +10,7 @@ import { StatePill } from "../../ui/StatePill";
 import { OriginBadge } from "../../ui/OriginBadge";
 import { Reasons } from "../../ui/Reasons";
 import { formatConfidence, humanizeId } from "../../lib/format";
+import { PhonePairing } from "./PhonePairing";
 
 interface Change {
   device: DeviceStatus;
@@ -108,6 +109,7 @@ export function Devices({
                 .join(", ") || "—"}
             </p>
           </div>
+          <PhonePairing />
         </aside>
       </div>
       {change && (

@@ -4,6 +4,29 @@ This record includes Phase 2 (18 November 2026; machine part delivered, owner pa
 Phase 1 and Phase 0 (both 17 November 2026), followed by the historical Stage 1–3 and camera/VR
 record. Phase 0 began at `b61c6b7`. All phases are on `main`.
 
+## Android client and LAN mode (18 November 2026)
+
+Owner decision ([ADR-042](architecture/martial-arts/adr/ADR-042-android-client.md)): an Android
+app that is a camera, a live viewer and an admin console, over the engine's LAN mode on the same
+Wi-Fi, pose estimated on the PC, native Kotlin. Not on the roadmap before; recorded as ADR-042,
+which implements ADR-031's LAN mode.
+
+| Part | Delivered | Evidence |
+|---|---|---|
+| LAN mode (engine) | `api.lan.enabled` required for a non-loopback bind; bearer token from `<data_dir>/lan-token` (128 random bits) on every request from another machine, constant-time check, `401 unauthorized`; local peers unchanged; `GET /lan/pairing` (local only) gives the `bansayo://pair` link | `cargo test -p bansayo-engine --test lan_mode`: **pass**, including requests through this PC's LAN address (401 without or with a wrong token, 200 with it, pairing refused remotely) |
+| Phone camera (engine) | Camera entries with `network: true` take JPEG frames from `/ingest/camera/{id}` into the normal decode and pose chain; one-slot buffer; 2 s without frames disconnects | `network_frames_decode_replace_and_time_out`: **pass**; emulator run below |
+| Desktop | Devices → *Phone pairing*: QR code (inline SVG, `qrcode` 1.5.4) and the three values, behind a "Show" button | Checked in the browser against a LAN-mode engine |
+| Android app | `apps/android`: pairing (link or typed), Camera (CameraX at the slot's declared size and aspect, JPEG over WebSocket at the slot's rate, stale frames skipped, manual exposure through Camera2), Viewer (engine preview with landmarks, session state, counts, cues), Admin (devices, athletes with consent, sessions and commands, USB camera exposure) | `./gradlew assembleDebug` (AGP 9.2.1, Gradle 9.4.1): **pass**. On the Android emulator (API 36) against the engine through the PC's LAN address with the token: pairing link → connected; PHONE1 `tracking` at 29 Hz with pose inference; viewer drew the camera preview and the session state; admin created an athlete with consent, made it active, created a session, acknowledged safety, ended it |
+
+Found and fixed while testing: the emulated camera's default size (1856×1392) was refused by the
+engine, so the app now requests the slot's declared size and aspect ratio; the admin screen
+acknowledged the wrong technique after refreshing its picker, so it now acknowledges the running
+session's exercise. **Not tested on a physical phone** (Wi-Fi bandwidth and latency, manual
+exposure on a real sensor, scanning the QR code from the screen); steps are in
+`apps/android/README.md`. `npm audit` now reports a high-severity advisory in `picomatch`
+(through vite/vitest, build tooling only), unrelated to this change; its suggested fix
+downgrades vite, so it was left for a separate update.
+
 ## Phase 2 — The slice on one webcam (18 November 2026)
 
 Implements martial-arts [18 §3 Phase 2](architecture/martial-arts/18-implementation-roadmap.md) for
