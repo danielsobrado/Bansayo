@@ -4,7 +4,11 @@ Printed fiducial tags on 3D-printed wearable carriers, the camera calibration th
 same tags, and every calibration procedure the training platform needs.
 
 Decision record: [ADR-024](adr/ADR-024-fiducial-markers-and-board-calibration.md).
-Status of everything here: **Proposed**, except where a row says otherwise. Numbers derived by
+Status: **Phase A optional AprilTag detection and camera overlays implemented**.
+Wearable carriers, mounting calibration, 3D marker pose estimation, and fusion remain
+**Proposed**. Actual camera calibration uses the existing offline ChArUco procedure;
+this document's AprilTag grid and own-solver path is optional future work.
+See [AprilTag installation and runtime inspection](../../apriltag.md). Numbers derived by
 arithmetic are design values to be confirmed by the tests in [16 §3](16-accuracy-and-validation.md).
 
 ## 1. What tags are for — and what they are not
@@ -25,14 +29,15 @@ arithmetic are design values to be confirmed by the tests in [16 §3](16-accurac
 | AprilTag `tag16h5` | 30 identifiers; high false-positive rate | Rejected |
 | AprilTag `tagStandard41h12` | More identifiers, more cells per edge → shorter range for wearable sizes | Rejected for wearables |
 | ArUco (OpenCV dictionaries) | Comparable function; the practical implementation is OpenCV | Rejected: would add OpenCV as a dependency for no gain over AprilTag |
-| ChArUco board | Good sub-pixel corners for calibration; again OpenCV | Rejected: an AprilTag grid board calibrates with the detector already present |
+| ChArUco board | Sub-pixel corners for camera calibration | **Current offline calibration procedure**; OpenCV is not a runtime dependency |
 | Circular / retro-reflective / active LED markers | Different hardware class (IR illumination, strobing) | Out of scope |
 
 Family facts above are standard but were not re-verified against the AprilTag sources during this
 task ([19](19-risks-and-open-questions.md) O-05).
 
-Detector implementation: the AprilTag 3 C library through Rust bindings, isolated in
-`bansayo-engine/src/sources/camera/fiducial.rs` behind
+Planned extension: the AprilTag 3 detector is currently implemented as a
+runtime-loaded C ABI adapter in `crates/bansayo-engine/src/sources/camera/fiducial.rs`.
+The following interchangeable detector trait remains a design proposal:
 
 ```rust
 pub trait FiducialDetector: Send {

@@ -7,6 +7,20 @@
 | Extends | ADR-014, ADR-015, ADR-016 in [docs/12](../../../12-decisions.md) |
 | Specified in | [09](../09-optical-markers-and-calibration.md), [21](../21-wearable-hardware.md) |
 
+## Implementation status (18 November 2026)
+
+An optional AprilTag 3 C detector is integrated into camera capture processing, with a
+runtime-loaded native library, independent bounded latest-frame worker, per-camera
+YAML switches, latency diagnostics, a raw-corner inspection API, and an opt-in
+desktop overlay. The current implementation is **Phase A inspection only**.
+It does not yet record fiducials in MCAP, solve calibrated 3D marker poses,
+manage marker-cluster devices, perform marker mounting, or fuse markers with
+IMU/body landmarks. See [installation and validation](../../../apriltag.md).
+
+The native detector library's operation and timings on the target Windows
+cameras remain unverified. Upstream's C ABI is used directly through a
+small adapter, rather than a third-party Rust binding crate.
+
 ## Revision (17 November 2026): the existing ChArUco script is the calibration path for now
 
 Commits `0397304` and `61950cf` delivered `scripts/calibrate_cameras.py` (ChArUco board, Python
@@ -40,17 +54,17 @@ a fiducial detector. The project has no OpenCV dependency and avoids copyleft co
    (ADR-016's principle).
 4. A cluster yields a **carrier pose**; a segment rotation follows only through a calibrated
    `marker_mounting` transform and is `derived`. A cluster never overrides a joint landmark.
-5. Cameras are calibrated with an **AprilTag grid board** using the same detector; intrinsics,
-   extrinsics and floor are solved by a **small own solver** on `nalgebra` (Zhang initialisation,
-   damped Gauss–Newton refinement).
-6. The detector sits behind a `FiducialDetector` trait: the AprilTag 3 C library through a binding,
-   or a pure-Rust port.
+5. The existing ChArUco calibration importer remains the primary camera calibration
+   path. An AprilTag grid and independent solver are optional future tooling,
+   not a Phase 4 prerequisite.
+6. Detection is isolated behind the camera fiducial adapter; an interchangeable
+   `FiducialDetector` trait remains a future extraction if another provider is needed.
 
 ## Alternatives evaluated
 
 | Alternative | Verdict |
 |---|---|
-| ArUco / ChArUco via OpenCV | Rejected: adds OpenCV for no functional gain over AprilTag ([ADR-020](ADR-020-camera-processing-stack.md)) |
+| ArUco / ChArUco via OpenCV | Runtime dependency rejected; existing offline ChArUco calibration script retained ([ADR-020](ADR-020-camera-processing-stack.md)) |
 | Single flat tag per segment | Rejected: planar pose ambiguity, lost at oblique angles, bends on a limb |
 | Tags on wrists, ankles, hands | Rejected by arithmetic: too small to decode at room scale with 1080p cameras |
 | Retro-reflective or active LED markers | Out of scope: different camera hardware |

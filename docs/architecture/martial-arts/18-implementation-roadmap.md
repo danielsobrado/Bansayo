@@ -19,7 +19,7 @@ Differences from the phase list suggested in the brief, and why:
 |---|---|---|
 | Phase 1 "movement analysis foundation" | Phase 1 (simulator) + Phase 2 (one real camera) | The engine has no real input today. Splitting keeps Phase 1 free of hardware risk and makes the first real-camera result an explicit milestone |
 | Phase 2 "guided training" | Phase 3 | Unchanged in content; flexibility is moved **into** it because holds and limb-elevation range work with one camera and are P1 |
-| Phase 3 "improved tracking" (calibration, triangulation, tags, IMUs together) | Phase 4 (calibration + multi-view) and Phase 6a/6b (tags, IMUs) | Metric heights need only calibrated cameras. Tags and IMUs are P2 use cases; the AprilTag **detector** still arrives in Phase 4 because the calibration board needs it |
+| Phase 3 "improved tracking" (calibration, triangulation, tags, IMUs together) | Phase 4 (calibration + multi-view) and Phase 6a/6b (tags, IMUs) | Metric heights need only calibrated cameras. Tags and IMUs are P2 use cases; the optional AprilTag detector is a separate Phase A extension and is not required for Phase 4 ChArUco calibration |
 | Phase 4 "VR" | Phase 5 | The VR mirror needs a world skeleton, which exists from Phase 4 |
 | Phase 5 "advanced analysis" | Phase 6c–6h | Forms, programs and the rest are independent work packages |
 
@@ -139,9 +139,9 @@ flowchart LR
 | Objective | Profile `multi_view`: metric heights, speeds, headings; the calibration wizard (UC-20, UC-05) |
 | Dependencies | Phase 2; two or more cameras; a printed board on a rigid panel |
 | Required existing capabilities | Triangulation stage; camera profiles as calibration kinds; calibration store and invalidation |
-| Architecture changes | Fiducial detector; procedure state machine and solvers; time alignment; plausibility gates; skeleton fit; body proportions; sigma on landmarks; calibration sets and QA in the store |
-| Modules affected | `bansayo-engine::{sources::camera::fiducial, calibration::{procedures, camera, optimize}, pipeline::{align, gates, skeleton_fit, capability}}`; desktop Calibration |
-| Deliverables | AprilTag binding spike and decision ([ADR-024](adr/ADR-024-fiducial-markers-and-board-calibration.md)); board and print endpoint; intrinsics, extrinsics, floor, time-offset and body-proportion procedures; calibration check; `triangulation.mode: aligned` behind configuration; continuity re-analysis and method-difference display; height assessments |
+| Architecture changes | Procedure state machine and solvers for ChArUco-imported calibration; time alignment; plausibility gates; skeleton fit; body proportions; sigma on landmarks; calibration sets and QA in the store |
+| Modules affected | `bansayo-engine::{calibration::{procedures, camera, optimize}, pipeline::{align, gates, skeleton_fit, capability}}`; desktop Calibration |
+| Deliverables | ChArUco calibration checks, intrinsics, extrinsics, floor, time-offset and body-proportion procedures; calibration check; `triangulation.mode: aligned` behind configuration; continuity re-analysis and method-difference display; height assessments |
 | Acceptance criteria | V-01 – V-03, V-07 and V-08 are run and reported; [ADR-023](adr/ADR-023-time-aligned-triangulation.md) is decided from V-08. On the owner's rig the calibration check passes. The Phase 1–3 content runs **unchanged** (same content snapshot hashes) and additional metrics reach grade A because their inputs became observable. Removing one of three cameras mid-session changes grades, not the session state. A session from before the upgrade and one after appear as separate series with a method-difference figure from continuity re-analysis. V-12 and V-13 produce the first `validated` sigma tables or a written statement of why not |
 | Risks | R9, R19, R20, R21 (existing); R24, R25, R26 |
 | Validation | As listed; V-26, V-27 on the first full recordings |
@@ -168,7 +168,7 @@ Independent packages; each is taken only when its use case is wanted.
 
 | Package | Objective | Depends on | Key deliverables | Acceptance | Validation |
 |---|---|---|---|---|---|
-| 6a Marker clusters (UC-13) | Rotation of tagged segments; profile `marker_assisted` | 4 | Carrier models and print files; `marker_geometry`, `marker_mounting`; stage 4; arbitration; simulator fiducial projector | Twist observables reach grade A on tagged segments; removing all tags returns to `multi_view` with no other change | V-04 – V-06, V-09, V-10 |
+| 6a Marker clusters (UC-13) | Rotation of tagged segments; profile `marker_assisted` | 4, optional Phase A detector | Carrier models and print files; `marker_geometry`, `marker_mounting`; stage 4; arbitration; simulator fiducial projector | Twist observables reach grade A on tagged segments; removing all tags returns to `multi_view` with no other change | V-04 – V-06, V-09, V-10 |
 | 6b IMUs and hybrid (UC-14) | Timing through occlusion; profile `hybrid` | 4; trackers | SolarXR adapter (existing ADR-008); `esp32_udp` when raw rates are needed; heading alignment and correction; anchored FK | A camera-occluded kick keeps its timing metrics with method `imu_gyro`; an IMU can be removed without any content change | V-17, V-18, V-28 |
 | 6c Forms (UC-16) | Kata and poomsae | 3, 4 | `form` plan; step machine; symbolic alignment; Heian Shodan and Taegeuk Il Jang with stated style; form guide in both clients | Scripted omissions and insertions recovered; facing and travel `not_assessed` rather than guessed below `multi_view` | V-22 |
 | 6d Programs (UC-17) | Multi-week plans | 3 | Enrolment; the closed rule set of [06 §6](06-exercise-and-workout-engine.md) | The proposed next session follows the rules on a synthetic history | Table tests |

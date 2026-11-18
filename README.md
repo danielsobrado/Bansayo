@@ -4,6 +4,13 @@ Open-source, local-first full-body motion tracking and training platform: wearab
 or both, feeding one tracking engine and one canonical body model that a desktop application and a
 VR application share.
 
+## Optional AprilTag 3 detection
+
+AprilTag 3 detection is available as an **off-by-default** camera extension using a separately
+installed native C library. It provides a per-camera HTTP inspection endpoint and an opt-in
+marker overlay in the Cameras workspace; it does not yet estimate body poses from printed tags.
+See [installation, configuration and validation](docs/apriltag.md).
+
 ## Status
 
 The local PoC implements a Rust engine, a React/three.js Studio, a Tauri desktop shell and a
