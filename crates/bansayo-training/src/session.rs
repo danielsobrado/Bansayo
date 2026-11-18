@@ -578,6 +578,22 @@ impl Session {
                     if ev.len() < inputs.len() || inputs.is_empty() && m.obs.is_some() {
                         return Grade::X;
                     }
+                    // One camera: the image-plane rule replaces the world gates (05 §10.6).
+                    if combine(ev.iter()).is_some_and(|e| e.method == MethodId::ImagePlane) {
+                        let view = self.observer.planar_view();
+                        return match crate::metrics::planar_rule(d, rate, view) {
+                            crate::metrics::Planar::Suppressed(r) => {
+                                reasons.push(r);
+                                Grade::X
+                            }
+                            crate::metrics::Planar::Graded {
+                                cap, reasons: r, ..
+                            } => {
+                                reasons.extend(r);
+                                cap
+                            }
+                        };
+                    }
                     for k in &d.gates.calibration {
                         if self.setup.grade.calibration.get(k) != Some(&CalibrationState::Valid) {
                             let name = serde_json::to_value(k)
@@ -605,24 +621,6 @@ impl Session {
                     let Some(e) = combine(ev.iter()) else {
                         return Grade::X;
                     };
-                    if e.method == MethodId::ImagePlane {
-                        return match crate::metrics::planar_rule(
-                            d,
-                            rate,
-                            self.observer.planar_view(),
-                        ) {
-                            crate::metrics::Planar::Suppressed(r) => {
-                                reasons.push(r);
-                                Grade::X
-                            }
-                            crate::metrics::Planar::Graded {
-                                cap, reasons: r, ..
-                            } => {
-                                reasons.extend(r);
-                                cap
-                            }
-                        };
-                    }
                     if e.provenance == Provenance::Inferred {
                         reasons.push(reason(
                             "model_fill",

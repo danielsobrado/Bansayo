@@ -453,6 +453,17 @@ pub fn measure(
     };
     let mut why = vec![];
     for o in &inputs {
+        // Never observed in the window: the observable's own reason says why (e.g. no foot points).
+        if frames.iter().all(|f| sample(f, o).is_none())
+            && let Some(r) = o.index.and_then(|i| {
+                frames
+                    .iter()
+                    .find_map(|f| f.get(i).reasons.first().cloned())
+            })
+        {
+            why.push(r);
+            break;
+        }
         if longest_gap(&frames, o, a, b) > g.max_gap_us {
             why.push(reason(
                 "input_gap",

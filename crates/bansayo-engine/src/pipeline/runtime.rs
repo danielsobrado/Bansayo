@@ -269,6 +269,16 @@ impl Runtime {
                     self.record_context(&engine);
                     self.publish_state(&engine);
                 }
+                Event::Input(Some(crate::sources::Ingest::Notice { code, message })) => {
+                    let _ = self.notices.send(Encoded::new(
+                        &ServerMessage::Notice {
+                            level: NoticeLevel::Warning,
+                            code,
+                            message,
+                        },
+                        0,
+                    ));
+                }
                 Event::Input(Some(crate::sources::Ingest::Event(event))) => {
                     if self.replay.is_some() {
                         continue;

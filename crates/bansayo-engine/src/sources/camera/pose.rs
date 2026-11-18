@@ -95,6 +95,47 @@ pub struct Detector {
 pub struct Track {
     bbox: Option<[f32; 4]>,
     since_detect: u32,
+    /// No subject is followed and two people are equally likely to be the athlete.
+    pub ambiguous: bool,
+}
+
+/// Who the athlete is among the detected people (08 §3 subject selection).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Subject {
+    Person([f32; 5]),
+    /// Two candidates within 10 % of each other: no pose until it resolves (`multiple_people`).
+    Ambiguous,
+    Nobody,
+}
+
+/// The followed person by box overlap; otherwise the largest box nearest the image centre. A
+/// newly chosen subject must stand out by more than 10 % from the next candidate.
+pub fn choose_subject(people: &[[f32; 5]], previous: Option<[f32; 4]>, size: [f32; 2]) -> Subject {
+    let bbox = |p: &[f32; 5]| [p[0], p[1], p[2], p[3]];
+    if let Some(prev) = previous
+        && let Some(p) = people
+            .iter()
+            .map(|p| (iou(prev, bbox(p)), p))
+            .filter(|(o, _)| *o > 0.3)
+            .max_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|(_, p)| *p)
+    {
+        return Subject::Person(p);
+    }
+    let [w, h] = size;
+    let half_diagonal = (w * w + h * h).sqrt() / 2.0;
+    let score = |p: &[f32; 5]| {
+        let area = (p[2] - p[0]).max(0.0) * (p[3] - p[1]).max(0.0) / (w * h);
+        let (cx, cy) = ((p[0] + p[2]) / 2.0 - w / 2.0, (p[1] + p[3]) / 2.0 - h / 2.0);
+        area * (1.0 - (cx * cx + cy * cy).sqrt() / half_diagonal).max(0.0)
+    };
+    let mut ranked: Vec<(f32, [f32; 5])> = people.iter().map(|p| (score(p), *p)).collect();
+    ranked.sort_by(|a, b| b.0.total_cmp(&a.0));
+    match ranked.as_slice() {
+        [] => Subject::Nobody,
+        [(a, _), (b, _), ..] if *b >= *a * 0.9 => Subject::Ambiguous,
+        [(_, p), ..] => Subject::Person(*p),
+    }
 }
 
 impl Detector {
@@ -225,20 +266,12 @@ impl Detector {
             None => {
                 track.since_detect = 0;
                 let people = self.people(img)?;
-                let chosen = track
-                    .bbox
-                    .and_then(|prev| {
-                        people
-                            .iter()
-                            .map(|p| (iou(prev, [p[0], p[1], p[2], p[3]]), p))
-                            .filter(|(o, _)| *o > 0.3)
-                            .max_by(|a, b| a.0.total_cmp(&b.0))
-                            .map(|(_, p)| *p)
-                    })
-                    .or_else(|| people.first().copied());
+                let size = [img.width() as f32, img.height() as f32];
+                let chosen = choose_subject(&people, track.bbox, size);
+                track.ambiguous = chosen == Subject::Ambiguous;
                 match chosen {
-                    Some(p) => ([p[0], p[1], p[2], p[3]], Some(p[4])),
-                    None => {
+                    Subject::Person(p) => ([p[0], p[1], p[2], p[3]], Some(p[4])),
+                    Subject::Ambiguous | Subject::Nobody => {
                         track.bbox = None;
                         return Ok(None);
                     }
@@ -316,6 +349,31 @@ fn sample(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn subject_is_followed_largest_and_central_or_ambiguous() {
+        let size = [640.0, 480.0];
+        let centre = [220.0, 40.0, 420.0, 460.0, 0.9];
+        let edge_small = [0.0, 200.0, 60.0, 400.0, 0.95];
+        assert_eq!(
+            choose_subject(&[edge_small, centre], None, size),
+            Subject::Person(centre)
+        );
+        // Two equally large people equally far from the centre: no choice, a notice instead.
+        let left = [60.0, 40.0, 260.0, 460.0, 0.9];
+        let right = [380.0, 40.0, 580.0, 460.0, 0.9];
+        assert_eq!(
+            choose_subject(&[left, right], None, size),
+            Subject::Ambiguous
+        );
+        // An athlete already followed keeps being followed when someone else walks in.
+        let followed = [left[0], left[1], left[2], left[3]];
+        assert_eq!(
+            choose_subject(&[right, left], Some(followed), size),
+            Subject::Person(left)
+        );
+        assert_eq!(choose_subject(&[], None, size), Subject::Nobody);
+    }
+
     #[test]
     fn letterbox_sampling_matches_pixels_and_pads() {
         let img = RgbImage::from_fn(4, 2, |x, y| image::Rgb([x as u8 * 10, y as u8 * 100, 7]));

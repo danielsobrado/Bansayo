@@ -388,10 +388,21 @@ fn inference_loop(
                     )?);
                     tracing::info!(source=%spec.id, "Pose models loaded");
                 }
-                match detector.as_mut() {
+                let was = tracks[i].ambiguous;
+                let found = match detector.as_mut() {
                     Some(d) => d.track(&frame.image, &mut tracks[i])?,
                     None => None,
+                };
+                if tracks[i].ambiguous && !was {
+                    let _ = context.events.try_send(Ingest::Notice {
+                        code: "multiple_people".into(),
+                        message: format!(
+                            "{}: two people are equally likely to be the athlete; no pose until one leaves the view.",
+                            spec.cameras[i].id
+                        ),
+                    });
                 }
+                found
             }
         };
         seqs[i] += 1;

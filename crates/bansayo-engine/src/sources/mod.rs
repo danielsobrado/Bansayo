@@ -16,6 +16,11 @@ pub struct SourceError(pub String);
 #[allow(clippy::large_enum_variant)]
 pub enum Ingest {
     Event(SourceEvent),
+    /// A condition the user should see that is not a device state, e.g. `multiple_people`.
+    Notice {
+        code: String,
+        message: String,
+    },
     Failure {
         devices: Vec<DeviceId>,
         message: String,
