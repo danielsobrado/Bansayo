@@ -360,31 +360,28 @@ fn capture_loop(
                                 connected = true;
                                 link(context, &camera.id, true);
                             }
-                            if let Ok(mut slot) = slots.frames[index].lock() {
-                                // A frame replaced before inference took it is dropped (08 §3).
-                                if slot.is_some()
-                                    && let Some(c) = context.dropped.get(&camera.id)
-                                {
-                                    c.fetch_add(1, Ordering::Relaxed);
-                                }
-                                *slot = Some(Frame {
-                                    image: Arc::new(image),
-                                    t_us,
-                                    settings: applied.as_ref().map(|(_, s)| s.clone()),
-                                    recorded: capture.recorded_landmarks(),
-                                });
-                            }
+                            let frame = Frame {
+                                image: Arc::new(image),
+                                t_us,
+                                settings: applied.as_ref().map(|(_, s)| s.clone()),
+                                recorded: capture.recorded_landmarks(),
+                            };
                             if camera.fiducials {
-                                if let Ok(frame) = slots.frames[index].lock()
-                                    && let Some(frame) = frame.as_ref()
-                                    && let Ok(mut target) = slots.marker_frames[index].lock()
-                                {
+                                if let Ok(mut target) = slots.marker_frames[index].lock() {
                                     *target = Some(frame.clone());
-                                    if let Ok(mut fresh) = slots.marker_fresh.lock() {
-                                        *fresh = true;
-                                        slots.marker_wake.notify_one();
-                                    }
                                 }
+                                if let Ok(mut fresh) = slots.marker_fresh.lock() {
+                                    *fresh = true;
+                                    slots.marker_wake.notify_one();
+                                }
+                            }
+                            if let Ok(mut slot) = slots.frames[index].lock() {
+                                if slot.is_some()
+                                    && let Some(counter) = context.dropped.get(&camera.id)
+                                {
+                                    counter.fetch_add(1, Ordering::Relaxed);
+                                }
+                                *slot = Some(frame);
                             }
                             if let Ok(mut fresh) = slots.fresh.lock() {
                                 *fresh = true;
@@ -669,6 +666,7 @@ mod tests {
             latency_us: 0,
             exposure_s: None,
             gain: None,
+            fiducials: false,
         };
         let source = SourceId::new("cams").unwrap();
         for (k, jitter) in [0.0f32, 3.5, -2.25, 7.0, 0.125].into_iter().enumerate() {
