@@ -11,7 +11,10 @@ use std::{path::Path, sync::OnceLock};
 
 pub const DETECTOR_MODEL: &str = "yolox-m-humanart.onnx";
 pub const POSE_MODEL: &str = "rtmpose-m.onnx";
-pub const DETECTOR_NAME: &str = "yolox-m-humanart+rtmpose-m";
+/// `/raw`: landmarks are recorded and solved as the detector returns them, unsmoothed (O-20).
+/// Sessions recorded with the earlier One-Euro smoothing carry the name without it, so they form
+/// a separate comparability class (12 §5.3).
+pub const DETECTOR_NAME: &str = "yolox-m-humanart+rtmpose-m/raw";
 const DET_SIZE: usize = 640;
 const POSE_W: usize = 192;
 const POSE_H: usize = 256;
@@ -310,38 +313,6 @@ fn sample(
     out
 }
 
-/// One-Euro filter (Casiez et al. 2012) on one scalar: smooths jitter at rest, follows fast motion.
-// shortcut: fixed parameters tuned on nothing; tune min_cutoff/beta on recorded real footage.
-#[derive(Clone, Copy)]
-pub struct OneEuro {
-    x: f32,
-    dx: f32,
-    t_us: u64,
-}
-pub const SMOOTHING_IDENTITY: &str = "one_euro";
-pub const SMOOTHING_PARAMETERS: [f32; 3] = [MIN_CUTOFF_HZ, BETA, D_CUTOFF_HZ];
-const MIN_CUTOFF_HZ: f32 = 1.5;
-const BETA: f32 = 0.02;
-const D_CUTOFF_HZ: f32 = 1.0;
-impl OneEuro {
-    pub fn new(x: f32, t_us: u64) -> Self {
-        Self { x, dx: 0.0, t_us }
-    }
-    pub fn filter(&mut self, x: f32, t_us: u64) -> f32 {
-        let dt = (t_us.saturating_sub(self.t_us) as f32 / 1e6).max(1e-4);
-        let alpha = |cutoff: f32| {
-            let tau = 1.0 / (2.0 * std::f32::consts::PI * cutoff);
-            1.0 / (1.0 + tau / dt)
-        };
-        let dx = (x - self.x) / dt;
-        self.dx += alpha(D_CUTOFF_HZ) * (dx - self.dx);
-        let cutoff = MIN_CUTOFF_HZ + BETA * self.dx.abs();
-        self.x += alpha(cutoff) * (x - self.x);
-        self.t_us = t_us;
-        self.x
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -359,20 +330,6 @@ mod tests {
         // BGR swap.
         let bgr = sample(&img, 4, 2, [1.0, 0.0, 1.0, 0.0], 0.0, [2, 1, 0], |_, v| v);
         assert_eq!(bgr[0], 7.0);
-    }
-    #[test]
-    fn one_euro_holds_still_and_follows_steps() {
-        let mut f = OneEuro::new(0.0, 0);
-        for i in 1..30 {
-            let v = f.filter(if i % 2 == 0 { 1.0 } else { -1.0 }, i * 33_333);
-            assert!(v.abs() < 0.6, "jitter {v}");
-        }
-        let mut f = OneEuro::new(0.0, 0);
-        let mut v = 0.0;
-        for i in 1..30 {
-            v = f.filter(100.0, i * 33_333);
-        }
-        assert!(v > 99.0, "lag {v}");
     }
     /// Needs the local model files and a photo of one person; run with
     /// `BANSAYO_POSE_IMAGE=photo.jpg cargo test -p bansayo-engine -- --ignored detects`.

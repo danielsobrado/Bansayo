@@ -237,7 +237,6 @@ fn inference_loop(
     tracing::info!(source=%spec.id, "Pose models loaded");
     let n = spec.cameras.len();
     let mut tracks: Vec<pose::Track> = (0..n).map(|_| pose::Track::default()).collect();
-    let mut filters: Vec<Vec<Option<[pose::OneEuro; 2]>>> = vec![vec![None; 17]; n];
     let mut seqs = vec![0u64; n];
     let mut last_preview = vec![0u64; n];
     let mut next = 0;
@@ -263,63 +262,15 @@ fn inference_loop(
         next = i + 1;
         let camera = &spec.cameras[i];
         let detection = detector.track(&frame.image, &mut tracks[i])?;
-        let mut points = detection
-            .as_ref()
-            .map_or_else(|| vec![None; 17], |d| d.points.clone());
-        for (point, filter) in points.iter_mut().zip(filters[i].iter_mut()) {
-            match point {
-                Some(p) => {
-                    let f = filter.get_or_insert_with(|| {
-                        [
-                            pose::OneEuro::new(p.x_px, frame.t_us),
-                            pose::OneEuro::new(p.y_px, frame.t_us),
-                        ]
-                    });
-                    p.x_px = f[0].filter(p.x_px, frame.t_us);
-                    p.y_px = f[1].filter(p.y_px, frame.t_us);
-                }
-                // A lost point restarts its filter so it does not glide in from a stale place.
-                None => *filter = None,
-            }
-        }
         seqs[i] += 1;
-        let seen: Vec<f32> = points.iter().flatten().map(|p| p.confidence).collect();
-        let origin = if matches!(camera.backend, Backend::Device(_)) {
-            Origin::Live
-        } else {
-            Origin::Fixture
-        };
-        let observation = SensorObservation {
-            device_id: camera.id.clone(),
-            source_id: spec.id.clone(),
-            origin,
-            seq: seqs[i],
-            t_us: frame.t_us,
-            device_time_us: None,
-            time_quality: TimeQuality::ReceiveTime,
-            calibration_ref: None,
-            // Nobody in view says nothing about the camera's health.
-            confidence: (!seen.is_empty()).then(|| seen.iter().sum::<f32>() / seen.len() as f32),
-            data: ObservationData::Landmarks2d {
-                landmarks: PoseLandmarks2D {
-                    frame_meta: CameraFrameMetadata {
-                        device_id: camera.id.clone(),
-                        frame_seq: seqs[i],
-                        t_us: frame.t_us,
-                        device_time_us: None,
-                        time_quality: TimeQuality::ReceiveTime,
-                        image_size_px: [frame.image.width(), frame.image.height()],
-                    },
-                    frame: FrameRef::Image {
-                        id: camera.id.clone(),
-                    },
-                    origin,
-                    schema_id: COCO17_SCHEMA_ID.into(),
-                    detector: pose::DETECTOR_NAME.into(),
-                    points,
-                },
-            },
-        };
+        let observation = landmarks_observation(
+            camera,
+            &spec.id,
+            seqs[i],
+            frame.t_us,
+            [frame.image.width(), frame.image.height()],
+            detection.as_ref(),
+        );
         if context
             .events
             .try_send(Ingest::Event(SourceEvent::Observation { observation }))
@@ -340,6 +291,56 @@ fn inference_loop(
     Ok(())
 }
 
+/// The `landmarks_2d` observation of one frame: the detector's points exactly as returned, with no
+/// smoothing, so recordings hold raw inputs and re-analysis sees what live analysis saw (O-20).
+pub fn landmarks_observation(
+    camera: &LiveCameraSpec,
+    source_id: &SourceId,
+    seq: u64,
+    t_us: u64,
+    image_size_px: [u32; 2],
+    detection: Option<&pose::Detection>,
+) -> SensorObservation {
+    let points = detection.map_or_else(|| vec![None; 17], |d| d.points.clone());
+    let seen: Vec<f32> = points.iter().flatten().map(|p| p.confidence).collect();
+    let origin = if matches!(camera.backend, Backend::Device(_)) {
+        Origin::Live
+    } else {
+        Origin::Fixture
+    };
+    SensorObservation {
+        device_id: camera.id.clone(),
+        source_id: source_id.clone(),
+        origin,
+        seq,
+        t_us,
+        device_time_us: None,
+        time_quality: TimeQuality::ReceiveTime,
+        calibration_ref: None,
+        // Nobody in view says nothing about the camera's health.
+        confidence: (!seen.is_empty()).then(|| seen.iter().sum::<f32>() / seen.len() as f32),
+        data: ObservationData::Landmarks2d {
+            landmarks: PoseLandmarks2D {
+                frame_meta: CameraFrameMetadata {
+                    device_id: camera.id.clone(),
+                    frame_seq: seq,
+                    t_us,
+                    device_time_us: None,
+                    time_quality: TimeQuality::ReceiveTime,
+                    image_size_px,
+                },
+                frame: FrameRef::Image {
+                    id: camera.id.clone(),
+                },
+                origin,
+                schema_id: COCO17_SCHEMA_ID.into(),
+                detector: pose::DETECTOR_NAME.into(),
+                points,
+            },
+        },
+    }
+}
+
 fn preview_jpeg(image: &RgbImage) -> Option<bytes::Bytes> {
     let scaled;
     let image = if image.width() > PREVIEW_MAX_WIDTH {
@@ -354,4 +355,58 @@ fn preview_jpeg(image: &RgbImage) -> Option<bytes::Bytes> {
         .encode_image(image)
         .ok()?;
     Some(out.into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// O-20: what is recorded and solved is the detector's output, bit for bit, frame after frame.
+    #[test]
+    fn recorded_landmarks_equal_raw_detector_output() {
+        let camera = LiveCameraSpec {
+            id: DeviceId::new("CAM1").unwrap(),
+            backend: Backend::Device(0),
+            rate_hz: 30.0,
+            resolution_px: [640, 480],
+            latency_us: 0,
+        };
+        let source = SourceId::new("cams").unwrap();
+        for (k, jitter) in [0.0f32, 3.5, -2.25, 7.0, 0.125].into_iter().enumerate() {
+            let points: Vec<Option<Landmark2D>> = (0..17)
+                .map(|i| {
+                    (i % 5 != 3).then_some(Landmark2D {
+                        x_px: 100.0 + i as f32 * 11.0 + jitter,
+                        y_px: 50.0 + i as f32 * 7.0 - jitter,
+                        confidence: 0.3 + i as f32 * 0.03,
+                    })
+                })
+                .collect();
+            let detection = pose::Detection {
+                bbox: [0.0, 0.0, 640.0, 480.0],
+                score: 0.9,
+                points: points.clone(),
+            };
+            let o = landmarks_observation(
+                &camera,
+                &source,
+                k as u64 + 1,
+                k as u64 * 33_333,
+                [640, 480],
+                Some(&detection),
+            );
+            let ObservationData::Landmarks2d { landmarks } = o.data else {
+                panic!("landmarks");
+            };
+            let bits = |p: &[Option<Landmark2D>]| -> Vec<Option<[u32; 3]>> {
+                p.iter()
+                    .map(|p| {
+                        p.as_ref()
+                            .map(|p| [p.x_px.to_bits(), p.y_px.to_bits(), p.confidence.to_bits()])
+                    })
+                    .collect()
+            };
+            assert_eq!(bits(&landmarks.points), bits(&points), "frame {k}");
+        }
+    }
 }

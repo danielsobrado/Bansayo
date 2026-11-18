@@ -261,7 +261,7 @@ pub fn identity_bodies(
 ) -> (serde_json::Value, serde_json::Value) {
     let device_config:Vec<_>=devices.iter().map(|d|json!({"id":d.descriptor.id,"kind":d.descriptor.kind,"model":d.descriptor.model,"resolution":d.descriptor.camera.as_ref().map(|c|c.resolution_px),"nominal_rate":d.descriptor.nominal_rate_hz})).collect();
     let detectors:Vec<_>=devices.iter().filter_map(|d|d.descriptor.camera.as_ref().map(|c|json!({"device":d.descriptor.id,"schema":c.landmark_schema.as_ref().map(|s|&s.id),"detector":detector_id(config,&d.descriptor)}))).collect();
-    let camera_processing:Vec<_>=config.sources.iter().filter_map(|s|match s {crate::config::SourceConfig::Camera(c) if c.enabled=>Some(json!({"id":c.id,"model":crate::sources::camera::pose::DETECTOR_NAME,"execution":c.execution,"min_person_score":c.min_person_score,"min_keypoint_score":c.min_keypoint_score,"smoothing":{"filter":crate::sources::camera::pose::SMOOTHING_IDENTITY,"parameters":crate::sources::camera::pose::SMOOTHING_PARAMETERS},"latencies":c.cameras.iter().map(|c|json!({"id":c.id,"latency_ms":c.latency_ms})).collect::<Vec<_>>()})),_=>None}).collect();
+    let camera_processing:Vec<_>=config.sources.iter().filter_map(|s|match s {crate::config::SourceConfig::Camera(c) if c.enabled=>Some(json!({"id":c.id,"model":crate::sources::camera::pose::DETECTOR_NAME,"execution":c.execution,"min_person_score":c.min_person_score,"min_keypoint_score":c.min_keypoint_score,"smoothing":{"filter":"none"},"latencies":c.cameras.iter().map(|c|json!({"id":c.id,"latency_ms":c.latency_ms})).collect::<Vec<_>>()})),_=>None}).collect();
     let version = env!("CARGO_PKG_VERSION")
         .split('.')
         .take(2)
