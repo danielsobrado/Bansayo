@@ -19,6 +19,7 @@ pub enum Stage {
     Decode,
     /// Decoded image → landmarks (subject box and pose inference).
     Inference,
+    Fiducial,
     /// Landmarks ready → the solver tick that uses them.
     TickWait,
     /// Solver stages, `MotionSample` and planar bodies.
@@ -30,9 +31,10 @@ pub enum Stage {
 }
 
 impl Stage {
-    pub const ALL: [Stage; 6] = [
+    pub const ALL: [Stage; 7] = [
         Stage::Decode,
         Stage::Inference,
+        Stage::Fiducial,
         Stage::TickWait,
         Stage::Solve,
         Stage::Training,
@@ -42,6 +44,7 @@ impl Stage {
         match self {
             Stage::Decode => "decode",
             Stage::Inference => "inference",
+            Stage::Fiducial => "fiducial",
             Stage::TickWait => "tick_wait",
             Stage::Solve => "solve",
             Stage::Training => "training",
@@ -53,6 +56,7 @@ impl Stage {
         match self {
             Stage::Decode => 4_000,
             Stage::Inference => 12_000,
+            Stage::Fiducial => 8_000,
             Stage::TickWait => tick_period_us,
             Stage::Solve => 2_000,
             Stage::Training => 1_000,

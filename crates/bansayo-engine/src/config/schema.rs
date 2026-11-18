@@ -36,6 +36,8 @@ pub struct Config {
     pub evidence: EvidenceConfig,
     #[serde(default)]
     pub tracking: TrackingConfig,
+    #[serde(default)]
+    pub fiducials: FiducialsConfig,
     /// Reserved for camera processing; rejected until the camera milestone.
     #[serde(default)]
     pub processing_profiles: Option<Value>,
@@ -57,6 +59,24 @@ pub struct Config {
     /// `diagnostics.timing`: per-stage latency histograms (15 §4.1). Schema version 2.
     #[serde(default)]
     pub diagnostics: Option<DiagnosticsConfig>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct FiducialsConfig {
+    pub enabled: bool,
+    pub library_path: Option<PathBuf>,
+    pub family: String,
+    pub max_detection_hz: f64,
+    pub max_hamming: u8,
+    pub min_decision_margin: f32,
+    pub allowed_ids: Vec<u32>,
+}
+impl Default for FiducialsConfig {
+    fn default() -> Self {
+        Self { enabled: false, library_path: None, family: "tag36h11".into(), max_detection_hz: 15.0,
+            max_hamming: 1, min_decision_margin: 30.0, allowed_ids: vec![] }
+    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -402,6 +422,8 @@ pub struct LiveCameraConfig {
     /// Manual gain in the device's own units; unset leaves the camera's setting.
     #[serde(default)]
     pub gain: Option<f64>,
+    #[serde(default)]
+    pub fiducials: bool,
 }
 
 fn camera_rate_default() -> f64 {

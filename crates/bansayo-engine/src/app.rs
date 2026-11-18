@@ -100,6 +100,7 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
         (1e6 / config.config.engine.publish_rate_hz) as u64,
     );
     let previews = Previews::default();
+    let fiducials = crate::sources::camera::FiducialPreviews::default();
     let camera_settings = crate::sources::camera::CameraSettings::default();
     let feeds: crate::sources::camera::capture::NetworkFeeds = std::sync::Arc::new(
         config
@@ -118,6 +119,7 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
         let source = CameraSource {
             spec: spec.clone(),
             previews: previews.clone(),
+            fiducials: fiducials.clone(),
             settings: camera_settings.clone(),
             timing: timing.clone(),
             feeds: feeds.clone(),
@@ -227,6 +229,7 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
         publish_rate: config.config.engine.publish_rate_hz,
         cancel: cancel.clone(),
         previews,
+        fiducials,
         camera_settings,
         diagnostics,
         lan_token,

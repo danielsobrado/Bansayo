@@ -25,6 +25,7 @@ pub struct Api {
     pub publish_rate: f64,
     pub cancel: CancellationToken,
     pub previews: crate::sources::camera::Previews,
+    pub fiducials: crate::sources::camera::FiducialPreviews,
     pub camera_settings: crate::sources::camera::CameraSettings,
     /// Frames of network cameras (phones), by camera id (ADR-042).
     pub feeds: crate::sources::camera::capture::NetworkFeeds,
@@ -50,6 +51,7 @@ pub fn router(api: Api) -> Router {
         .route("/api/v1/calibration/profiles", post(import_profiles))
         .route("/api/v1/stream", get(ws::upgrade))
         .route("/api/v1/cameras/{id}/preview.jpg", get(preview))
+        .route("/api/v1/cameras/{id}/fiducials", get(fiducials))
         .route("/api/v1/cameras/{id}/settings", put(camera_settings))
         .route("/api/v1/lan/pairing", get(lan_pairing))
         .route("/api/v1/ingest/camera/{id}", get(ingest_camera))
@@ -196,6 +198,20 @@ async fn preview(
             ApiErrorCode::NotFound,
             "No preview: the device is not a physical camera or has not delivered a frame yet.",
         ),
+    }
+}
+async fn fiducials(
+    State(api): State<Api>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Response {
+    let value = DeviceId::new(id.as_str()).ok().and_then(|id| {
+        let all = api.fiducials.read().ok()?;
+        let (seen, data) = all.get(&id)?;
+        (seen.elapsed() <= std::time::Duration::from_millis(500)).then(|| data.clone())
+    });
+    match value {
+        Some(data) => Json(ApiResponse::ok(data)).into_response(),
+        None => failure(ApiErrorCode::NotFound, "No fresh AprilTag observations for this camera."),
     }
 }
 /// `PUT /cameras/{id}/settings` (14 §5.5): manual exposure and gain, applied by the capture thread

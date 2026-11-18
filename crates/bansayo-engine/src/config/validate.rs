@@ -69,6 +69,7 @@ pub struct LiveCameraSpec {
     pub latency_us: u64,
     pub exposure_s: Option<f64>,
     pub gain: Option<f64>,
+    pub fiducials: bool,
 }
 
 /// An enabled camera source with validated identities and present model files.
@@ -79,6 +80,7 @@ pub struct CameraSourceSpec {
     pub execution: crate::sources::camera::pose::Execution,
     pub min_person_score: f32,
     pub min_keypoint_score: f32,
+    pub fiducials: FiducialsConfig,
     pub cameras: Vec<LiveCameraSpec>,
 }
 
@@ -288,6 +290,7 @@ pub(super) fn validate(config: Config) -> Result<Validated, Vec<Problem>> {
     check_engine(&mut c, &config.engine);
     check_quality(&mut c, &config.quality);
     check_triangulation(&mut c, &config.triangulation);
+    check_fiducials(&mut c, &config.fiducials, &config.sources);
     let bind = check_api(&mut c, &config.api);
     let skeleton = Skeleton::builtin(
         &config.skeleton.model,
@@ -300,7 +303,8 @@ pub(super) fn validate(config: Config) -> Result<Validated, Vec<Problem>> {
     if config.processing_profiles.is_some() {
         c.err("processing_profiles", "not implemented in this build");
     }
-    let (simulated, cameras, devices) = check_sources(&mut c, &config.sources);
+    let (simulated, mut cameras, devices) = check_sources(&mut c, &config.sources);
+    for source in &mut cameras { source.fiducials = config.fiducials.clone(); }
     let assignments = check_assignments(
         &mut c,
         &config.assignments,
@@ -319,6 +323,23 @@ pub(super) fn validate(config: Config) -> Result<Validated, Vec<Problem>> {
     } else {
         Err(c.problems)
     }
+}
+
+fn check_fiducials(c: &mut Check, f: &FiducialsConfig, sources: &[SourceConfig]) {
+    if !["tag36h11", "tag25h9", "tagStandard41h12", "tagCircle49h12"].contains(&f.family.as_str()) {
+        c.err("fiducials.family", "unsupported AprilTag family");
+    }
+    c.range("fiducials.max_detection_hz", f.max_detection_hz, 1.0, 240.0);
+    c.range("fiducials.min_decision_margin", f.min_decision_margin.into(), 0.0, 255.0);
+    if f.max_hamming > 2 { c.err("fiducials.max_hamming", "must be 0..2"); }
+    if f.allowed_ids.len() > 4096 { c.err("fiducials.allowed_ids", "too many marker ids"); }
+    let mut seen = std::collections::BTreeSet::new();
+    for id in &f.allowed_ids {
+        if !seen.insert(id) { c.err("fiducials.allowed_ids", format!("duplicate id {id}")); }
+    }
+    let selected = sources.iter().any(|s| matches!(s, SourceConfig::Camera(k) if k.enabled && k.cameras.iter().any(|cam| cam.fiducials)));
+    if selected && !f.enabled { c.err("fiducials.enabled", "enable the global detector or disable camera fiducials"); }
+    if f.enabled && !selected { c.err("fiducials.enabled", "no enabled camera requested AprilTag detection"); }
 }
 
 fn check_engine(c: &mut Check, e: &EngineConfig) {
@@ -738,6 +759,7 @@ fn check_camera_source(
                 latency_us: (cam.latency_ms * 1000.0) as u64,
                 exposure_s: cam.exposure_s,
                 gain: cam.gain,
+                fiducials: cam.fiducials,
             });
         }
     }
@@ -747,6 +769,7 @@ fn check_camera_source(
         execution: k.execution,
         min_person_score: k.min_person_score,
         min_keypoint_score: k.min_keypoint_score,
+        fiducials: FiducialsConfig::default(),
         cameras,
     })
 }
