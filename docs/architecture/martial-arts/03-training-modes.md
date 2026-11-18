@@ -5,7 +5,8 @@ A mode is not a code path in a client. This document fixes, for each mode, the p
 recognition context, what the athlete sees, what is stored, and what is withheld when observation
 is insufficient.
 
-Status of everything in this document: **Proposed**.
+The class and lessons below are **proposed**. For the sessions that run today and the order
+of the next releases, see the [training roadmap](18-implementation-roadmap.md#22-next-training-releases).
 
 ## 1. Common session skeleton
 
@@ -133,6 +134,21 @@ plan:
 | `wrong_side` | The mirror-side machine completed instead | No | No; shown as a notice |
 | `excluded` | The athlete removed it afterwards | No | No |
 
+### First Taekwondo technique clinic
+
+Start with the two draft techniques already in the library, *ap chagi* (front kick) and
+*dollyeo chagi* (roundhouse). The athlete selects one kick and one side after warming up.
+Show a demonstration, allow slow solo practice, then run two normal-paced sets of four with
+rest between them. Offer the other side as a separate run. Use the same kick, side and stage
+for the repeat set so the athlete can tell what changed.
+
+Give the athlete one thing to work on between sets. For example, show the retraction phase
+on the attempt timeline and, when the timing cue meets its evidence gate, let them repeat the
+set with that cue in mind. On one webcam, label body-relative heights and timing estimates
+with their grades. If the support-foot pivot is out of view, show the reason and withhold
+that correction. Use comparable normal-paced sets for the side-by-side review and the
+existing grade and baseline rules for a trend across sessions. [Coaching rules](07-recognition-and-coaching.md) · [Progress rules](12-data-and-progress.md)
+
 ## 5. Combinations and Drills
 
 **Purpose.** Practise ordered movements with timing.
@@ -180,6 +196,40 @@ Hierarchy and semantics (sets, blocks, rest, completion, goals) are in
 kinds except `workout`. Timed items (`duration_s`) end on the clock; counted items end on the
 count or on the item's `time_cap_s`.
 
+### Full Body in 20 — a music-led follow-along class
+
+Les Mills TONE pairs instructor-led cardio, strength and core work with music and intensity
+options. For Bansayo, use that class format with original movement sequences, prompts and
+music. [Les Mills TONE](https://www.lesmills.com/workouts/les-mills-tone)
+
+| Class clock | Block | What the athlete follows |
+|---|---|---|
+| 0–3 min | Warm-up | March, step side to side, then add arm swings. Preview each new move while the feet keep moving. |
+| 3–7 min | Cardio | Alternate a minute of step-touch with overhead reaches and a minute of alternating knee lifts. Repeat once. Offer a march with low reaches throughout. |
+| 7–12 min | Full-body strength | Do a squat, wall push-up, hip hinge, wall push-up and squat, one station per minute. Each minute includes 40 seconds of movement and 20 seconds to recover or change position. Offer a shallower squat and a more upright wall push-up. |
+| 12–17 min | Core and coordination | Alternate standing cross-crawls and side steps with arm sweeps for five one-minute stations, starting with cross-crawls. Keep the same 40/20 split. Offer alternating toe taps in place of knee lifts. |
+| 17–20 min | Cooldown | Ease back to a walk, lower the arms, then finish with comfortable shoulder and calf movements. |
+
+Use a `free` item with `coaching: off` and a `duration_s` target for each timed station.
+Key the movement prompt and easier option to the item ID. The engine owns block changes and
+remaining time. For the pilot, pair an original 120 BPM loop with a visual preview eight
+beats before each change. The 40-second work and 20-second recovery intervals then fall on
+whole eight-count phrases. Athletes can move at half time. Pause and resume the loop and
+prompts at the same position as the session clock. A muted class follows the same schedule.
+
+Credit active time and completed blocks for following along. An easier variation earns the
+same time credit. Attach a rep count or technique cue only to an explicitly tracked item
+with a supported movement definition and sufficient evidence.
+
+### First guided kicking workout
+
+For the first playable version, follow a warm-up with separate front-kick and roundhouse
+sets on each side, rest between sets, then cool down. Keep the volume selectable. Show completed
+reps against the target per kick and side, including partial sets when the athlete ends early.
+Once both kicks can be distinguished on the chosen setup, add the longer workout's
+front-kick–roundhouse round. Verify that reversing their order yields a sequence error even
+when both reps were recognised. [Draft kicking workout](examples/workout-guided-kicking.yaml)
+
 ## 7. Kata and Poomsae Mode
 
 **Purpose.** Learn and perform structured forms.
@@ -208,6 +258,18 @@ is reported as `not_assessed`, never as passed ([07 §5](07-recognition-and-coac
 
 Variants: a form definition belongs to one style. Alternative valid executions inside one style are
 expressed with `choice` nodes in the step list; a different lineage is a different form id.
+
+Pilot one named section each of Shotokan **Heian Shodan** (karate kata) and Kukkiwon
+**Taegeuk Il Jang** (Taekwondo poomsae). Have an instructor for each style verify the counts,
+sides, turns and stance labels against the named version before publishing the lessons.
+The existing Taegeuk example is a schema draft. Author the Shotokan section and resolve
+the movement and stance definitions used by both excerpts. [Draft Taegeuk form](examples/form-taegeuk-1.yaml)
+
+In a lesson, preview the section and its floor path, guide one count at a time, then let the
+athlete repeat the section from its start. After all sections are available, offer a silent
+full run. Its review should locate an omitted or extra step and let the athlete reopen that
+section for practice. A replay with one omitted step must still align the following steps.
+At `basic`, the review marks facing and travel as `not_assessed`.
 
 ## 8. Flexibility and Mobility Mode
 
@@ -249,6 +311,21 @@ towards `hold_s`.
 than the athlete's stored comfortable baseline plus the definition's `progression_step`; holds are
 capped at the definition's `max_hold_s`; a mandatory rest follows every hold; the UI shows the
 limitation text on first use of each definition.
+
+### First flexibility session
+
+After a warm-up, start with four controlled standing hip flexion raises per side, then
+two comfortable hamstring forward-fold holds. Pilot a 15-second stable-time target, capped
+by the movement definition, with its mandatory rest after each hold. Show the side during
+raises and the accumulated stable time during holds. If a required landmark disappears for
+five seconds, the hold must earn zero seconds during that gap.
+
+Let the athlete repeat the session at the same comfortable range. Report peak limb elevation
+per side and stable hold time separately. On one webcam, label elevation in a suitable view
+as an image-plane estimate. Compare like movements with the same support and measurement
+method. Add a supported ankle dorsiflexion hold when heel and toe landmarks are available.
+The optional hip-flexion benchmark requires calibrated multi-view tracking and grade-A
+trials. [Measurement feasibility](22-measurement-feasibility.md) · [Hip-flexion benchmark](examples/assessment-hip-flexion.yaml)
 
 ## 9. Assessment / Benchmark Mode
 
