@@ -43,6 +43,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             Ok(cameras) => {
                 for (index, name) in cameras {
                     println!("{index}	{name}");
+                    match bansayo_engine::sources::camera::capture::device_formats(index) {
+                        Ok(formats) => formats.iter().for_each(|f| println!("	{f}")),
+                        Err(e) => println!("	formats unavailable: {e}"),
+                    }
                 }
             }
             Err(e) => {

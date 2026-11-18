@@ -206,6 +206,7 @@ dependencies = [
  "tower",
  "tracing",
  "tracing-subscriber",
+ "windows",
 ]
 
 [[package]]

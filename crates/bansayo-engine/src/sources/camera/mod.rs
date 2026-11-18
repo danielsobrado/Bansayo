@@ -6,6 +6,7 @@
 //! every two seconds; the others keep running. Observations have the same shape as the
 //! simulator's, so triangulation and the skeleton fit cannot tell them apart.
 pub mod capture;
+pub mod controls;
 pub mod pose;
 
 use crate::{

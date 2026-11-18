@@ -95,6 +95,11 @@ pub fn list_devices() -> Result<Vec<(u32, String)>, String> {
     device::list()
 }
 
+/// Formats a system camera offers, one line per pixel format and resolution.
+pub fn device_formats(index: u32) -> Result<Vec<String>, String> {
+    device::formats(index)
+}
+
 #[cfg(windows)]
 mod device {
     use super::Capture;
@@ -116,14 +121,50 @@ mod device {
             .collect())
     }
 
+    /// Formats a device offers, `"MJPEG 1280x720 @ 30, 15 fps"` per format and resolution.
+    pub fn formats(index: u32) -> Result<Vec<String>, String> {
+        let any = RequestedFormat::new::<RgbFormat>(RequestedFormatType::None);
+        let mut camera = Camera::new(CameraIndex::Index(index), any).map_err(|e| e.to_string())?;
+        let mut rates: std::collections::BTreeMap<(String, u32, u32), Vec<u32>> =
+            Default::default();
+        for f in camera
+            .compatible_camera_formats()
+            .map_err(|e| e.to_string())?
+        {
+            let r = f.resolution();
+            rates
+                .entry((f.format().to_string(), r.width(), r.height()))
+                .or_default()
+                .push(f.frame_rate());
+        }
+        Ok(rates
+            .into_iter()
+            .map(|((format, w, h), mut fps)| {
+                fps.sort_unstable_by(|a, b| b.cmp(a));
+                fps.dedup();
+                let fps: Vec<String> = fps.iter().map(u32::to_string).collect();
+                format!("{format} {w}x{h} @ {} fps", fps.join(", "))
+            })
+            .collect())
+    }
+
     struct Device(Camera);
 
     pub fn open(index: u32, [w, h]: [u32; 2], rate_hz: f64) -> Result<Box<dyn Capture>, String> {
         // MJPEG keeps 720p/1080p at full rate over USB 2; decoded here, not by nokhwa.
         let wanted = CameraFormat::new(Resolution::new(w, h), FrameFormat::MJPEG, rate_hz as u32);
-        let format = RequestedFormat::new::<RgbFormat>(RequestedFormatType::Closest(wanted));
-        let mut camera =
-            Camera::new(CameraIndex::Index(index), format).map_err(|e| e.to_string())?;
+        // `Closest` alone picked 1 fps on a UGREEN camera offering 1280x720 at 30 (18 Nov 2026).
+        let mut camera = Camera::new(
+            CameraIndex::Index(index),
+            RequestedFormat::new::<RgbFormat>(RequestedFormatType::Exact(wanted)),
+        )
+        .or_else(|_| {
+            Camera::new(
+                CameraIndex::Index(index),
+                RequestedFormat::new::<RgbFormat>(RequestedFormatType::Closest(wanted)),
+            )
+        })
+        .map_err(|e| e.to_string())?;
         camera.open_stream().map_err(|e| e.to_string())?;
         Ok(Box::new(Device(camera)))
     }
@@ -144,9 +185,12 @@ mod device {
                 .map_err(|e| e.to_string())
         }
         fn describe(&self) -> String {
+            // nokhwa 0.10 reports the rate's denominator ("@1FPS") for Media Foundation formats.
+            let f = self.0.camera_format();
             format!(
-                "{} ({})",
-                self.0.camera_format(),
+                "{} {} ({})",
+                f.format(),
+                f.resolution(),
                 self.0.info().human_name()
             )
         }
@@ -169,11 +213,33 @@ mod device {
     pub fn open(_: u32, _: [u32; 2], _: f64) -> Result<Box<dyn Capture>, String> {
         Err(UNSUPPORTED.into())
     }
+    pub fn formats(_: u32) -> Result<Vec<String>, String> {
+        Err(UNSUPPORTED.into())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// Capture rate of a physical camera without inference. Needs a camera:
+    /// `BANSAYO_CAMERA=0 cargo test -p bansayo-engine -- --ignored --nocapture capture_rate`.
+    #[test]
+    #[ignore]
+    fn capture_rate_of_a_physical_camera() {
+        let index = std::env::var("BANSAYO_CAMERA")
+            .expect("BANSAYO_CAMERA")
+            .parse()
+            .unwrap();
+        let mut c = open(&Backend::Device(index), [1280, 720], 30.0).unwrap();
+        eprintln!("format {}", c.describe());
+        c.next().unwrap();
+        let t = Instant::now();
+        for _ in 0..60 {
+            c.next().unwrap();
+        }
+        eprintln!("{:.1} frames/s", 60.0 / t.elapsed().as_secs_f64());
+    }
+
     #[test]
     fn frames_play_in_name_order_at_rate_and_loop() {
         let dir = tempfile::tempdir().unwrap();

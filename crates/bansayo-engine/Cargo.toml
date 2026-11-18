@@ -32,6 +32,8 @@ rusqlite.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 nokhwa.workspace = true
+# ADR-020 fallback for manual exposure and gain; the same version nokhwa already builds.
+windows = { version = "0.62", features = ["Win32_Media_MediaFoundation", "Win32_Media_DirectShow", "Win32_System_Com"] }
 ort = { workspace = true, features = ["directml"] }
 
 [dev-dependencies]
