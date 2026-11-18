@@ -1,0 +1,23 @@
+# Optional AprilTag 3 camera inspection; native library is separately installed.
+schema_version: 1
+engine:
+  publish_rate_hz: 60
+  stale_after_ms: 250
+  data_dir: ./data
+api:
+  bind: 127.0.0.1:7700
+fiducials:
+  enabled: true
+  library_path: ./native/apriltag.dll
+  family: tag36h11
+  max_detection_hz: 15
+  max_hamming: 1
+  min_decision_margin: 30
+  allowed_ids: []
+sources:
+  - id: cams
+    kind: camera
+    models_dir: ./models
+    execution: auto
+    cameras:
+      - { id: CAM-FRONT, device: 0, resolution_px: [1280, 720], rate_hz: 30, fiducials: true }

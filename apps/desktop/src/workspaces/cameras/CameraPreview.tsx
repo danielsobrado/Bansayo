@@ -5,6 +5,13 @@ import { tokenCss } from "../../viewport/palette";
 import { OriginBadge } from "../../ui/OriginBadge";
 import { API_BASE } from "../../engine/config";
 
+type AprilTagSnapshot = {
+  tags: Array<{
+    id: number;
+    corners_px: [number, number][];
+  }>;
+};
+
 /** The engine refreshes previews at most every 100 ms. */
 const PREVIEW_POLL_MS = 150;
 
@@ -12,10 +19,12 @@ const PREVIEW_POLL_MS = 150;
 export function CameraPreview({
   device,
   highlight = null,
+  showAprilTags = false,
 }: {
   device: DeviceStatus;
   /** Landmark index to ring, e.g. the one selected in the reconstruction inspector. */
   highlight?: number | null;
+  showAprilTags?: boolean;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const highlightRef = useRef(highlight);
@@ -36,6 +45,7 @@ export function CameraPreview({
     let id = 0;
     // Physical cameras: newest JPEG preview, polled; drawn stretched to image pixels.
     let image: ImageBitmap | null = null;
+    let tags: AprilTagSnapshot["tags"] = [];
     let stopped = false;
     let poll = 0;
     async function fetchPreview() {
@@ -52,8 +62,23 @@ export function CameraPreview({
             image = next;
           }
         }
+        if (showAprilTags) {
+          const markers = await fetch(
+            `${API_BASE}/cameras/${encodeURIComponent(device.descriptor.id)}/fiducials`,
+            { cache: "no-store" },
+          );
+          if (markers.ok) {
+            const response: { ok: boolean; data?: AprilTagSnapshot } = await markers.json();
+            tags = response.ok && Array.isArray(response.data?.tags)
+              ? response.data.tags
+              : [];
+          } else {
+            tags = [];
+          }
+        }
       } catch {
         // Engine restarting or camera gone: keep the last image and retry.
+        tags = [];
       }
       if (!stopped) poll = window.setTimeout(fetchPreview, PREVIEW_POLL_MS);
     }
@@ -70,6 +95,22 @@ export function CameraPreview({
         ctx.strokeStyle = faint;
         ctx.lineWidth = 1;
         ctx.strokeRect(w * 0.05, h * 0.05, w * 0.9, h * 0.9);
+      }
+      ctx.strokeStyle = accent;
+      ctx.fillStyle = accent;
+      ctx.lineWidth = Math.max(2, w / 450);
+      ctx.textAlign = "left";
+      ctx.font = `${Math.max(14, w / 65)}px sans-serif`;
+      for (const tag of tags) {
+        if (tag.corners_px.length !== 4) continue;
+        ctx.beginPath();
+        tag.corners_px.forEach(([x, y], index) => {
+          if (index === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.closePath();
+        ctx.stroke();
+        ctx.fillText(`Tag ${tag.id}`, tag.corners_px[0][0], tag.corners_px[0][1] - 8);
       }
       const landmarks = freshLandmarks(performance.now()).get(
         device.descriptor.id,
@@ -128,7 +169,7 @@ export function CameraPreview({
       image?.close();
       cancelAnimationFrame(id);
     };
-  }, [device.descriptor]);
+  }, [device.descriptor, showAprilTags]);
   return (
     <div className="camera-preview">
       <canvas

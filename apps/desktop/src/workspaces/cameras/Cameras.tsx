@@ -48,6 +48,7 @@ export function Cameras({ state }: { state: SystemState | null }) {
     state?.devices.filter((d) => d.descriptor.kind === "camera") ?? [];
   const [selected, setSelected] = useState<string | null>(null);
   const [landmark, setLandmark] = useState<number | null>(null);
+  const [showAprilTags, setShowAprilTags] = useState(false);
   const camera =
     cameras.find((d) => d.descriptor.id === selected) ?? cameras[0];
   const calibration = state?.calibration;
@@ -98,8 +99,16 @@ export function Cameras({ state }: { state: SystemState | null }) {
               selected={camera.descriptor.id}
               onSelect={setSelected}
             />
+            <label className="subtle">
+              <input
+                type="checkbox"
+                checked={showAprilTags}
+                onChange={(event) => setShowAprilTags(event.target.checked)}
+              />
+              {" "}Show AprilTag markers
+            </label>
             <div className="camera-views">
-              <CameraPreview device={camera} highlight={landmark} />
+              <CameraPreview device={camera} highlight={landmark} showAprilTags={showAprilTags} />
               <Reconstruction
                 feature={state?.features.find(
                   (f) => f.id === "landmarks_3d_triangulated",
