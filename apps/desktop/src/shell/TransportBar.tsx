@@ -4,6 +4,7 @@ import { useAction } from "../engine/hooks";
 import { useState } from "react";
 import { formatDurationUs, formatSpeed } from "../lib/format";
 import { useShortcuts } from "../lib/shortcuts";
+import { Icon } from "../ui/Icon";
 
 const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 4];
 export function TransportBar({
@@ -68,14 +69,16 @@ export function TransportBar({
             disabled={stopStatus.pending}
             onClick={() => void stopPlayback()}
           >
-            ← Exit replay
+            <Icon name="back" size={13} /> Exit replay
           </button>
           <button
             disabled={playbackStatus.pending}
             title="Play / pause (Space)"
+            aria-keyshortcuts="Space"
             onClick={pause}
           >
-            {playback.paused ? "▶ Play" : "Ⅱ Pause"}
+            <Icon name={playback.paused ? "play" : "pause"} size={13} />
+            {playback.paused ? "Play" : "Pause"}
           </button>
           <label className="speed-label">
             Speed{" "}
@@ -115,7 +118,8 @@ export function TransportBar({
             </span>
           </label>
           <span className="replay-loop">
-            {playback.looping ? "↻ Looping" : "Single play"}
+            {playback.looping && <Icon name="rotate" size={13} />}
+            {playback.looping ? "Looping" : "Single play"}
           </span>
         </>
       ) : (
@@ -158,21 +162,25 @@ export function TransportBar({
           </label>
           <button
             title="Play / pause (Space)"
+            aria-keyshortcuts="Space"
             disabled={!simulation || simulationStatus.pending}
             onClick={pause}
           >
-            {simulation?.paused ? "▶ Play" : "Ⅱ Pause"}
+            <Icon name={simulation?.paused ? "play" : "pause"} size={13} />
+            {simulation?.paused ? "Play" : "Pause"}
           </button>
           <span className="transport-divider" />
           <button
             className={state?.recording ? "recording-button" : ""}
             title={recordingReason}
+            aria-keyshortcuts="R"
             disabled={
               recordStatus.pending || (!state?.recording && recordDisabled)
             }
             onClick={record}
           >
-            {state?.recording ? "■ Stop recording" : "● Record"}
+            <Icon name={state?.recording ? "stop" : "record"} size={13} />
+            {state?.recording ? "Stop recording" : "Record"}
           </button>
           <span className="transport-end">
             {state ? (

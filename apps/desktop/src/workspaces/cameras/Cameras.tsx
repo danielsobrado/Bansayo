@@ -6,6 +6,10 @@ import type {
   SystemState,
 } from "@contracts";
 import { CameraPreview } from "./CameraPreview";
+import { CameraProperties } from "./CameraProperties";
+import type { SceneSelection } from "../../lib/sceneSelection";
+import { DockLayout } from "../../shell/DockLayout";
+import { SceneExplorer, type SceneGroup } from "../../shell/SceneExplorer";
 import { Icon } from "../../ui/Icon";
 import {
   calibratedCameras,
@@ -48,11 +52,19 @@ export function Cameras({ state }: { state: SystemState | null }) {
   const cameras =
     state?.devices.filter((d) => d.descriptor.kind === "camera") ?? [];
   const [selected, setSelected] = useState<string | null>(null);
-  const [landmark, setLandmark] = useState<number | null>(null);
-  const [viewMode, setViewMode] = useState<"split" | "camera" | "reconstruction">("split");
+  const [selection, setSelection] = useState<SceneSelection | null>(null);
+  const [viewMode, setViewMode] = useState<"split" | "camera" | "grid" | "reconstruction">("split");
   const [showAprilTags, setShowAprilTags] = useState(false);
+  const [floorVisible, setFloorVisible] = useState(true);
+  const landmark = selection?.kind === "landmark" ? selection.index : null;
+  const select = (target: SceneSelection) => {
+    if (target.kind === "camera") setSelected(target.id);
+    setSelection(target);
+  };
   const camera =
     cameras.find((d) => d.descriptor.id === selected) ?? cameras[0];
+  const visibleFeeds = viewMode === "grid" ? cameras : camera && viewMode !== "reconstruction" ? [camera] : [];
+  const canShowAprilTags = visibleFeeds.some(({ descriptor }) => descriptor.origin !== "simulated");
   const calibration = state?.calibration;
   const poses = useMemo(
     () => calibratedCameras(calibration ?? []),
@@ -82,139 +94,88 @@ export function Cameras({ state }: { state: SystemState | null }) {
     },
     `${landmark}/${schemaKey}`,
   );
+  const activeSelection = selection?.kind === "landmark" && schema?.names[selection.index] !== undefined
+    ? selection
+    : camera ? { kind: "camera" as const, id: camera.descriptor.id } : null;
+  const groups: SceneGroup[] = [
+    { label: "Cameras", icon: "camera", expanded: true, nodes: cameras.map(({ descriptor, state }) => ({
+      selection: { kind: "camera", id: descriptor.id }, label: descriptor.id, detail: humanizeId(state),
+    })) },
+    { label: "Landmarks", icon: "crosshair", nodes: (schema?.names ?? []).map((name, index) => {
+      const status = sampled.statuses?.[index];
+      return { selection: { kind: "landmark", index }, label: humanizeId(name),
+        detail: status ? STATUS[status].join(" ") : "Waiting" };
+    }) },
+  ];
   return (
-    <div className="workspace-page">
-      <header className="workspace-heading">
-        <div>
-          <span className="eyebrow">Workspace / Cameras</span>
-          <h1>
-            Cameras <span className="heading-count mono">{cameras.length}</span>
-          </h1>
-        </div>
-        <span className="subtle">2D image pixels · 3D world metres, +Y up</span>
+    <div className="workbench-workspace">
+      <header className="workspace-heading workbench-heading">
+        <h1>Cameras</h1>
+        <span className="mono subtle">{cameras.length} sources · {poses.length} calibrated</span>
       </header>
       {camera ? (
-        <div className="cameras-layout">
-          <section className="camera-main">
-            <CameraTabs
-              cameras={cameras}
-              selected={camera.descriptor.id}
-              onSelect={setSelected}
-            />
-            <label className="subtle">
-              <input
-                type="checkbox"
-                checked={showAprilTags}
-                onChange={(event) => setShowAprilTags(event.target.checked)}
-              />
-              {" "}Show AprilTag markers
-            </label>
-            <div className="camera-mode-toolbar" role="toolbar" aria-label="Camera workspace view">
+        <DockLayout workspace="cameras"
+          toolbar={() => <>
+            <div className="tool-group" role="group" aria-label="Camera workspace view">
               <button type="button" aria-pressed={viewMode === "split"} onClick={() => setViewMode("split")}>
                 <Icon name="grid" size={14} /> Split
               </button>
               <button type="button" aria-pressed={viewMode === "camera"} onClick={() => setViewMode("camera")}>
                 <Icon name="video" size={14} /> Camera
               </button>
+              <button type="button" aria-pressed={viewMode === "grid"} onClick={() => setViewMode("grid")}>
+                <Icon name="layers" size={14} /> Grid
+              </button>
               <button type="button" aria-pressed={viewMode === "reconstruction"} onClick={() => setViewMode("reconstruction")}>
-                <Icon name="rotate" size={14} /> 3D reconstruction
+                <Icon name="rotate" size={14} /> 3D
               </button>
             </div>
-            <div className={`camera-views camera-mode-${viewMode}`}>
-              {viewMode !== "reconstruction" && (
-                <CameraPreview device={camera} highlight={landmark} showAprilTags={showAprilTags} />
-              )}
-              {viewMode !== "camera" && <Reconstruction
-                feature={state?.features.find(
-                  (f) => f.id === "landmarks_3d_triangulated",
-                )}
-                poses={poses}
-                cameraCount={cameras.length}
-                selectedCamera={camera.descriptor.id}
-                schema={schema}
-                sampled={sampled}
-                landmark={landmark}
-                onSelect={setLandmark}
-              />}
+            <select aria-label="Active camera" value={camera.descriptor.id}
+              onChange={(event) => select({ kind: "camera", id: event.target.value })}>
+              {cameras.map(({ descriptor }) => <option key={descriptor.id}>{descriptor.id}</option>)}
+            </select>
+          </>}
+          tools={<div className="dock-tool-section">
+            <h3>Overlays</h3>
+            <label title={canShowAprilTags ? undefined : "AprilTag markers require a visible physical camera"}>
+              <input type="checkbox" checked={showAprilTags && canShowAprilTags}
+                disabled={!canShowAprilTags}
+                onChange={(event) => setShowAprilTags(event.target.checked)} /> AprilTag markers
+            </label>
+            <label><input type="checkbox" checked={floorVisible} onChange={(event) => setFloorVisible(event.target.checked)} /> 3D floor grid</label>
+            <a className="tool-action" href="#/studio"><Icon name="crosshair" size={14} /> Motion Studio</a>
+          </div>}
+          viewport={<div className={`capture-views capture-mode-${viewMode}`}>
+            {visibleFeeds.map((device) => {
+              const id = device.descriptor.id;
+              const active = id === camera.descriptor.id;
+              return <section key={id} className="capture-feed" aria-label={`2D camera view ${id}`}>
+                <header className="reconstruction-heading">
+                  <h2>Camera feed</h2>
+                  <button type="button" className="mono feed-camera" aria-pressed={activeSelection?.kind === "camera" && active}
+                    onClick={() => select({ kind: "camera", id })}>{id}</button>
+                </header>
+                <CameraPreview device={device} highlight={active ? landmark : null}
+                  showAprilTags={showAprilTags && device.descriptor.origin !== "simulated"}
+                  onSelect={(index) => {
+                    setSelected(id);
+                    select({ kind: "landmark", index });
+                  }} />
+              </section>;
+            })}
+            <div className="capture-3d" hidden={viewMode !== "split" && viewMode !== "reconstruction"}>
+              <Reconstruction
+                feature={state?.features.find((f) => f.id === "landmarks_3d_triangulated")}
+                poses={poses} cameraCount={cameras.length} schema={schema}
+                sampled={sampled} selection={activeSelection} onSelect={select}
+                floorVisible={floorVisible} active={viewMode === "split" || viewMode === "reconstruction"} />
             </div>
-          </section>
-          <aside className="camera-detail dock">
-            <div className="panel-heading">CAMERA DETAILS</div>
-            <div className="page-panel-content">
-              <h2 className="mono">{camera.descriptor.id}</h2>
-              <p>
-                <StatePill state={camera.state} />
-              </p>
-              <dl className="detail-list">
-                <dt>Source</dt>
-                <dd>{camera.descriptor.origin}</dd>
-                <dt>Resolution</dt>
-                <dd className="mono">
-                  {camera.descriptor.camera?.resolution_px.join(" × ") ?? "—"}
-                </dd>
-                <dt>Frame rate</dt>
-                <dd className="mono">
-                  {camera.stream.measured_rate_hz.toFixed(1)} /{" "}
-                  {camera.descriptor.nominal_rate_hz ?? "—"} fps
-                </dd>
-                <dt>Landmark schema</dt>
-                <dd className="mono">
-                  {camera.descriptor.camera?.landmark_schema?.id ?? "—"}
-                </dd>
-                <dt>Dropped frames</dt>
-                <dd className="mono">{camera.stream.dropped}</dd>
-              </dl>
-              <div className="device-calibrations">
-                {camera.calibration.map((c) => (
-                  <span key={c.kind}>
-                    {c.kind.replaceAll("_", " ")} <strong>{c.state}</strong>
-                  </span>
-                ))}
-              </div>
-              <Reasons reasons={camera.reasons} />
-              <p className="calibration-note">
-                Each camera gives 2D landmarks in image pixels. Metric 3D
-                positions come only from triangulating two or more calibrated,
-                synchronised cameras. Simulated cameras project the simulated
-                body; physical cameras run person detection and RTMPose.
-              </p>
-            </div>
-            <LandmarkInspector inspection={sampled.inspection} />
-            <div className="panel-heading">
-              LANDMARKS{" "}
-              <span className="mono">
-                {sampled.live
-                  ? `${sampled.reconstructed}/${sampled.total}`
-                  : "—"}
-              </span>
-            </div>
-            <div className="landmark-list" role="group" aria-label="Landmarks">
-              {schema?.names.map((name, index) => {
-                const status = sampled.statuses?.[index];
-                return (
-                  <button
-                    key={`${name}-${index}`}
-                    className={`segment-row ${landmark === index ? "selected" : ""}`}
-                    aria-pressed={landmark === index}
-                    onClick={() => setLandmark(index)}
-                  >
-                    <span
-                      className="segment-glyph"
-                      data-status={status}
-                      aria-hidden="true"
-                    >
-                      {status ? STATUS[status][0] : "–"}
-                    </span>
-                    <span className="segment-name">{humanizeId(name)}</span>
-                    <span className="subtle">
-                      {status ? STATUS[status][1] : "waiting"}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </aside>
-        </div>
+          </div>}
+          explorer={<SceneExplorer groups={groups} selection={activeSelection} onSelect={select} />}
+          properties={activeSelection?.kind === "landmark"
+            ? <LandmarkInspector key={activeSelection.index} inspection={sampled.inspection} />
+            : <CameraProperties key={camera.descriptor.id} camera={camera} />}
+        />
       ) : (
         <EmptyState
           title={state ? "No cameras configured" : "Waiting for the engine"}
@@ -234,25 +195,27 @@ function Reconstruction({
   feature,
   poses,
   cameraCount,
-  selectedCamera,
   schema,
   sampled,
-  landmark,
+  selection,
   onSelect,
+  floorVisible,
+  active,
 }: {
   feature: FeatureStatus | undefined;
   poses: CameraPose[];
   cameraCount: number;
-  selectedCamera: string;
   schema: LandmarkSchema | null;
   sampled: Readout;
-  landmark: number | null;
-  onSelect: (index: number) => void;
+  selection: SceneSelection | null;
+  onSelect: (selection: SceneSelection) => void;
+  floorVisible: boolean;
+  active: boolean;
 }) {
   return (
     <section className="reconstruction" aria-label="3D reconstruction">
       <header className="reconstruction-heading">
-        <span className="eyebrow">3D reconstruction</span>
+        <h2>3D reconstruction</h2>
         {feature && <StatePill state={feature.state} />}
       </header>
       <div className="reconstruction-view">
@@ -261,13 +224,13 @@ function Reconstruction({
             <ViewportCanvas
               skeleton={null}
               landmarkSchema={schema}
-              selected={landmark ?? -1}
+              selection={selection}
               onSelect={onSelect}
               view="3D"
               skeletonVisible={false}
-              floorVisible
+              floorVisible={floorVisible}
               cameras={poses}
-              selectedCamera={selectedCamera}
+              active={active}
             />
             <div className="viewport-top">
               <div>
@@ -276,7 +239,7 @@ function Reconstruction({
             </div>
             {!sampled.live && (
               <div className="no-pose">
-                <span aria-hidden="true">◇</span>
+                <Icon name="focus" />
                 <h2>Waiting for triangulated landmarks</h2>
               </div>
             )}
@@ -321,10 +284,10 @@ function LandmarkInspector({
 }) {
   return (
     <>
-      <div className="panel-heading">LANDMARK INSPECTOR</div>
       {inspection ? (
-        <div className="page-panel-content landmark-inspector">
-          <h2>{humanizeId(inspection.name)}</h2>
+        <div className="inspector-content landmark-inspector">
+          <span className="eyebrow">Landmark</span>
+          <h3>{humanizeId(inspection.name)}</h3>
           <p data-testid="landmark-status">
             {inspection.status === "high_error"
               ? `◇ accepted · reprojection RMS above ${HIGH_REPROJECTION_PX} px`
@@ -334,8 +297,7 @@ function LandmarkInspector({
           </p>
           {inspection.status === "not_reconstructed" && (
             <p className="subtle">
-              Too few views or a failed reprojection check. Compare the camera
-              views below and the reasons under the 3D view.
+              Too few views or a failed reprojection check. See the camera observations below.
             </p>
           )}
           <dl className="detail-list">
@@ -377,14 +339,14 @@ function LandmarkInspector({
         </div>
       ) : (
         <p className="empty-inline">
-          Select a landmark in the 3D view or the list below.
+          Select a landmark in the viewport or scene explorer.
         </p>
       )}
     </>
   );
 }
 
-export function CameraTabs({
+function CameraTabs({
   cameras,
   selected,
   onSelect,
@@ -410,11 +372,14 @@ export function CameraTabs({
 export function CameraInset({
   cameras,
   main = false,
+  selected,
+  onSelect,
 }: {
   cameras: DeviceStatus[];
   main?: boolean;
+  selected: string | null;
+  onSelect: (id: string) => void;
 }) {
-  const [selected, setSelected] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const camera =
     cameras.find((d) => d.descriptor.id === selected) ?? cameras[0];
@@ -432,7 +397,7 @@ export function CameraInset({
             }
             onClick={() => setExpanded(!expanded)}
           >
-            {expanded ? "↙" : "↗"}
+            <Icon name={expanded ? "focus" : "expand"} size={14} />
           </button>
         )}
       </header>
@@ -441,7 +406,7 @@ export function CameraInset({
         <CameraTabs
           cameras={cameras}
           selected={camera.descriptor.id}
-          onSelect={setSelected}
+          onSelect={onSelect}
         />
       )}
     </div>

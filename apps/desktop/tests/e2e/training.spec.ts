@@ -23,7 +23,7 @@ test("pick a technique, run a set, review an attempt and see progress", async ({
   await expect(page.getByLabel("Active athlete")).toHaveValue("ana");
 
   // Pick: Taekwondo roundhouse kick, right, 1 × 3.
-  await page.getByLabel("Technique", { exact: true }).selectOption("taekwondo.dollyeo_chagi");
+  await page.getByRole("combobox", { name: "Technique", exact: true }).selectOption("taekwondo.dollyeo_chagi");
   await page.getByLabel("Sets", { exact: true }).fill("1");
   await page.getByLabel("Repetitions", { exact: true }).fill("3");
   await page.getByLabel("Rest (s)", { exact: true }).fill("0");
@@ -58,9 +58,9 @@ test("pick a technique, run a set, review an attempt and see progress", async ({
   await page.screenshot({ path: "test-results/technique-attempt.png" });
 
   // Progress: the simulated session appears as one series class.
-  await page.getByRole("link", { name: /Progress/ }).first().click();
+  await page.getByRole("navigation", { name: "Workspace tabs" }).getByRole("link", { name: "Progress" }).click();
   await expect(page.getByText("SIMULATED").first()).toBeVisible();
-  await page.getByLabel("Technique", { exact: true }).selectOption("taekwondo.dollyeo_chagi");
+  await page.getByRole("combobox", { name: "Technique", exact: true }).selectOption("taekwondo.dollyeo_chagi");
   await page.getByLabel("Metric", { exact: true }).selectOption("kick.total_time");
   await expect(page.getByTestId("series-class")).toHaveCount(1, { timeout: 20_000 });
   await page.screenshot({ path: "test-results/progress.png" });

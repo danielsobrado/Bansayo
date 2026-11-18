@@ -15,10 +15,11 @@ import type {
   SkeletonPose,
 } from "@contracts";
 import type { CameraPose } from "../engine/cameraCalibration";
+import type { SceneSelection } from "../lib/sceneSelection";
 import { frameStore, STALE_FRAME_MS } from "../engine/stores";
 import { CameraFrustums } from "./CameraFrustums";
 import { LandmarkRig } from "./LandmarkRig";
-import { readPalette } from "./palette";
+import { readPalette, type Palette } from "./palette";
 import { SkeletonRig } from "./SkeletonRig";
 
 export type ViewPreset = "Front" | "Side" | "Top" | "3D";
@@ -28,7 +29,7 @@ const DEFAULT_HEIGHT_M = 1.8;
 
 /**
  * Shows the skeleton from `frameStore`, or (with a `landmarkSchema`) the triangulated landmarks
- * from `landmarks3dStore`. `select` receives the picked segment or landmark index.
+ * from `landmarks3dStore`. Picking reports the same scene targets used by the explorer.
  */
 export class MotionViewport {
   private readonly renderer = new WebGLRenderer({ antialias: true });
@@ -38,8 +39,9 @@ export class MotionViewport {
   private readonly rig: SkeletonRig | null;
   private readonly landmarks: LandmarkRig | null;
   private readonly frustums: CameraFrustums;
-  private readonly grid: GridHelper;
+  private grid: GridHelper;
   private readonly resize: ResizeObserver;
+  private readonly theme: MutationObserver;
   private readonly raycaster = new Raycaster();
   private readonly pointer = new Vector2();
   private animation = 0;
@@ -47,11 +49,12 @@ export class MotionViewport {
   private floorVisible = true;
   private pointerX = 0;
   private pointerY = 0;
+  private active = true;
 
   constructor(
     private readonly host: HTMLElement,
     private readonly definition: SkeletonDefinition | null,
-    private readonly select: (index: number) => void,
+    private readonly select: (target: SceneSelection) => void,
     landmarkSchema: LandmarkSchema | null = null,
     /** Replaces the live `frameStore` pose, e.g. a stored clip; called once per animation frame. */
     private readonly poseSource: PoseSource | null = null,
@@ -63,23 +66,15 @@ export class MotionViewport {
       "aria-label",
       landmarkSchema
         ? "Triangulated 3D landmarks and calibrated camera frustums. Use the landmark list to select landmarks with a keyboard."
-        : "Live motion skeleton. Use the segment list to select bones with a keyboard.",
+        : "Motion skeleton. Use the Scene Explorer to select segments and joints with a keyboard.",
     );
     this.renderer.domElement.setAttribute("role", "img");
     host.append(this.renderer.domElement);
-    this.scene.add(new AmbientLight(palette.measured, 2));
-    const key = new DirectionalLight(palette.measured, 2.5);
+    this.scene.add(new AmbientLight(0xffffff, 2));
+    const key = new DirectionalLight(0xffffff, 2.5);
     key.position.set(3, 4, 5);
     this.scene.add(key);
-    this.grid = new GridHelper(10, 20, palette.ink3, palette.line);
-    const mats = Array.isArray(this.grid.material)
-      ? this.grid.material
-      : [this.grid.material];
-    for (const m of mats) {
-      m.transparent = true;
-      m.opacity = 0.36;
-    }
-    this.scene.add(this.grid);
+    this.grid = this.createGrid(palette);
     this.rig = definition && new SkeletonRig(definition, palette);
     if (this.rig) {
       this.rig.root.visible = false;
@@ -96,6 +91,18 @@ export class MotionViewport {
     this.setView("3D");
     this.resize = new ResizeObserver(() => this.measure());
     this.resize.observe(host);
+    this.theme = new MutationObserver(() => {
+      const colors = readPalette();
+      this.scene.background = colors.surface0;
+      this.grid.removeFromParent();
+      this.grid.dispose();
+      this.grid = this.createGrid(colors);
+      this.rig?.setPalette(colors);
+      this.landmarks?.setPalette(colors);
+      this.frustums.setPalette(colors);
+    });
+    this.theme.observe(document.documentElement, { attributeFilter: ["data-theme"] });
+    this.raycaster.params.Line = { threshold: 0.04 };
     this.measure();
     this.renderer.domElement.addEventListener("pointerdown", this.down);
     this.renderer.domElement.addEventListener("pointerup", this.pick);
@@ -118,9 +125,15 @@ export class MotionViewport {
     this.skeletonVisible = skeleton;
     this.floorVisible = floor;
   }
-  setSelected(index: number): void {
-    this.rig?.setSelected(index);
-    this.landmarks?.setSelected(index);
+  setSelection(selection: SceneSelection | null): void {
+    this.rig?.setSelected(
+      selection?.kind === "segment" ? selection.index : -1,
+      selection?.kind === "joint" ? selection.index : -1,
+    );
+    this.landmarks?.setSelected(selection?.kind === "landmark" ? selection.index : -1);
+  }
+  setActive(active: boolean): void {
+    this.active = active;
   }
   /** Frustums for these cameras; `selected` is highlighted. */
   setCameras(cameras: readonly CameraPose[], selected: string | null): void {
@@ -129,6 +142,7 @@ export class MotionViewport {
   dispose(): void {
     cancelAnimationFrame(this.animation);
     this.resize.disconnect();
+    this.theme.disconnect();
     this.controls.dispose();
     this.renderer.domElement.removeEventListener("pointerdown", this.down);
     this.renderer.domElement.removeEventListener("pointerup", this.pick);
@@ -136,23 +150,27 @@ export class MotionViewport {
     this.rig?.dispose();
     this.landmarks?.dispose();
     this.frustums.dispose();
-    this.grid.geometry.dispose();
-    const materials = Array.isArray(this.grid.material)
-      ? this.grid.material
-      : [this.grid.material];
-    for (const material of materials) material.dispose();
+    this.grid.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
+  private createGrid(palette: Palette): GridHelper {
+    const grid = new GridHelper(10, 20, palette.ink3, palette.line);
+    grid.material.transparent = true;
+    grid.material.opacity = 0.45;
+    this.scene.add(grid);
+    return grid;
+  }
   private measure(): void {
     const { clientWidth: w, clientHeight: h } = this.host;
+    if (w === 0 || h === 0) return;
     this.renderer.setSize(w, h);
     this.camera.aspect = w / Math.max(h, 1);
     this.camera.updateProjectionMatrix();
   }
   private draw = (): void => {
     this.animation = requestAnimationFrame(this.draw);
-    if (document.hidden) return;
+    if (document.hidden || !this.active) return;
     const now = performance.now();
     const frame = frameStore.frame;
     const pose = this.poseSource ? this.poseSource(now) : frame?.pose;
@@ -176,12 +194,12 @@ export class MotionViewport {
     this.pointerY = e.clientY;
   };
   private pick = (e: PointerEvent): void => {
+    if (e.button !== 0) return;
     if (Math.hypot(e.clientX - this.pointerX, e.clientY - this.pointerY) > 4)
       return;
     const targets = [this.rig, this.landmarks].flatMap((r) =>
       r?.root.visible ? r.pickables : [],
     );
-    if (targets.length === 0) return;
     const rect = this.renderer.domElement.getBoundingClientRect();
     this.pointer.set(
       ((e.clientX - rect.left) / rect.width) * 2 - 1,
@@ -190,10 +208,10 @@ export class MotionViewport {
     this.raycaster.setFromCamera(this.pointer, this.camera);
     // The raycaster ignores visibility; skip hidden landmarks and segments.
     const hit = this.raycaster
-      .intersectObjects(targets, false)
-      .find((h) => h.object.visible && h.object.parent?.visible !== false);
-    const data = hit?.object.userData;
-    if (data) this.select((data.segmentIndex ?? data.landmarkIndex) as number);
+      .intersectObjects([...targets, ...this.frustums.root.children], false)
+      .find((h) => h.object.userData.selection && h.object.visible && h.object.parent?.visible !== false);
+    const selection = hit?.object.userData.selection as SceneSelection | undefined;
+    if (selection) this.select(selection);
   };
   private centre = (): void => {
     const frame = frameStore.frame;

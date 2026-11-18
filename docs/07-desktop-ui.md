@@ -12,7 +12,7 @@ monospaced face, colour reserved for meaning.
 
 | Decision | Choice |
 |---|---|
-| Theme | Graphite by default; Silver and Onyx are visual alternatives. Tracking and provenance colours remain semantic. |
+| Theme | Graphite by default, with Silver and Onyx alternatives. Tracking and provenance colours retain their semantic roles. |
 | Layout | Docked panels with hairline dividers. No floating cards on a background, no card grids as the default layout |
 | Typography | IBM Plex Sans for interface text, IBM Plex Mono for every number, identifier and timestamp. Self-hosted; the app works offline |
 | Colour | Semantic only. Hue means state or provenance; nothing is coloured for decoration |
@@ -74,15 +74,20 @@ properties in `styles/tokens.css`; components use tokens only.
 
 ## 2. Navigation
 
-A left navigation rail and a persistent top status bar frame every workspace.
+A compact application menu, workspace tabs, an expandable icon rail, and persistent
+status and transport bars frame every workspace. The rail and tabs share the same routes
+and keyboard shortcuts.
 
 | Key | Workspace | PoC |
 |---|---|---|
-| 1 | Overview | Yes |
-| 2 | Studio | Yes — the primary workspace |
-| 3 | Devices | Yes |
-| 4 | Cameras | Yes |
-| 5 | Sessions | Yes |
+| 1 | Train | Yes |
+| 2 | Technique | Yes |
+| 4 | Progress | Yes |
+| 5 | Overview | Yes |
+| 6 | Studio | Yes |
+| 7 | Devices | Yes |
+| 8 | Cameras | Yes |
+| 0 | Sessions | Yes |
 | — | Analysis | Designed. Not shown in the PoC navigation |
 | — | Calibration | Designed as a workspace. In the PoC, calibration is a flow opened from Devices and Overview |
 
@@ -93,7 +98,10 @@ the URL hash (`#/studio`), so reload and browser navigation work and a view can 
 
 ```text
 ┌────┬───────────────────────────────────────────────────────────────────────────────────┐
-│ K  │ ● Engine connected   ▨ SIMULATED   ◐ Degraded · 11/19 segments   ⚠ Calibration   │  status bar
+│ BANSAYO    File   View   Capture   Training   Tools   Help          Theme     Density   │
+├────┬───────────────────────────────────────────────────────────────────────────────────┤
+│ ▣  │ Train   Technique   Progress   Overview   Studio   Devices   Cameras   Sessions  │
+│    │ Engine connected · 2 cameras · 12 sensors   ▨ SIMULATED   ◐ Degraded   Calibration│
 ├────┼───────────────────────────────────────────────────────────────────────────────────┤
 │ ▣  │                                                                                   │
 │ ◈  │                                                                                   │
@@ -105,9 +113,8 @@ the URL hash (`#/studio`), so reload and browser navigation work and a view can 
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Status bar**, left to right: engine connection; origin badge; system tracking state with body
-coverage; calibration readiness (ready, action needed, or running on assumptions); recording
-indicator with elapsed time. Each item opens the place where it can be acted on.
+The status bar shows the engine connection, source counts, origin badges, tracking state,
+body coverage, calibration readiness and elapsed recording time.
 
 **Transport bar** has two forms.
 
@@ -150,38 +157,32 @@ Purpose: answer "is the system ready, and if not, what do I do?" in one glance.
 
 ### Studio
 
-The main working view.
+The motion-analysis workspace places layer and capture actions beside the 3D viewport.
 
 ```text
 ┌──────────────────┬──────────────────────────────────────────────────┬─────────────────────┐
-│ LAYERS           │ ▨ SIMULATED                    Front Side Top 3D │ INSPECTOR           │
-│ ☑ Skeleton       │                                                  │ Left knee flexion   │
-│ ☑ Floor          │                                ┌──────────────┐  │                     │
-│ ☑ Trackers       │                                │ SIM-CAM1     │  │   75.5°             │
-│ ☐ Cameras        │               3D viewport      │ 2D landmarks │  │   derived · conf .95│
-│ ☐ Trails         │                                │ ▨ simulated  │  │   not validated     │
-│ ☑ Angle arcs     │                                └──────────────┘  │   ▁▂▄▆▇▆▄▂▁▂▄▆▇     │
-│                  │                                                  │   SIM-T03 · SIM-T04 │
-│ SEGMENTS         │                                                  ├─────────────────────┤
-│ ● pelvis     der │                                                  │ JOINT ANGLES        │
-│ ◌ spine      inf │                                                  │ L knee      75.5°   │
-│ ● chest      der │                                                  │ R knee        —     │
-│ ● l_thigh    der │   coverage 11/19 · pose age 9 ms                 │ L hip       61.2°   │
-│ ◌ r_shin     inf │                                                  │ Trunk lean   8.4°   │
+│ TOOLS            │ 3D   Front   Side   Top                          │ SCENE EXPLORER      │
+│ ☑ Skeleton       │ ▨ SIMULATED                                      │ Athlete             │
+│ ☑ Floor grid     │                                                  │ Joint angles        │
+│ ☐ Cameras        │                                                  │   Left knee flexion │
+│                  │                                ┌──────────────┐  │ Cameras             │
+│ Calibrate        │               3D viewport      │ SIM-CAM1     │  │ Sensors             │
+│ Compare technique│                                │ 2D landmarks │  ├─────────────────────┤
+│ Camera capture   │                                └──────────────┘  │ PROPERTIES          │
+│                  │                                                  │ Left knee flexion   │
+│                  │                                                  │ —  waiting          │
+│                  │   Coverage  —     Pose age  —     Y-up · metres │ Rolling trace       │
 └──────────────────┴──────────────────────────────────────────────────┴─────────────────────┘
 ```
 
-- **Left panel.** Layer toggles, then the segment list in hierarchy order with provenance and
-  source device. Selecting a row selects the segment in the viewport, and the reverse.
-- **Viewport.** Described in §4.
-- **Camera inset.** When cameras exist, a picture-in-picture panel shows the selected camera's
-  landmarks on its image plane. With several cameras, a thumbnail strip selects which one. The
-  inset can be enlarged to share the viewport half-and-half.
-- **Inspector.** For the selected joint measurement: value in degrees, provenance, confidence,
-  the "not validated" tag, a rolling trace of the last ten seconds, contributing devices. For a
-  selected segment: provenance, source device, device state, calibration state, with a link to
-  the device. Below it, the table of all joint measurements; unavailable ones show a dash and
-  their reason on hover and focus.
+- The left dock includes layer toggles and actions for calibration, technique comparison and camera capture.
+- The searchable Scene Explorer groups body segments, joint measurements, cameras and sensors.
+  A pick in the 3D viewport selects the same object in the explorer and inspector.
+- The camera inset shows the active camera's 2D landmarks. Camera buttons in the inset and the
+  explorer select the same source.
+- The inspector shows joint angle, provenance, confidence, validation, a ten-second trace and
+  input sources. Segments show provenance and device calibration. Cameras and sensors show
+  details of the selected source.
 
 Angles are shown in degrees with one decimal. The wire unit is radians; conversion happens in one
 formatting helper.
@@ -238,14 +239,14 @@ not hidden, so cards align.
 └───────────────────────────────────────────────┴─────────────────────────────────────────┘
 ```
 
-- The preview shows one camera at a time, chosen from a tab row of camera ids. Beside it is the
-  **3D reconstruction view** (below). The sketch above shows the single-camera layout.
+- Use Split for the active camera and 3D reconstruction side by side. Camera and 3D show either
+  view by itself. Grid shows the configured camera feeds and lets the user choose the active feed.
 - Landmarks are drawn from the camera's `LandmarkSchema` (names and edges come from the engine).
   Confidence drives point opacity; undetected points are not drawn.
 - A simulated camera has no image. Its preview says so and shows landmarks on a neutral field. It
   never shows a fake video frame.
-- The detail panel shows source, resolution, measured frame rate, landmark count, detector, time
-  quality, calibration states and synchronisation status.
+- The camera inspector shows origin, resolution, measured and nominal frame rates, time quality,
+  dropped frames, calibration states and the latest reconstruction contribution.
 - **3D reconstruction view.** Shown when at least two cameras report usable intrinsics and
   extrinsics (read from the calibration profiles in `SystemState`, which carry the camera data for
   this purpose) and the cameras declare a landmark schema. It draws a wire frustum per calibrated
@@ -255,14 +256,14 @@ not hidden, so cards align.
   set older than half a second is not drawn, and the view says it is waiting. With fewer than two
   calibrated cameras it shows an empty state saying how many report usable calibration. The
   feature state and its reasons from the engine appear under the view.
-- **Landmark inspector.** Selecting a landmark, in the 3D view or in the landmark list, answers why
+- **Landmark inspector.** Selecting a landmark in the camera feed, 3D view or explorer answers why
   a joint is misplaced or missing: its status (`accepted`, `high error`, `not reconstructed`), world
   position, number of views used, reprojection RMS and confidence, and a row per camera with its
   role (`used`, `rejected`, `not used`) and its own 2D observation (pixels and confidence, "not
   detected", or "no 2D data"). The selected landmark is also highlighted in the camera preview.
   Status is shown as a glyph and a word, never colour alone.
 - Studio can show the same frustums through its Cameras layer toggle, off by default.
-- Everything here is simulated in the PoC: no video is captured and no detector runs.
+- A connected physical camera supplies a preview and detector landmarks when available.
 - Designed: live video in the preview, source selection, and the entry to intrinsic and extrinsic
   calibration.
 
@@ -306,7 +307,7 @@ step, the result, and what it invalidated.
 | Floor | Grid on `y = 0`: minor lines every 0.5 m, major every 1 m, fading with distance. Origin marker with +X and +Z ticks labelled in metres |
 | Skeleton | Bones as tapered capsules between a segment's origin and its tail; joints as small spheres. Matte material, one hemisphere light and one key light for form |
 | Provenance | Measured and derived: opaque, in the provenance colour. Inferred: translucent fill with a dashed centre line. No pose: nothing is drawn and the viewport shows the reason |
-| Selection | Accent outline on the selected segment; its row is highlighted in the segment list |
+| Selection | Segments and joints use an accent outline. The Scene Explorer highlights the same target |
 | Angle arcs | For the selected joint (or all, by layer toggle): a sector between the two segment axes with the value as a screen-space label |
 | Trackers | A small oriented box on each segment that has a tracker, at its midpoint, in the device's state colour. The label says the position on the bone is illustrative: tracker position is not measured |
 | Cameras | A wire frustum per camera whose extrinsics are known, in the camera's state colour. Hidden when extrinsics are missing |
@@ -320,11 +321,11 @@ step, the result, and what it invalidated.
 | Drag | Orbit |
 | Right-drag or Shift-drag | Pan |
 | Wheel | Zoom |
-| Click a bone | Select segment |
+| Click a bone or joint | Select the segment or joint measurement |
 | Double-click a bone | Centre the view on it |
 | `F`, `L`, `T`, `P` | Front, left side, top, perspective |
 | `Home` | Reset view |
-| `Tab` within the segment list | Keyboard path to everything the mouse can select |
+| `Tab` within the Scene Explorer | Keyboard path to viewport targets |
 
 ### Implementation rules
 
@@ -416,20 +417,19 @@ generic icon.
 
 | Width | Layout |
 |---|---|
-| ≥ 1280 px | Three columns in Studio; navigation rail with labels |
-| 960 – 1279 px | The inspector becomes a collapsible right drawer; rail shows icons only |
-| 800 – 959 px | Both side panels become overlay sheets over the viewport |
+| ≥ 1280 px | Three columns in Studio and Cameras when both docks are open |
+| 800 – 1279 px | Workspace docks open as overlay panels from the toolbar |
 | Minimum | 800 × 600 |
 
 - Everything reachable by mouse is reachable by keyboard, with a visible focus ring in the accent
   colour.
-- Shortcuts: `1`–`5` workspaces, `Space` play/pause, `R` record, `[` and `]` speed, `Esc` closes
-  a drawer or dialog. Shortcuts are shown in tooltips and do not fire while typing in a field.
+- Workspace shortcuts are listed in §2. `Space` plays or pauses, `R` records or stops recording,
+  and `[` and `]` change speed. `Esc` closes an active dock overlay or dialog.
 - Controls are native elements (`button`, `select`, `input[type=range]`, `dialog`) with labels.
   The layout uses landmarks: `header`, `nav`, `main`, `aside`, `footer`.
 - State changes that matter (engine disconnected, device lost, recording started or stopped) are
   announced through a polite live region.
-- The segment list and joint table are the non-visual equivalent of the viewport.
+- The Scene Explorer and Properties Inspector provide keyboard access to the viewport's objects and readouts.
 - Motion respects `prefers-reduced-motion`.
 
 ## 9. Component architecture
@@ -441,7 +441,7 @@ src/
 │                  stores: connection, system state, skeleton, latest frame, latest landmarks
 │                  (2D and triangulated 3D), cameraCalibration (camera poses from profiles)
 │                  hooks: useSystemState(selector), useConnection(), useSampledFrame(hz)
-├── shell/         AppShell, NavRail, StatusBar, TransportBar, LiveRegion
+├── shell/         WorkbenchMenu, DockLayout, SceneExplorer, TransportBar
 ├── workspaces/    overview/  studio/  devices/  cameras/  sessions/
 ├── viewport/      MotionViewport, SkeletonRig, LandmarkRig, picking, ViewportCanvas (React wrapper)
 │                  layers/ Floor, Trackers, CameraFrustums, Trails, AngleArcs
@@ -498,14 +498,22 @@ The desktop interface keeps the React, Tauri and imperative Three.js architectur
 workbench includes a compact menu, workspace tabs, an expandable icon rail, and a persistent status
 and transport area. Menu entries route to existing workspaces or trigger existing actions.
 
-Studio has a compact view/layer toolbar, a searchable scene explorer synchronized with skeleton
-selection, and a joint/segment property inspector. Desktop widths are adjustable by pointer or
-keyboard, persisted locally under `bansayo.studio.docks.v1`. The Analysis, Capture and Focus
-presets reset widths. Below 1280px, existing mobile/tablet drawers replace desktop resizing.
+Studio and Cameras use fixed docking regions. Contextual tools sit on the left, the viewport
+takes the remaining width, and the searchable Scene Explorer and Properties Inspector share
+the right dock. Desktop widths and the explorer/inspector split are adjustable by pointer or
+keyboard. At narrower widths the same panels open over the viewport. Each workspace persists
+its own dock layout. Applying a preset restores its widths, split and panel visibility.
 
-Visual theme (Graphite, Silver, Onyx), density (Compact, Comfortable), and rail expansion
-persist under `bansayo.ui.preferences.v1`. Semantic tracking states, provenance marks,
-disabled controls, and numerical validity labels must remain legible in every theme.
+Studio starts in Motion Analysis and offers Capture and Focus. Cameras starts in Capture and
+also offers Focus. Selection is shared by the explorer, inspector and available viewport targets.
+Train keeps its training layout and Technique keeps its existing comparison workflow. Their
+layout presets can be defined when those workspaces adopt dock controls.
+
+Graphite and Compact are the desktop defaults. Theme (Graphite, Silver, Onyx), density
+(Compact, Comfortable), and rail expansion persist under `bansayo.ui.preferences.v1`.
+The desktop client owns these presentation preferences. A future YAML defaults file can
+provide installation defaults that local preferences override. Semantic tracking states,
+provenance marks, disabled controls and numerical validity labels remain legible across themes.
 
 The renderer is not remounted by adjusting panel widths or changing visual preferences.
 Camera sources, training logic, API contracts, and VR presentation are unaffected. The workbench

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_PREFERENCES, parsePreferences } from "./preferences";
-import { parseDockWidths } from "../workspaces/studio/useDockWidths";
+import { parseDockLayout } from "./DockLayout";
 
 describe("workstation preferences", () => {
   it("returns safe defaults for missing or invalid data", () => {
@@ -19,20 +19,29 @@ describe("workstation preferences", () => {
   });
 });
 
-describe("studio dock preferences", () => {
-  it("starts with analysis proportions", () => {
-    expect(parseDockWidths(null)).toEqual({ left: 240, right: 300, preset: "analysis" });
+describe("workbench dock preferences", () => {
+  it("uses independent defaults for Studio and Cameras", () => {
+    expect(parseDockLayout(null, "studio")).toEqual({
+      preset: "analysis", left: 210, right: 320, explorer: 42, leftOpen: true, rightOpen: true,
+    });
+    expect(parseDockLayout(null, "cameras")).toMatchObject({ preset: "capture", right: 340, explorer: 48 });
   });
 
   it("clamps corrupted widths and preserves a valid preset", () => {
-    expect(parseDockWidths(JSON.stringify({
+    expect(parseDockLayout(JSON.stringify({
       left: -500, right: 7000, preset: "capture",
-    }))).toEqual({ left: 180, right: 440, preset: "capture" });
+    }), "studio")).toEqual({
+      preset: "capture", left: 180, right: 440, explorer: 48, leftOpen: true, rightOpen: true,
+    });
+    expect(parseDockLayout('{"left":440,"right":180,"preset":"analysis"}', "studio"))
+      .toMatchObject({ left: 440, right: 180, explorer: 42 });
   });
 
   it("rejects non-finite and invalid values", () => {
-    expect(parseDockWidths(JSON.stringify({
-      left: "bad", right: null, preset: "focus",
-    }))).toEqual({ left: 240, right: 300, preset: "focus" });
+    expect(parseDockLayout(JSON.stringify({
+      left: "bad", right: null, preset: "focus", explorer: 2, leftOpen: "true", rightOpen: true,
+    }), "cameras")).toEqual({
+      preset: "focus", left: 210, right: 320, explorer: 25, leftOpen: false, rightOpen: true,
+    });
   });
 });

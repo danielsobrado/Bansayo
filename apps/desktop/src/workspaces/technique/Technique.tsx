@@ -153,7 +153,7 @@ function Attempt({ id, rep }: { id: string; rep: number }) {
         <div className={styles.stack}>
           <div className={styles.viewport} aria-label="Attempt clip">
             {poseSource ? (
-              <ViewportCanvas skeleton={skeleton} selected={-1} onSelect={() => {}} view="3D" skeletonVisible floorVisible poseSource={poseSource} />
+              <ViewportCanvas skeleton={skeleton} view="3D" skeletonVisible floorVisible poseSource={poseSource} />
             ) : (
               <EmptyState title="No motion stored for this attempt">{clip.error && <p>{clip.error}</p>}</EmptyState>
             )}

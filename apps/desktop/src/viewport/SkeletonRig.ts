@@ -6,16 +6,15 @@ import {
   BackSide,
   Group,
   Line,
-  LineBasicMaterial,
   LineDashedMaterial,
   LatheGeometry,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   SphereGeometry,
   Vector2,
   Vector3,
   BufferGeometry,
-  type Material,
 } from "three";
 import type { SkeletonDefinition, SkeletonPose } from "@contracts";
 import type { Palette } from "./palette";
@@ -82,7 +81,6 @@ function taperedCapsule(length: number, r0: number, r1: number): LatheGeometry {
 
 export class SkeletonRig {
   readonly root = new Group();
-  /** Meshes that can be picked; `userData.segmentIndex` is the segment index. */
   readonly pickables: Mesh[] = [];
   readonly count: number;
 
@@ -91,13 +89,16 @@ export class SkeletonRig {
   private readonly joints: Mesh[] = [];
   private readonly centreLines: (Line | null)[] = [];
   private readonly outlines: (Mesh | null)[] = [];
+  private readonly jointOutlines: (Mesh | undefined)[] = [];
+  private readonly jointPickers: (Mesh | undefined)[] = [];
   private readonly styles: Style[] = [];
   private readonly materials: Record<Exclude<Style, "hidden">, MaterialPair>;
   private readonly lineMaterial: LineDashedMaterial;
-  private readonly outlineMaterial: Material;
+  private readonly outlineMaterial: MeshStandardMaterial;
   private readonly disposables: { dispose(): void }[] = [];
   private dimmed = false;
   private selected = -1;
+  private selectedJoint = -1;
 
   constructor(def: SkeletonDefinition, palette: Palette) {
     this.count = def.segments.length;
@@ -111,8 +112,6 @@ export class SkeletonRig {
       dashSize: DASH_M,
       gapSize: DASH_M,
     });
-    this.outlineMaterial = new LineBasicMaterial(); // replaced below; keeps the field definitely assigned
-    this.outlineMaterial.dispose();
     this.outlineMaterial = new MeshStandardMaterial({
       color: palette.accent,
       side: BackSide,
@@ -128,7 +127,8 @@ export class SkeletonRig {
       RADIAL_SEGMENTS,
       RADIAL_SEGMENTS / 2,
     );
-    this.disposables.push(jointGeometry);
+    const pickMaterial = new MeshBasicMaterial({ visible: false });
+    this.disposables.push(jointGeometry, pickMaterial);
     const up = new Vector3(0, 1, 0);
 
     def.segments.forEach((seg, i) => {
@@ -146,10 +146,25 @@ export class SkeletonRig {
         this.materials["solid-derived"].normal,
       );
       joint.scale.setScalar(r0 * JOINT_RADIUS_FACTOR);
-      joint.userData.segmentIndex = i;
+      joint.userData.selection = { kind: "segment", index: i };
       bone.add(joint);
       this.joints.push(joint);
       this.pickables.push(joint);
+      // Measurements live at the origin of the second segment in the joint definition.
+      const measurement = def.joints.findIndex((entry) => entry.segments[1] === seg.id);
+      if (measurement >= 0) {
+        const picker = new Mesh(jointGeometry, pickMaterial);
+        picker.scale.setScalar(r0 * 1.3);
+        picker.userData.selection = { kind: "joint", index: measurement };
+        bone.add(picker);
+        this.jointPickers[i] = picker;
+        this.pickables.push(picker);
+        const ring = new Mesh(jointGeometry, this.outlineMaterial);
+        ring.scale.setScalar(1.65);
+        ring.visible = false;
+        joint.add(ring);
+        this.jointOutlines[measurement] = ring;
+      }
 
       if (length > 0) {
         const geometry = taperedCapsule(length, r0, r0 * DISTAL_TAPER);
@@ -159,7 +174,7 @@ export class SkeletonRig {
           this.materials["solid-derived"].normal,
         );
         capsule.quaternion.setFromUnitVectors(up, tail.clone().normalize());
-        capsule.userData.segmentIndex = i;
+        capsule.userData.selection = { kind: "segment", index: i };
         const outline = new Mesh(geometry, this.outlineMaterial);
         outline.scale.set(OUTLINE_SCALE, 1, OUTLINE_SCALE);
         outline.visible = false;
@@ -192,6 +207,18 @@ export class SkeletonRig {
     });
   }
 
+  setPalette(palette: Palette): void {
+    this.outlineMaterial.color.copy(palette.accent);
+    this.lineMaterial.color.copy(palette.inferred);
+    const colors = {
+      "solid-measured": palette.measured, "solid-derived": palette.derived, inferred: palette.inferred,
+    };
+    for (const style of ["solid-measured", "solid-derived", "inferred"] as const) {
+      this.materials[style].normal.color.copy(colors[style]);
+      this.materials[style].dim.color.copy(colors[style]);
+    }
+  }
+
   /** Applies a pose whose segments are index-aligned with the definition. */
   update(pose: SkeletonPose): void {
     const segs = pose.segments;
@@ -217,13 +244,18 @@ export class SkeletonRig {
     for (let i = 0; i < this.count; i++) this.applyStyle(i);
   }
 
-  setSelected(index: number): void {
-    if (index === this.selected) return;
+  setSelected(index: number, joint: number): void {
+    if (index === this.selected && joint === this.selectedJoint) return;
     const prev = this.outlines[this.selected];
     if (prev) prev.visible = false;
     this.selected = index;
     const next = this.outlines[index];
     if (next) next.visible = true;
+    const oldJoint = this.jointOutlines[this.selectedJoint];
+    if (oldJoint) oldJoint.visible = false;
+    this.selectedJoint = joint;
+    const nextJoint = this.jointOutlines[joint];
+    if (nextJoint) nextJoint.visible = true;
   }
 
   dispose(): void {
@@ -237,6 +269,8 @@ export class SkeletonRig {
     const capsule = this.capsules[i];
     const joint = this.joints[i]!;
     joint.visible = visible;
+    const picker = this.jointPickers[i];
+    if (picker) picker.visible = visible;
     if (capsule) capsule.visible = visible;
     const line = this.centreLines[i];
     if (line) line.visible = style === "inferred";

@@ -295,7 +295,7 @@ function LiveSession({ training, state }: { training: TrainingState; state: Syst
       <div className={styles.grid}>
         <div className={styles.stack}>
           <div className={styles.viewport} aria-label="Live avatar">
-            <ViewportCanvas skeleton={skeleton} selected={-1} onSelect={() => {}} view="3D" skeletonVisible floorVisible />
+            <ViewportCanvas skeleton={skeleton} view="3D" skeletonVisible floorVisible />
           </div>
           {last?.cue && <CueBanner cue={last.cue} texts={texts} />}
           <Gauges ids={training.live_observables.slice(0, 8)} />

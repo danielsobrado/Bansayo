@@ -14,16 +14,17 @@ export interface Palette {
   degraded: Color;
 }
 
-/** Reads one `--token` from the document; tokens are oklch() per styles/tokens.css. */
+/** Reads an OKLCH or hex token from the active theme. */
 export function tokenColor(
   name: string,
   from: Element = document.documentElement,
 ): Color {
   const value = getComputedStyle(from).getPropertyValue(name).trim();
+  if (/^#[\da-f]{6}$/i.test(value)) return new Color(value);
   const parsed = parseOklch(value);
   if (!parsed)
     throw new Error(
-      `Design token ${name} is not an oklch() colour: "${value}"`,
+      `Design token ${name} is not an OKLCH or hex colour: "${value}"`,
     );
   const [r, g, b] = oklchToSrgb(...parsed);
   return new Color().setRGB(r, g, b, SRGBColorSpace);

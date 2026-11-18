@@ -4,7 +4,8 @@ export type IconName =
   | "play" | "target" | "chart" | "monitor" | "crosshair" | "usb"
   | "camera" | "folder" | "panel-left" | "panel-right" | "grid"
   | "layers" | "settings" | "ruler" | "rotate" | "record"
-  | "chevron-down" | "focus" | "video" | "sliders";
+  | "chevron-down" | "focus" | "video" | "sliders" | "close" | "check" | "warning" | "expand"
+  | "pause" | "stop" | "back";
 
 const glyphs: Record<IconName, ReactNode> = {
   play: <path d="m8 5 11 7-11 7z" />,
@@ -27,6 +28,13 @@ const glyphs: Record<IconName, ReactNode> = {
   focus: <><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5" /><circle cx="12" cy="12" r="3" /></>,
   video: <><rect x="3" y="5" width="13" height="14" rx="2" /><path d="m16 10 5-3v10l-5-3" /></>,
   sliders: <><path d="M4 6h16M4 12h16M4 18h16" /><circle cx="8" cy="6" r="2" /><circle cx="16" cy="12" r="2" /><circle cx="10" cy="18" r="2" /></>,
+  close: <path d="m6 6 12 12M18 6 6 18" />,
+  check: <path d="m5 12 4 4L19 6" />,
+  warning: <><path d="M12 3 2 20h20zM12 9v4" /><circle cx="12" cy="16.5" r=".5" /></>,
+  expand: <path d="M7 17 17 7M10 7h7v7" />,
+  pause: <path d="M9 5v14m6-14v14" />,
+  stop: <rect x="6" y="6" width="12" height="12" rx="1" />,
+  back: <path d="M19 12H5m7-7-7 7 7 7" />,
 };
 
 export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {

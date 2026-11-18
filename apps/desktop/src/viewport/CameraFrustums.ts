@@ -25,12 +25,22 @@ export class CameraFrustums {
   private key = "";
   private disposables: { dispose(): void }[] = [];
 
-  constructor(private readonly palette: Palette) {}
+  private cameras: readonly CameraPose[] = [];
+  private selected: string | null = null;
+  constructor(private palette: Palette) {}
+
+  setPalette(palette: Palette): void {
+    this.palette = palette;
+    this.key = "";
+    this.set(this.cameras, this.selected);
+  }
 
   set(cameras: readonly CameraPose[], selected: string | null): void {
     const key = JSON.stringify([cameras, selected]);
     if (key === this.key) return;
     this.key = key;
+    this.cameras = cameras;
+    this.selected = selected;
     this.clear();
     for (const camera of cameras) {
       const isSelected = camera.id === selected;
@@ -44,7 +54,9 @@ export class CameraFrustums {
         color: isSelected ? this.palette.accent : this.palette.ink2,
       });
       this.disposables.push(geometry, material);
-      this.root.add(new LineSegments(geometry, material));
+      const lines = new LineSegments(geometry, material);
+      lines.userData.selection = { kind: "camera", id: camera.id };
+      this.root.add(lines);
       // The selected camera also carries a glyph, so the highlight is not colour alone.
       const label = this.label(
         isSelected ? `● ${camera.id}` : camera.id,

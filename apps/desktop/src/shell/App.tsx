@@ -62,6 +62,8 @@ export function App() {
     return () => engineConnection.stop();
   }, []);
   const connected = connection.kind === "open";
+  const canCalibrate = connected && !state?.playback;
+  const cameraCount = state?.devices.filter((device) => device.descriptor.kind === "camera").length ?? 0;
   const readiness = calibrationReadiness(state);
   const origins = [
     ...new Set([
@@ -85,41 +87,32 @@ export function App() {
   const calibrate = () => setCalibrating(true);
   return (
     <div className={`app-shell ${preferences.rail === "expanded" ? "rail-expanded" : ""}`}>
-      <WorkbenchMenu items={NAV} active={route} connected={connected}
+      <WorkbenchMenu items={NAV} active={route} canCalibrate={canCalibrate}
         preferences={preferences} onChange={updatePreferences} onCalibrate={calibrate} />
       <nav className="navigation" aria-label="Workspaces">
-        <div className="brand">
-          <span className="brand-mark">B</span>
-          <span className="brand-name">
-            bansayo<span>motion platform</span>
-          </span>
-        </div>
         <button type="button" className="rail-toggle"
           title={preferences.rail === "compact" ? "Expand navigation" : "Collapse navigation"}
           aria-label={preferences.rail === "compact" ? "Expand navigation" : "Collapse navigation"}
+          aria-expanded={preferences.rail === "expanded"}
           onClick={() => updatePreferences({ rail: preferences.rail === "compact" ? "expanded" : "compact" })}>
           <Icon name="panel-left" />
         </button>
-        <span className="rail-label">Workspace</span>
         {NAV.map((item) => (
           <a
             key={item.id}
             href={`#/${item.id}`}
             aria-current={route === item.id ? "page" : undefined}
+            aria-label={item.label}
+            aria-keyshortcuts={item.key}
             title={`${item.label} (${item.key})`}
           >
             <span className="nav-icon" aria-hidden="true">
               <Icon name={item.icon} />
             </span>
             <span className="nav-text">{item.label}</span>
-            <kbd>{item.key}</kbd>
+            <kbd aria-hidden="true">{item.key}</kbd>
           </a>
         ))}
-        <div className="rail-bottom">
-          <span className="rail-label">Local engine</span>
-          <span className="mono endpoint">{ENGINE_HOST}</span>
-          <span className="rail-version">PoC · Local motion capture</span>
-        </div>
       </nav>
       <header className={`statusbar ${state?.playback ? "is-replay" : ""}`}>
         <span className={`connection-status ${connected ? "connected" : ""}`}>
@@ -130,6 +123,9 @@ export function App() {
               ? "Protocol incompatible"
               : "Connecting to engine"}
         </span>
+        {state && <span className="status-source-counts mono">
+          {cameraCount} cameras · {state.devices.length - cameraCount} sensors
+        </span>}
         {origins.map((origin) => (
           <OriginBadge key={origin} label={origin} />
         ))}
@@ -141,15 +137,16 @@ export function App() {
         )}
         <button
           className="calibration-status"
-          disabled={!connected || !!state?.playback}
+          disabled={!canCalibrate}
           onClick={calibrate}
         >
+          <Icon name={readiness === "action_needed" ? "warning" : readiness === "ready" ? "check" : "crosshair"} size={13} />
           {readiness === "action_needed"
-            ? "⚠ Calibration needed"
+            ? "Calibration needed"
             : readiness === "assumptions"
-              ? "◌ Heading assumed"
+              ? "Heading assumed"
               : readiness === "ready"
-                ? "✓ Calibration ready"
+                ? "Calibration ready"
                 : "Calibration —"}
         </button>
         {state?.recording && (

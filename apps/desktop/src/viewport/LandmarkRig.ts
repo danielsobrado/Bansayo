@@ -30,7 +30,7 @@ const MIN_SIZE = 0.6;
 
 export class LandmarkRig {
   readonly root = new Group();
-  /** Pick proxies; `userData.landmarkIndex` is the landmark index. */
+  /** Pick proxies share the explorer's landmark targets. */
   readonly pickables: Mesh[] = [];
   private readonly nodes: Group[] = [];
   private readonly markers: Mesh[] = [];
@@ -39,6 +39,9 @@ export class LandmarkRig {
   private readonly outlines: Mesh[] = [];
   private readonly positions: Float32Array;
   private readonly bones: LineSegments;
+  private readonly boneMaterial: LineBasicMaterial;
+  private readonly outlineMaterial: MeshStandardMaterial;
+  private readonly errorMaterial: MeshBasicMaterial;
   private readonly disposables: { dispose(): void }[] = [];
   private selected = -1;
 
@@ -48,13 +51,13 @@ export class LandmarkRig {
   ) {
     const sphere = new SphereGeometry(1, 12, 6);
     const octahedron = new OctahedronGeometry(ERROR_MARK_M);
-    const outlineMaterial = new MeshStandardMaterial({
+    const outlineMaterial = this.outlineMaterial = new MeshStandardMaterial({
       color: palette.accent,
       side: BackSide,
       roughness: 1,
       metalness: 0,
     });
-    const errorMaterial = new MeshBasicMaterial({
+    const errorMaterial = this.errorMaterial = new MeshBasicMaterial({
       color: palette.degraded,
       wireframe: true,
     });
@@ -84,7 +87,7 @@ export class LandmarkRig {
       const errorMark = new Mesh(octahedron, errorMaterial);
       const pick = new Mesh(sphere, pickMaterial);
       pick.scale.setScalar(PICK_M);
-      pick.userData.landmarkIndex = i;
+      pick.userData.selection = { kind: "landmark", index: i };
       node.add(marker, outline, errorMark, pick);
       this.root.add(node);
       this.nodes.push(node);
@@ -97,11 +100,18 @@ export class LandmarkRig {
     this.positions = new Float32Array(schema.edges.length * 6);
     const geometry = new BufferGeometry();
     geometry.setAttribute("position", new BufferAttribute(this.positions, 3));
-    const boneMaterial = new LineBasicMaterial({ color: palette.derived });
+    const boneMaterial = this.boneMaterial = new LineBasicMaterial({ color: palette.derived });
     this.bones = new LineSegments(geometry, boneMaterial);
     this.bones.frustumCulled = false; // positions change every frame; the bounds would go stale
     this.root.add(this.bones);
     this.disposables.push(geometry, boneMaterial);
+  }
+
+  setPalette(palette: Palette): void {
+    this.outlineMaterial.color.copy(palette.accent);
+    this.errorMaterial.color.copy(palette.degraded);
+    this.boneMaterial.color.copy(palette.derived);
+    for (const material of this.materials) material.color.copy(palette.derived);
   }
 
   /** Draws the latest set if it is fresh and matches the schema; otherwise hides everything. */
