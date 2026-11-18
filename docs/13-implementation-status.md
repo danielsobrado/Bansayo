@@ -1,7 +1,120 @@
 # 13 — Implementation and validation record
 
-This record includes Phase 1 and Phase 0, both delivered on **17 November 2026**, followed by the
-historical Stage 1–3 and camera/VR record. Phase 0 began at `b61c6b7`. Phase 1 is on `main`.
+This record includes Phase 2 (18 November 2026; machine part delivered, owner part pending),
+Phase 1 and Phase 0 (both 17 November 2026), followed by the historical Stage 1–3 and camera/VR
+record. Phase 0 began at `b61c6b7`. All phases are on `main`.
+
+## Phase 2 — The slice on one webcam (18 November 2026)
+
+Implements martial-arts [18 §3 Phase 2](architecture/martial-arts/18-implementation-roadmap.md) for
+profile `basic`. `protocol_version` remains **1**; every wire change is additive and the generated
+TypeScript and golden examples are regenerated. No new crate: the `windows` crate (0.62, already
+built for `nokhwa`) gains Media Foundation, DirectShow and COM features for ADR-020's exposure
+fallback. No Python at runtime; `scripts/annotate_reps.py` is an offline annotator tool. Camera
+preview is never written to disk; there is no video recording.
+
+**Hardware.** One physical webcam was attached on 18 November: UGREEN Camera (VID 0C45, PID 6369),
+MJPEG/NV12 up to 1920×1080 at 30 fps. Camera checks were run on it
+([report](validation/2026-11-18-phase2-camera-bringup.md)); no person was recorded or annotated.
+
+### Deliverables
+
+| | Delivered | Main commits |
+|---|---|---|
+| D1 Unsmoothed landmarks (O-20) | One-Euro removed; the camera source records and forwards the detector's points unchanged (`landmarks_observation`, bit-for-bit test). The detector id becomes `yolox-m-humanart+rtmpose-m/raw`, so earlier smoothed recordings stay loadable in a separate comparability class; the processing identity says `smoothing: none` | `2963086` |
+| D2 Manual exposure | `exposure_s` and `gain` per camera; applied on the capture thread after the stream opens and re-applied when `PUT /cameras/{id}/settings` changes them; values read back from the device in each frame's `CameraFrameMetadata.settings` and in `DeviceStatus.camera_settings`; a setting not applied, or a physical camera left on automatic exposure, makes the camera `degraded` with the property named. `nokhwa` cannot switch a control to manual, so ADR-020's fallback was built for controls (`sources/camera/controls.rs`, Media Foundation `IAMCameraControl` / `IAMVideoProcAmp`). Also: exact-format request (nokhwa's `Closest` picked 1 fps), `--list-cameras` prints formats, dev-profile optimised JPEG decoding (debug capture was 7–10 fps) | `50203da`, `04dc99f`, `a11831f` |
+| D3 `PlanarBody` and image-plane observables | `pipeline/schema_map.rs` (COCO-17 per 04 §2.2); `pipeline/planar.rs` captures `scale_px`, origin and view during 500 ms of stillness after a session is created (re-analysis opens the same window), `scale_px: null` before; `MotionSample.planar` filled. Image-plane realisations: knee flexion, thigh elevation, hip flexion (lateral only, else `view_unsuitable`), keypoint heights above the floor captured with the reference, keypoint speeds; `method: image_plane`, `provenance: derived`, `sigma: null`; positions and speeds publish only `norm`. Without a realisation: `needs_calibrated_cameras`; feet with COCO-17: `detector_no_feet`; before capture: `planar_scale_missing`. `analysis.planar_camera: auto | <id>` (validated). No `BodyState` exists with one camera; training runs on planar observables | `a4136a0` |
+| D4 Grades and readiness at `basic` | 05 §10.6 / 22 §3 rule for `image_plane` inputs in `metrics::planar_rule`, used by measurement and by metric availability: heights B normalised only (C below grade-B confidence); phase durations B, C (indicative, "camera rate 30 fps") below half the grade-A rate; speeds, hip rotation, support pivot, guard suppressed with reasons worded for 22 §5. Desktop `readinessPhrase` renders "label: status (first reason)", normalised-only values show as body-relative. The start-stance gate falls back to 500 ms of stillness and reports `stance_ready { assessed: false }` (06 §3); no shipped definition has a start stance yet | `7d60fca` |
+| D5 Stage timing | `diagnostics.timing` (schema version 2, off by default): decode, inference, tick wait, solve, training and frame serialisation recorded; p50/p95/p99/max over 10 s on the new `diagnostics` topic and in the shutdown log with camera frame drop counters; `stage_over_budget` notice when a stage's p95 stays over its 15 §2.1 budget for 5 s. Frames replaced in the one-slot buffer now count as dropped (08 §3) | `56080aa` |
+| D6 Pose model | **No Halpe-26 model adopted**: weight terms cannot be read and stated (sources in ADR-021). COCO-17 stays the default; foot observables are unavailable with `detector_no_feet`. Inference measured and recorded in ADR-021 | `1ee82e3` |
+| D7 Robustness | Unplug → link down → no planar body → tracking lost → `paused` after 3 s; replug → reopen within 2 s → **resumes by itself** after 500 ms of required observables (08 §10). Subject selection: followed box, else largest box nearest the centre; two candidates within 10 % → no pose and a `multiple_people` notice. Image folders may carry `landmarks.jsonl` (recorded COCO-17 rows) and run without pose models | `7d60fca`, `2dc1cc2` |
+| D8 Validation tooling | `RepAnnotation` files (20 §4.1); `validation::evaluate` (precision/recall at IoU ≥ 0.5, count error per 20, phase-start error mean/SD/max); `regress` expectations `labels` and `phase_boundary_ms` for sessions with `annotations: required` (28 §3); `bansayo-engine promote` (take → real golden set), `bansayo-engine claps` (clap instants for video alignment); `scripts/annotate_reps.py`; templates and owner checklist in [docs/validation](validation/README.md) | `3cebac4` |
+
+### Phase 1 gate and restated criterion 3
+
+The Phase 1 deliverables are present and their tests pass in the runs below (training runner,
+content and SQLite stores, `training`/`observables` topics, guided simulator session, workspaces,
+`regress`). **Restated criterion 3 is met without engine change**: in golden session
+`20261117T090905Z-ni9h` the contributing cameras recorded in each repetition's phase evidence are
+`[SIM-CAM1, SIM-CAM2, SIM-CAM3]` for repetition 1 and `[SIM-CAM1, SIM-CAM3]` for repetitions 2
+and 3. `regress` now checks this (`expect.sources`, commit `5d0613c`); grades are unchanged.
+
+### Acceptance evidence (18 §3 Phase 2 and the task's criteria)
+
+| # | Criterion | Command and result |
+|---|---|---|
+| 1 | Image-folder camera replaying a kick sequence: counts, phase durations, normalised image-plane measurements, every metre/speed metric suppressed with its reason | `cargo test -p bansayo-engine --test phase2_camera guided_roundhouse_on_one_image_folder_camera`: **pass**. The simulator's roundhouse projected into a front camera at 30 fps as recorded landmarks; 1 × 3 session at profile `basic`; 3 completed; total time B; extension time C ("camera rate 30 fps"); peak knee and foot height B with `value: null` and `norm` set; peak foot speed X `rate_too_low`; hip rotation X `needs_calibrated_cameras`; support pivot X `detector_no_feet`; settle time X `metric_kind_not_implemented`; guard X. Pose inference is the only stage not exercised (landmarks replace it) |
+| 2 | D1 | `cargo test -p bansayo-engine --lib recorded_landmarks_equal_raw_detector_output`: **pass** |
+| 3 | Disconnect pauses after 3 s, reconnect resumes | Same test: folder removed after the first kick → `paused` (cause `tracking_lost`) ≥ 3 s later; restored → `session_resumed` (cause `tracking_restored`), session completes. Unit: `exercise::tests::a_tracking_loss_pause_resumes_when_tracking_returns`: **pass**. On the physical camera: **pending owner** (checklist A.7) |
+| 4 | One-webcam readiness wording per 22 §5 from reasons | Engine reasons asserted in criterion 1's test (`metric_availability`); wording: desktop `readinessPhrase` test reproduces all six 22 §5 one-webcam lines: **pass** |
+| 5 | Stage timings on `diagnostics`; 15 §2.1 budgets measured with a camera | `stage_timings_reach_the_diagnostics_topic`: **pass**. Measured on the webcam (release, 30 fps): decode p95 4.3 ms (budget 4), inference p95 22.0 ms with nobody followed (budget 12), tick wait p95 16.3 ms, solve 0.04 ms, publish 0.03 ms; consequences recorded in ADR-020 and ADR-021 |
+| 6 | Manual exposure applied and read back on a physical camera | **Met on the UGREEN webcam**: 0.004 s → 1/256 s, 0.002 s → 1/512 s, by configuration and by `PUT /cameras/{id}/settings`; capture stays at 30.0 fps. Degraded path: `unapplied_camera_settings_degrade_the_camera_with_the_property_named`: **pass** |
+| 7 | V-19 for the roundhouse at `basic` on ≥ 3 people | **Pending owner** — [checklist](validation/PHASE2-OWNER-CHECKLIST.md) B–D; tooling tested by `a_take_is_promoted_annotated_and_evaluated` |
+| 8–12 | fmt, clippy, tests (workspace and Tauri), gate scripts, desktop tests/build/Playwright, `regress` unchanged, generated TypeScript current | See "Final checks" below |
+| — | V-20, L-01, L-03, L-06 | **Pending owner** (checklist C–E). L-06 engine part on the replayed take: 144–149 ms (the segmenter's 150 ms end hold) |
+
+### Final checks
+
+Windows 11, Rust 1.92, Node 24, `CARGO_TARGET_DIR=F:\drusniel-cache\cargo-target`, `-j 4` (one
+parallel run hit the paging-file limit at link time while another build ran).
+
+| Check | Result |
+|---|---|
+| `cargo fmt --all --check`; `cargo clippy --workspace --all-targets -- -D warnings` | **pass** |
+| `cargo test --workspace --no-fail-fast`, three runs | **pass** on the final code: 31 test binaries, 196 passed, 0 failed, 4 ignored (photo detector without `BANSAYO_POSE_IMAGE`, golden generator, two hardware tests needing `BANSAYO_CAMERA`). An earlier run failed once in the new acceptance test: it read readiness on the first `ready` tick, while rates were still `warming_up`; the test now waits for settled availability (3/3 passes alone, then the full run) |
+| Tauri crate: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` | **pass** (1 test) |
+| `node scripts/verify-gate1.mjs`; `node scripts/verify-gate2.mjs` | **pass**: 8 and 5 real-process checks; scripts unchanged |
+| Desktop `npx vitest run`; `npm run build`; `npx playwright test` | **pass**: 56 unit tests; build (existing large-chunk advisory); 4 Playwright tests. The training journey logs React duplicate-key warnings from the Phase 1 chart's x ticks (`ui/chart/Chart.tsx`), not changed here; follow-up |
+| `regress` on the synthetic golden sessions | **pass**, expectations unchanged except the added `sources` check of `ni9h` (`cargo test -p bansayo-engine --test golden`) |
+| Generated TypeScript and golden examples | **current** (`generated_contracts_are_current`); added `CameraSettingsStatus`, `CameraSettingsRequest`, `StageTiming`, `DropCount`, `ServerMessage::Diagnostics`, optional `CameraFrameMetadata.settings` and `DeviceStatus.camera_settings`; examples `api_request_camera_settings.json`, `diagnostics.json` |
+| Hardware tests on the webcam (`--ignored`) | `capture_rate_of_a_physical_camera`: 30.0 frames/s; `manual_exposure_on_a_physical_camera`: 1/256 s in effect, 30.0 frames/s, camera returned to automatic exposure |
+| `python scripts/annotate_reps.py --selftest`; `python scripts/setup.py cameras` | **pass**; wrote the git-ignored `config/local-cameras.yaml` for the UGREEN camera, which validates (`--check`) |
+
+### Contradictions, interpretations and limits found
+
+- **03 §1 vs 08 §10, pause after tracking loss.** 03 §1 leaves `paused` only by `resume`; 08 §10
+  says the session resumes when observables return. Implemented: a pause caused by tracking loss
+  resumes after 500 ms of required observables; a pause by command still needs `resume`.
+- **04 §6.4 per tick vs a flickering multi-view rig.** Serving image-plane values on every tick
+  without a world body mixed methods inside simulator repetitions (two Phase 1 tests failed under
+  load). Image-plane realisations are served only after the profile has been `basic` for 1 s;
+  Phase 1 simulator behaviour is unchanged (goldens pass unchanged).
+- **05 §10.6 vs 22 §3.1, phase durations at `basic`.** 05 gives B, 22 gives I at 30 fps and E at
+  60 fps. Implemented 22's finer rule from existing gates (C below half `rate_for_a_hz`).
+- **04 §4 `PlanarBody` origin.** "Origin at the planar pelvis keypoint" is taken as the pelvis at
+  the reference capture, held with the scale; heights need a fixed origin. The floor is the ankle
+  level of the first frame of a reference, lowered by the rest ankle height.
+- **13 §4 camera keys vs the engine schema.** The engine keeps its camera source with nested
+  `cameras[]` and device indices; `exposure_s` and `gain` were added there. `processing_profiles`
+  is still refused by validation (one model pair, hard-coded).
+- **14 §5.5.** The preview stays the existing single-JPEG `/cameras/{id}/preview.jpg` (no multipart
+  stream). `PUT /cameras/{id}/settings` refuses `resolution_px` and `rate_hz` (calibration depends
+  on them) and changes `exposure_s` and `gain` only; settings are not persisted across restarts.
+- **08 §3 subject selection** happens whenever no subject is followed, not only when `ready`
+  begins.
+- **Camera-path phases.** On the replayed take the chamber phase is zero length (entered on the
+  same sample as extension) and pivot is skipped (no heading at `basic`); extension ≈ 190 ms,
+  retraction ≈ 120 ms, recovery ≈ 690 ms. The same zero-length chamber was noted on Phase 1's
+  camera path. Thresholds need real data (V-20).
+- **Review at `basic`.** `/training/reps/{s}/{i}/motion` draws from the world body, so the attempt
+  clip is empty at `basic`; the phase timeline, traces and metric table work.
+- **Validation takes.** No video recording exists (flag stays `false`); no retention job exists,
+  so nothing deletes takes; "keep" is done by promoting a take into `<data_dir>/golden/`.
+
+No martial-arts architecture document was changed except ADR-020 and ADR-021 (status and
+evidence, `1ee82e3`).
+
+### Notes for Phases 3 and 4
+
+- Phase 3: a planar attempt clip (draw `PlanarBody` keypoints) so review works at `basic`;
+  multipart preview; `processing_profiles`; persist camera settings; video recording on consented
+  request; the retention job with a real keep flag; tune segmenter and phase thresholds on V-20
+  takes (zero-length chamber); sign `hip_flexion` in side views from a facing estimate.
+- Phase 4: the 08 §10 auto-resume and the 1 s `basic` hold matter when cameras drop to one; four
+  cameras at 60 fps do not fit the 12 ms inference budget with untracked subjects (person detector
+  every frame), so batching across cameras or a lighter detector cadence is needed; decode p95 is
+  already at its 4 ms budget with one camera (`turbojpeg` trigger of ADR-020); a feet-capable
+  model remains open (ADR-021).
 
 ## Phase 1 — Roundhouse-kick slice on the simulator (17 November 2026)
 

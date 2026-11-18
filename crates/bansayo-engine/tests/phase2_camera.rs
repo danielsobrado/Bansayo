@@ -133,8 +133,15 @@ async fn guided_roundhouse_on_one_image_folder_camera() {
     let s = ok(addr, "POST", "training/sessions", json!({ "plan": { "kind": "technique", "technique": "taekwondo.dollyeo_chagi", "side": "right", "sets": 1, "reps": 3, "rest_s": 0 } })).await;
     let id = s["session_id"].as_str().unwrap().to_owned();
     ok(addr, "POST", "training/command", json!({ "command": "ack_safety", "args": { "content_refs": ["taekwondo.dollyeo_chagi@1"] } })).await;
-    // Ready once the planar reference is captured during a still second.
-    let ready = wait_state(addr, 30, |s| s["phase"] == "ready").await;
+    // Ready once the planar reference is captured during a still second; availability settles a
+    // few samples later, when the rates have their second input.
+    let ready = wait_state(addr, 30, |s| {
+        s["phase"] == "ready"
+            && s["metric_availability"]
+                .as_array()
+                .is_some_and(|m| m.iter().all(|m| m["reasons"][0]["code"] != "warming_up"))
+    })
+    .await;
     assert_eq!(ready["capability_profile"], "basic", "{ready}");
     let availability = |metric: &str| {
         ready["metric_availability"]
@@ -217,6 +224,16 @@ async fn guided_roundhouse_on_one_image_folder_camera() {
         .filter(|e| e["type"] == "rep_completed")
         .map(|e| &e["data"])
         .collect();
+    // L-06 (15 §4.2), engine part only: repetition end → the event carrying its result and cue.
+    for e in events.iter().filter(|e| e["type"] == "rep_completed") {
+        let end = e["data"]["repetition"]["t_end_us"].as_u64().unwrap();
+        let at = e["t_us"].as_u64().unwrap();
+        eprintln!(
+            "L-06 rep {}: {} ms",
+            e["data"]["repetition"]["rep_index"],
+            at.saturating_sub(end) / 1000
+        );
+    }
     assert_eq!(reps.len(), 3, "{kinds:?}");
     for rep in reps {
         let r = &rep["repetition"];
