@@ -103,6 +103,8 @@ export function CameraPreview({
       ctx.font = `${Math.max(14, w / 65)}px sans-serif`;
       for (const tag of tags) {
         if (tag.corners_px.length !== 4) continue;
+        const first = tag.corners_px[0];
+        if (!first) continue;
         ctx.beginPath();
         tag.corners_px.forEach(([x, y], index) => {
           if (index === 0) ctx.moveTo(x, y);
@@ -110,7 +112,7 @@ export function CameraPreview({
         });
         ctx.closePath();
         ctx.stroke();
-        ctx.fillText(`Tag ${tag.id}`, tag.corners_px[0][0], tag.corners_px[0][1] - 8);
+        ctx.fillText(`Tag ${tag.id}`, first[0], first[1] - 8);
       }
       const landmarks = freshLandmarks(performance.now()).get(
         device.descriptor.id,
