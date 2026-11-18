@@ -30,12 +30,67 @@ enum Cmd {
         #[arg(long)]
         bless: bool,
     },
+    /// Copy a stored take into a real golden set (28 §2) and add it to its manifest.
+    Promote {
+        /// The engine's data directory (`engine.data_dir`).
+        #[arg(long)]
+        data: PathBuf,
+        /// Session id, e.g. 20261203T180000Z-k9x2.
+        #[arg(long)]
+        session: String,
+        /// Golden set directory; `manifest.yaml` is created or extended there.
+        #[arg(long)]
+        golden: PathBuf,
+        /// Human label of the rig, e.g. one-webcam-30.
+        #[arg(long, default_value = "one-webcam")]
+        rig: String,
+    },
+    /// Print the session times of hand claps in a session directory's motion.mcap, to align
+    /// phone video with the session clock.
+    Claps { session_dir: PathBuf },
 }
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let args = Args::parse();
-    if let Some(Cmd::Regress { manifest, bless }) = &args.command {
-        std::process::exit(bansayo_engine::regress::main(manifest, *bless));
+    match &args.command {
+        Some(Cmd::Regress { manifest, bless }) => {
+            std::process::exit(bansayo_engine::regress::main(manifest, *bless));
+        }
+        Some(Cmd::Promote {
+            data,
+            session,
+            golden,
+            rig,
+        }) => match bansayo_engine::validation::promote(data, session, golden, rig) {
+            Ok(()) => {
+                println!(
+                    "Promoted {session} to {}; annotate it, then run regress --bless",
+                    golden.display()
+                );
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!("{e}");
+                std::process::exit(1);
+            }
+        },
+        Some(Cmd::Claps { session_dir }) => match bansayo_engine::validation::claps(session_dir) {
+            Ok(times) if times.is_empty() => {
+                eprintln!("No claps found: both hands must meet above the shoulders, in view.");
+                std::process::exit(1);
+            }
+            Ok(times) => {
+                for t in times {
+                    println!("{t}");
+                }
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!("{e}");
+                std::process::exit(1);
+            }
+        },
+        None => {}
     }
     if args.list_cameras {
         match bansayo_engine::sources::camera::capture::list_devices() {

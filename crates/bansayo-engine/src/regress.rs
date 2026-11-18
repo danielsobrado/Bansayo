@@ -25,6 +25,10 @@ pub struct GoldenSession {
     pub rig: String,
     #[serde(default)]
     pub tags: Vec<String>,
+    /// `required`: the session directory holds `annotations.json` (20 §4.1), the ground truth
+    /// for the `labels` and `phase_boundary_ms` expectations (28 §3).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub annotations: Option<String>,
     pub expect: Expect,
     #[serde(default)]
     pub masks: Vec<MaskSpec>,
@@ -76,6 +80,21 @@ pub struct Cues {
     pub max_per_rep: u32,
 }
 
+/// Counting against annotations (16 §5 V-19).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Labels {
+    pub precision_min: f64,
+    pub recall_min: f64,
+}
+
+/// Phase boundaries against annotations (16 §5 V-20).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BoundaryExpect {
+    pub mean_abs_max: f64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Expect {
@@ -93,6 +112,10 @@ pub struct Expect {
     /// Phase 1 criterion 3: a lost camera leaves every later repetition's evidence).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sources: Option<Vec<Vec<String>>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub labels: Option<Labels>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub phase_boundary_ms: Option<BoundaryExpect>,
     /// Final session phase.
     pub ends: SessionPhase,
 }
@@ -142,6 +165,7 @@ fn evaluate(
     run_name: &str,
     expect: &Expect,
     events: &[TrainingEvent],
+    annotations: Option<&[crate::validation::RepAnnotation]>,
 ) -> (Vec<Check>, Expect) {
     let mut out = vec![];
     let mut check = |name: &str, pass: bool, detail: String| {
@@ -244,6 +268,36 @@ fn evaluate(
             MetricExpect { value, ..m.clone() }
         })
         .collect();
+    if let Some(truth) = annotations {
+        let e = crate::validation::evaluate(&reps, truth);
+        let figures = format!(
+            "precision {:.3}, recall {:.3} ({} matched of {} detected, {} annotated), count error {:.2} per 20; phase starts: n {}, mean {:.1} ms, SD {:.1} ms, max {:.1} ms",
+            e.precision,
+            e.recall,
+            e.matched,
+            e.detected,
+            e.annotated,
+            e.count_error_per_20,
+            e.boundary_n,
+            e.boundary_mean_ms,
+            e.boundary_sd_ms,
+            e.boundary_max_ms
+        );
+        if let Some(l) = &expect.labels {
+            check(
+                "labels",
+                e.precision >= l.precision_min && e.recall >= l.recall_min,
+                figures.clone(),
+            );
+        }
+        if let Some(b) = &expect.phase_boundary_ms {
+            check(
+                "phase_boundary_ms",
+                e.boundary_n > 0 && e.boundary_mean_ms <= b.mean_abs_max,
+                figures,
+            );
+        }
+    }
     if let Some(want) = &expect.sources {
         let measured: Vec<Vec<String>> = completed
             .iter()
@@ -313,6 +367,28 @@ pub fn run_manifest(manifest_path: &Path) -> Result<Report, String> {
             return Err(format!("{}: only pinned content is supported", g.session));
         }
         let library = ContentStore::library_from_snapshots(&training.snapshots)?;
+        let annotations = match g.annotations.as_deref() {
+            None => None,
+            Some(_) => {
+                let path = dir
+                    .join("sessions")
+                    .join(g.session.as_str())
+                    .join(crate::validation::ANNOTATIONS_FILE);
+                let f = crate::validation::load_annotations(&path).map_err(|e| {
+                    format!(
+                        "{e} (annotate the take first: docs/validation/PHASE2-OWNER-CHECKLIST.md)"
+                    )
+                })?;
+                if f.session != g.session {
+                    return Err(format!(
+                        "{}: annotations are for session {}",
+                        path.display(),
+                        f.session
+                    ));
+                }
+                Some(f.annotations)
+            }
+        };
         let mut runs = vec![("all sources".to_owned(), vec![], g.expect.clone())];
         runs.extend(
             g.masks
@@ -327,7 +403,13 @@ pub fn run_manifest(manifest_path: &Path) -> Result<Report, String> {
                 &library,
                 g.session.clone(),
             )?;
-            let (c, b) = evaluate(g.session.as_str(), &name, &expect, &out.events);
+            let (c, b) = evaluate(
+                g.session.as_str(),
+                &name,
+                &expect,
+                &out.events,
+                annotations.as_deref(),
+            );
             checks.extend(c);
             if i == 0 {
                 blessed.sessions[k].expect = b;

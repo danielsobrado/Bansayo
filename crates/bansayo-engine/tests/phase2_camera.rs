@@ -328,3 +328,118 @@ async fn stage_timings_reach_the_diagnostics_topic() {
     }
     engine.shutdown().await.unwrap();
 }
+
+/// D8 tooling end to end: a real-style take is recorded with inputs, a clap in it is found for
+/// video alignment, the take is promoted into a golden set, annotated, and `regress` evaluates
+/// counting (precision, recall at IoU ≥ 0.5) and phase boundaries against the annotations.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_take_is_promoted_annotated_and_evaluated() {
+    let dir = tempfile::tempdir().unwrap();
+    let frames = dir.path().join("frames");
+    let n = write_kicks(&frames);
+    // Frames 5..10 of each cycle: both wrists together above the head, a clap.
+    let rows: Vec<String> = std::fs::read_to_string(frames.join("landmarks.jsonl"))
+        .unwrap()
+        .lines()
+        .enumerate()
+        .map(|(k, line)| {
+            let mut row: Vec<Option<[f32; 3]>> = serde_json::from_str(line).unwrap();
+            if (5..10).contains(&k) {
+                let head = row[0].unwrap();
+                row[9] = Some([head[0], head[1] - 20.0, 0.9]);
+                row[10] = Some([head[0] + 1.0, head[1] - 20.0, 0.9]);
+            }
+            serde_json::to_string(&row).unwrap()
+        })
+        .collect();
+    assert_eq!(rows.len(), n);
+    std::fs::write(frames.join("landmarks.jsonl"), rows.join("\n") + "\n").unwrap();
+    let engine = engine(&yaml(dir.path(), &frames)).await;
+    let addr = engine.bound_addr();
+    athlete(addr, "ana", true).await;
+    let s = ok(addr, "POST", "training/sessions", json!({ "plan": { "kind": "technique", "technique": "taekwondo.dollyeo_chagi", "side": "right", "sets": 1, "reps": 2, "rest_s": 0 } })).await;
+    let id = s["session_id"].as_str().unwrap().to_owned();
+    ok(addr, "POST", "training/command", json!({ "command": "ack_safety", "args": { "content_refs": ["taekwondo.dollyeo_chagi@1"] } })).await;
+    wait_state(addr, 30, |s| s["phase"] == "ready").await;
+    ok(
+        addr,
+        "POST",
+        "training/command",
+        json!({ "command": "start" }),
+    )
+    .await;
+    wait_state(addr, 60, |s| s["phase"] == "completed").await;
+    // Stored and closed, recordings finalised.
+    let until = Instant::now() + Duration::from_secs(20);
+    while ok(addr, "GET", &format!("training/sessions/{id}"), Value::Null).await["session"]["status"]
+        == "active"
+        || !ok(addr, "GET", "state", Value::Null).await["recording"].is_null()
+    {
+        assert!(Instant::now() < until);
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    let reps = ok(
+        addr,
+        "GET",
+        &format!("training/sessions/{id}/reps"),
+        Value::Null,
+    )
+    .await;
+    engine.shutdown().await.unwrap();
+
+    let session_dir = dir.path().join("sessions").join(&id);
+    let claps = bansayo_engine::validation::claps(&session_dir).unwrap();
+    assert!(!claps.is_empty(), "no clap found");
+
+    let golden = dir.path().join("golden");
+    bansayo_engine::validation::promote(dir.path(), &id, &golden, "image-folder-30").unwrap();
+    // Annotations: the detected repetitions with every phase start 20 ms later.
+    let annotations: Vec<Value> = reps
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| {
+            let r = &r["repetition"];
+            let phases: Vec<Value> = r["phases"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|p| json!({ "phase": p["phase"], "t_start_us": p["t_start_us"].as_u64().unwrap() + 20_000, "t_end_us": p["t_end_us"] }))
+                .collect();
+            json!({ "schema_version": 1, "annotator": "test", "label": "taekwondo.dollyeo_chagi", "side": "right",
+                    "phases": phases, "strike_t_us": null, "quality": "positive" })
+        })
+        .collect();
+    assert_eq!(annotations.len(), 2);
+    std::fs::write(
+        golden.join("sessions").join(&id).join("annotations.json"),
+        serde_json::to_vec_pretty(&json!({ "schema": "bansayo.annotations/v1", "session": id, "annotations": annotations })).unwrap(),
+    )
+    .unwrap();
+    let manifest = golden.join("manifest.yaml");
+    let text = std::fs::read_to_string(&manifest).unwrap().replace(
+        "phase_boundary_ms: null",
+        "phase_boundary_ms: { mean_abs_max: 25 }",
+    );
+    let text = if text.contains("mean_abs_max") {
+        text
+    } else {
+        text.replace(
+            "    labels:",
+            "    phase_boundary_ms: { mean_abs_max: 25 }\n    labels:",
+        )
+    };
+    std::fs::write(&manifest, text).unwrap();
+    let report = bansayo_engine::regress::run_manifest(&manifest).unwrap();
+    let get = |name: &str| {
+        report
+            .checks
+            .iter()
+            .find(|c| c.name == name)
+            .unwrap_or_else(|| panic!("{name}: {:?}", report.checks))
+    };
+    assert!(get("labels").pass, "{:?}", get("labels"));
+    let b = get("phase_boundary_ms");
+    assert!(b.pass && b.detail.contains("mean 20.0 ms"), "{b:?}");
+    assert!(report.passed(), "{:?}", report.checks);
+}

@@ -16,4 +16,5 @@ pub mod sources;
 pub mod store;
 mod ticker;
 pub mod training;
+pub mod validation;
 pub use app::{EngineHandle, run, start};
