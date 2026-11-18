@@ -89,6 +89,10 @@ pub struct Expect {
     #[serde(default)]
     pub metrics: Vec<MetricExpect>,
     pub cues: Cues,
+    /// Devices contributing to each completed repetition's phase evidence, sorted (18 §3
+    /// Phase 1 criterion 3: a lost camera leaves every later repetition's evidence).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sources: Option<Vec<Vec<String>>>,
     /// Final session phase.
     pub ends: SessionPhase,
 }
@@ -240,6 +244,24 @@ fn evaluate(
             MetricExpect { value, ..m.clone() }
         })
         .collect();
+    if let Some(want) = &expect.sources {
+        let measured: Vec<Vec<String>> = completed
+            .iter()
+            .map(|r| {
+                let mut s: Vec<String> = r
+                    .repetition
+                    .phases
+                    .iter()
+                    .flat_map(|p| p.evidence.sources.iter().map(|d| d.to_string()))
+                    .collect();
+                s.sort();
+                s.dedup();
+                s
+            })
+            .collect();
+        check("sources", want == &measured, format!("{measured:?}"));
+        blessed.sources = Some(measured);
+    }
     let worst_cues = reps
         .iter()
         .map(|r| u32::from(r.cue.is_some()))

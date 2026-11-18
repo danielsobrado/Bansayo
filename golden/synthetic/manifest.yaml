@@ -180,6 +180,10 @@ sessions:
       grade: X
     cues:
       max_per_rep: 1
+    sources:
+    - [SIM-CAM1, SIM-CAM2, SIM-CAM3]
+    - [SIM-CAM1, SIM-CAM3]
+    - [SIM-CAM1, SIM-CAM3]
     ends: completed
   masks: []
 - session: 20261117T090914Z-ijcs
