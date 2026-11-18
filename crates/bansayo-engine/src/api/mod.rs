@@ -211,7 +211,10 @@ async fn fiducials(
     });
     match value {
         Some(data) => Json(ApiResponse::ok(data)).into_response(),
-        None => failure(ApiErrorCode::NotFound, "No fresh AprilTag observations for this camera."),
+        None => failure(
+            ApiErrorCode::NotFound,
+            "No fresh AprilTag observations for this camera.",
+        ),
     }
 }
 /// `PUT /cameras/{id}/settings` (14 §5.5): manual exposure and gain, applied by the capture thread

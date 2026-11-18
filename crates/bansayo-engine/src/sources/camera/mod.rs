@@ -7,8 +7,8 @@
 //! simulator's, so triangulation and the skeleton fit cannot tell them apart.
 pub mod capture;
 pub mod controls;
-pub mod pose;
 pub mod fiducial;
+pub mod pose;
 
 use crate::{
     config::{CameraSourceSpec, LiveCameraSpec},
@@ -29,7 +29,8 @@ use std::{
 
 /// Newest JPEG preview per camera, for the API.
 pub type Previews = Arc<RwLock<BTreeMap<DeviceId, bytes::Bytes>>>;
-pub type FiducialPreviews = Arc<RwLock<BTreeMap<DeviceId, (std::time::Instant, fiducial::Snapshot)>>>;
+pub type FiducialPreviews =
+    Arc<RwLock<BTreeMap<DeviceId, (std::time::Instant, fiducial::Snapshot)>>>;
 const PREVIEW_MAX_WIDTH: u32 = 640;
 const PREVIEW_PERIOD_US: u64 = 100_000;
 const REOPEN_AFTER: Duration = Duration::from_secs(2);
@@ -223,7 +224,7 @@ impl Source for CameraSource {
         let (fatal_tx, fatal_rx) = tokio::sync::oneshot::channel();
         {
             let (source, slots, stop, context) =
-                (self.clone(), slots, stop.clone(), context.clone());
+                (self.clone(), slots.clone(), stop.clone(), context.clone());
             std::thread::Builder::new()
                 .name(format!("pose-{}", self.spec.id))
                 .spawn(move || {
@@ -246,16 +247,20 @@ impl Source for CameraSource {
                 .map_err(|e| SourceError(e.to_string()))?;
         }
         if self.spec.fiducials.enabled && self.spec.cameras.iter().any(|c| c.fiducials) {
-            let (source, slots, stop, context) = (self.clone(), slots.clone(), stop.clone(), context.clone());
-            std::thread::Builder::new().name(format!("apriltag-{}", self.spec.id))
+            let (source, slots, stop, context) =
+                (self.clone(), slots.clone(), stop.clone(), context.clone());
+            std::thread::Builder::new()
+                .name(format!("apriltag-{}", self.spec.id))
                 .spawn(move || {
                     if let Err(message) = marker_loop(&source, &slots, &stop, &context) {
                         tracing::error!(source=%source.spec.id, %message, "AprilTag unavailable");
                         let _ = context.events.try_send(Ingest::Notice {
-                            code: "apriltag_unavailable".into(), message,
+                            code: "apriltag_unavailable".into(),
+                            message,
                         });
                     }
-                }).map_err(|e| SourceError(e.to_string()))?;
+                })
+                .map_err(|e| SourceError(e.to_string()))?;
         }
         tokio::select! {
             _ = context.cancel.cancelled() => Ok(()),
@@ -372,7 +377,8 @@ fn capture_loop(
                             if camera.fiducials {
                                 if let Ok(frame) = slots.frames[index].lock()
                                     && let Some(frame) = frame.as_ref()
-                                    && let Ok(mut target) = slots.marker_frames[index].lock() {
+                                    && let Ok(mut target) = slots.marker_frames[index].lock()
+                                {
                                     *target = Some(frame.clone());
                                     if let Ok(mut fresh) = slots.marker_fresh.lock() {
                                         *fresh = true;
@@ -568,7 +574,12 @@ pub fn landmarks_observation(
     }
 }
 
-fn marker_loop(source: &CameraSource, slots: &Slots, stop: &AtomicBool, context: &SourceContext) -> Result<(), String> {
+fn marker_loop(
+    source: &CameraSource,
+    slots: &Slots,
+    stop: &AtomicBool,
+    context: &SourceContext,
+) -> Result<(), String> {
     let mut native = fiducial::Native::open(&source.spec.fiducials)?;
     let n = source.spec.cameras.len();
     let mut next = 0;
@@ -578,25 +589,40 @@ fn marker_loop(source: &CameraSource, slots: &Slots, stop: &AtomicBool, context:
     while !stop.load(Ordering::Relaxed) {
         let taken = (0..n).find_map(|k| {
             let i = (next + k) % n;
-            if !source.spec.cameras[i].fiducials { return None; }
-            slots.marker_frames[i].lock().ok()?.take().map(|frame| (i, frame))
+            if !source.spec.cameras[i].fiducials {
+                return None;
+            }
+            slots.marker_frames[i]
+                .lock()
+                .ok()?
+                .take()
+                .map(|frame| (i, frame))
         });
         let Some((i, frame)) = taken else {
             let mut ready = slots.marker_fresh.lock().map_err(|e| e.to_string())?;
             if !*ready {
-                ready = slots.marker_wake.wait_timeout(ready, Duration::from_millis(50))
-                    .map_err(|e| e.to_string())?.0;
+                ready = slots
+                    .marker_wake
+                    .wait_timeout(ready, Duration::from_millis(50))
+                    .map_err(|e| e.to_string())?
+                    .0;
             }
             *ready = false;
             continue;
         };
         next = (i + 1) % n;
-        if last[i].is_some_and(|at| frame.t_us.saturating_sub(at) < period) { continue; }
+        if last[i].is_some_and(|at| frame.t_us.saturating_sub(at) < period) {
+            continue;
+        }
         last[i] = Some(frame.t_us);
         let started = source.timing.on().then(std::time::Instant::now);
         let tags = native.detect(&frame.image)?;
         if let Some(started) = started {
-            source.timing.record(crate::diagnostics::Stage::Fiducial, context.clock.now_us(), started.elapsed().as_micros() as u64);
+            source.timing.record(
+                crate::diagnostics::Stage::Fiducial,
+                context.clock.now_us(),
+                started.elapsed().as_micros() as u64,
+            );
         }
         let camera = &source.spec.cameras[i];
         let snapshot = fiducial::Snapshot {

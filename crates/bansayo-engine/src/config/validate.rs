@@ -304,7 +304,9 @@ pub(super) fn validate(config: Config) -> Result<Validated, Vec<Problem>> {
         c.err("processing_profiles", "not implemented in this build");
     }
     let (simulated, mut cameras, devices) = check_sources(&mut c, &config.sources);
-    for source in &mut cameras { source.fiducials = config.fiducials.clone(); }
+    for source in &mut cameras {
+        source.fiducials = config.fiducials.clone();
+    }
     let assignments = check_assignments(
         &mut c,
         &config.assignments,
@@ -330,16 +332,37 @@ fn check_fiducials(c: &mut Check, f: &FiducialsConfig, sources: &[SourceConfig])
         c.err("fiducials.family", "unsupported AprilTag family");
     }
     c.range("fiducials.max_detection_hz", f.max_detection_hz, 1.0, 240.0);
-    c.range("fiducials.min_decision_margin", f.min_decision_margin.into(), 0.0, 255.0);
-    if f.max_hamming > 2 { c.err("fiducials.max_hamming", "must be 0..2"); }
-    if f.allowed_ids.len() > 4096 { c.err("fiducials.allowed_ids", "too many marker ids"); }
+    c.range(
+        "fiducials.min_decision_margin",
+        f.min_decision_margin.into(),
+        0.0,
+        255.0,
+    );
+    if f.max_hamming > 2 {
+        c.err("fiducials.max_hamming", "must be 0..2");
+    }
+    if f.allowed_ids.len() > 4096 {
+        c.err("fiducials.allowed_ids", "too many marker ids");
+    }
     let mut seen = std::collections::BTreeSet::new();
     for id in &f.allowed_ids {
-        if !seen.insert(id) { c.err("fiducials.allowed_ids", format!("duplicate id {id}")); }
+        if !seen.insert(id) {
+            c.err("fiducials.allowed_ids", format!("duplicate id {id}"));
+        }
     }
     let selected = sources.iter().any(|s| matches!(s, SourceConfig::Camera(k) if k.enabled && k.cameras.iter().any(|cam| cam.fiducials)));
-    if selected && !f.enabled { c.err("fiducials.enabled", "enable the global detector or disable camera fiducials"); }
-    if f.enabled && !selected { c.err("fiducials.enabled", "no enabled camera requested AprilTag detection"); }
+    if selected && !f.enabled {
+        c.err(
+            "fiducials.enabled",
+            "enable the global detector or disable camera fiducials",
+        );
+    }
+    if f.enabled && !selected {
+        c.err(
+            "fiducials.enabled",
+            "no enabled camera requested AprilTag detection",
+        );
+    }
 }
 
 fn check_engine(c: &mut Check, e: &EngineConfig) {

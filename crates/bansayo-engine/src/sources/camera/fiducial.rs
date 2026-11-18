@@ -1,9 +1,14 @@
 //! Optional AprilTag 3 detector using the upstream C ABI at runtime.
-use std::{ffi::{c_int, c_void}, mem::size_of, path::Path, ptr::NonNull};
+use crate::config::FiducialsConfig;
 use image::{RgbImage, imageops::grayscale};
 use libloading::Library;
 use serde::Serialize;
-use crate::config::FiducialsConfig;
+use std::{
+    ffi::{c_int, c_void},
+    mem::size_of,
+    path::Path,
+    ptr::NonNull,
+};
 
 type Create = unsafe extern "C" fn() -> *mut c_void;
 type Destroy = unsafe extern "C" fn(*mut c_void);
@@ -12,13 +17,28 @@ type Detect = unsafe extern "C" fn(*mut c_void, *mut GrayHeader) -> *mut ZArray;
 type Free = unsafe extern "C" fn(*mut ZArray);
 
 #[repr(C)]
-struct GrayHeader { width: c_int, height: c_int, stride: c_int, buf: *mut u8 }
+struct GrayHeader {
+    width: c_int,
+    height: c_int,
+    stride: c_int,
+    buf: *mut u8,
+}
 #[repr(C)]
-struct ZArray { el_sz: usize, size: c_int, alloc: c_int, data: *mut u8 }
+struct ZArray {
+    el_sz: usize,
+    size: c_int,
+    alloc: c_int,
+    data: *mut u8,
+}
 #[repr(C)]
 struct RawTag {
-    family: *mut c_void, id: c_int, hamming: c_int, decision_margin: f32,
-    homography: *mut c_void, center: [f64; 2], corners: [[f64; 2]; 4],
+    family: *mut c_void,
+    id: c_int,
+    hamming: c_int,
+    decision_margin: f32,
+    homography: *mut c_void,
+    center: [f64; 2],
+    corners: [[f64; 2]; 4],
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -38,7 +58,12 @@ pub struct Snapshot {
     pub tags: Vec<Tag>,
 }
 
-struct Symbols { destroy_detector: Destroy, destroy_family: Destroy, detect: Detect, free: Free }
+struct Symbols {
+    destroy_detector: Destroy,
+    destroy_family: Destroy,
+    detect: Detect,
+    free: Free,
+}
 pub struct Native {
     detector: NonNull<c_void>,
     family: NonNull<c_void>,
@@ -63,10 +88,17 @@ fn family_symbols(name: &str) -> Result<(&'static [u8], &'static [u8]), String> 
 
 impl Native {
     pub fn open(config: &FiducialsConfig) -> Result<Self, String> {
-        let default_name = if cfg!(windows) { "apriltag.dll" }
-            else if cfg!(target_os = "macos") { "libapriltag.dylib" }
-            else { "libapriltag.so" };
-        let path = config.library_path.as_deref().unwrap_or(Path::new(default_name));
+        let default_name = if cfg!(windows) {
+            "apriltag.dll"
+        } else if cfg!(target_os = "macos") {
+            "libapriltag.dylib"
+        } else {
+            "libapriltag.so"
+        };
+        let path = config
+            .library_path
+            .as_deref()
+            .unwrap_or(Path::new(default_name));
         let library = unsafe { Library::new(path) }
             .map_err(|e| format!("Cannot load AprilTag library {}: {e}", path.display()))?;
         let create: Create = symbol(&library, b"apriltag_detector_create\0")?;
@@ -77,7 +109,8 @@ impl Native {
         let (make, drop_family) = family_symbols(&config.family)?;
         let make: Create = symbol(&library, make)?;
         let destroy_family: Destroy = symbol(&library, drop_family)?;
-        let detector = NonNull::new(unsafe { create() }).ok_or("AprilTag detector creation failed")?;
+        let detector =
+            NonNull::new(unsafe { create() }).ok_or("AprilTag detector creation failed")?;
         let family = match NonNull::new(unsafe { make() }) {
             Some(v) => v,
             None => {
@@ -85,11 +118,24 @@ impl Native {
                 return Err("AprilTag family creation failed".into());
             }
         };
-        unsafe { add_family(detector.as_ptr(), family.as_ptr(), config.max_hamming.into()) };
+        unsafe {
+            add_family(
+                detector.as_ptr(),
+                family.as_ptr(),
+                config.max_hamming.into(),
+            )
+        };
         Ok(Self {
-            detector, family,
-            symbols: Symbols { destroy_detector, destroy_family, detect, free },
-            config: config.clone(), _library: library,
+            detector,
+            family,
+            symbols: Symbols {
+                destroy_detector,
+                destroy_family,
+                detect,
+                free,
+            },
+            config: config.clone(),
+            _library: library,
         })
     }
 
@@ -97,14 +143,20 @@ impl Native {
         let (width, height) = input.dimensions();
         let mut gray = grayscale(input);
         let mut header = GrayHeader {
-            width: width as c_int, height: height as c_int, stride: width as c_int,
+            width: width as c_int,
+            height: height as c_int,
+            stride: width as c_int,
             buf: gray.as_mut().as_mut_ptr(),
         };
         let raw = unsafe { (self.symbols.detect)(self.detector.as_ptr(), &mut header) };
         let ptr = NonNull::new(raw).ok_or("AprilTag returned a null result")?;
-        let detections = Batch { ptr, free: self.symbols.free };
+        let detections = Batch {
+            ptr,
+            free: self.symbols.free,
+        };
         let array = unsafe { detections.ptr.as_ref() };
-        if array.el_sz != size_of::<*const RawTag>() || !(0..=4096).contains(&array.size)
+        if array.el_sz != size_of::<*const RawTag>()
+            || !(0..=4096).contains(&array.size)
             || (array.size > 0 && array.data.is_null())
         {
             return Err("Invalid AprilTag detection array".into());
@@ -112,14 +164,23 @@ impl Native {
         let mut tags = Vec::new();
         for i in 0..array.size as usize {
             let pointer = unsafe { *((array.data as *const *const RawTag).add(i)) };
-            let Some(raw) = (unsafe { pointer.as_ref() }) else { continue };
-            if raw.id < 0 || !(0..=2).contains(&raw.hamming) { continue; }
+            let Some(raw) = (unsafe { pointer.as_ref() }) else {
+                continue;
+            };
+            if raw.id < 0 || !(0..=2).contains(&raw.hamming) {
+                continue;
+            }
             let corners = raw.corners.map(|c| [c[0] as f32, c[1] as f32]);
             if corners.iter().any(|c| {
-                !c[0].is_finite() || !c[1].is_finite()
-                    || c[0] < -8.0 || c[1] < -8.0
-                    || c[0] > width as f32 + 8.0 || c[1] > height as f32 + 8.0
-            }) { continue; }
+                !c[0].is_finite()
+                    || !c[1].is_finite()
+                    || c[0] < -8.0
+                    || c[1] < -8.0
+                    || c[0] > width as f32 + 8.0
+                    || c[1] > height as f32 + 8.0
+            }) {
+                continue;
+            }
             let tag = Tag {
                 family: self.config.family.clone(),
                 id: raw.id as u32,
@@ -127,7 +188,9 @@ impl Native {
                 hamming: raw.hamming as u8,
                 decision_margin: raw.decision_margin,
             };
-            if accepts(&self.config, &tag) { tags.push(tag); }
+            if accepts(&self.config, &tag) {
+                tags.push(tag);
+            }
         }
         tags.sort_by_key(|tag| tag.id);
         Ok(tags)
@@ -141,8 +204,15 @@ fn accepts(config: &FiducialsConfig, tag: &Tag) -> bool {
         && (config.allowed_ids.is_empty() || config.allowed_ids.contains(&tag.id))
 }
 
-struct Batch { ptr: NonNull<ZArray>, free: Free }
-impl Drop for Batch { fn drop(&mut self) { unsafe { (self.free)(self.ptr.as_ptr()) } } }
+struct Batch {
+    ptr: NonNull<ZArray>,
+    free: Free,
+}
+impl Drop for Batch {
+    fn drop(&mut self) {
+        unsafe { (self.free)(self.ptr.as_ptr()) }
+    }
+}
 impl Drop for Native {
     fn drop(&mut self) {
         unsafe {
@@ -159,10 +229,27 @@ mod tests {
     fn quality_and_registry_filter() {
         let mut config = FiducialsConfig::default();
         config.allowed_ids.push(100);
-        let tag = Tag { family: "tag36h11".into(), id: 100, corners_px: [[0.0; 2]; 4],
-            hamming: 0, decision_margin: 40.0 };
+        let tag = Tag {
+            family: "tag36h11".into(),
+            id: 100,
+            corners_px: [[0.0; 2]; 4],
+            hamming: 0,
+            decision_margin: 40.0,
+        };
         assert!(accepts(&config, &tag));
-        assert!(!accepts(&config, &Tag { id: 101, ..tag.clone() }));
-        assert!(!accepts(&config, &Tag { decision_margin: 10.0, ..tag }));
+        assert!(!accepts(
+            &config,
+            &Tag {
+                id: 101,
+                ..tag.clone()
+            }
+        ));
+        assert!(!accepts(
+            &config,
+            &Tag {
+                decision_margin: 10.0,
+                ..tag
+            }
+        ));
     }
 }

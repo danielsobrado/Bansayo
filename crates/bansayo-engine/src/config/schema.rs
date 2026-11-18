@@ -74,8 +74,15 @@ pub struct FiducialsConfig {
 }
 impl Default for FiducialsConfig {
     fn default() -> Self {
-        Self { enabled: false, library_path: None, family: "tag36h11".into(), max_detection_hz: 15.0,
-            max_hamming: 1, min_decision_margin: 30.0, allowed_ids: vec![] }
+        Self {
+            enabled: false,
+            library_path: None,
+            family: "tag36h11".into(),
+            max_detection_hz: 15.0,
+            max_hamming: 1,
+            min_decision_margin: 30.0,
+            allowed_ids: vec![],
+        }
     }
 }
 
