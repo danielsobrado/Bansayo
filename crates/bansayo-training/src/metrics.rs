@@ -1,11 +1,13 @@
 //! Metric kinds, the grade rule (05 §8–9) and comparability classes (12 §5.3).
 use crate::content::compile::{CAtom, CMetric, Obs};
-use crate::content::types::{Agg, MetricKind, Op, Window, WindowName};
+use crate::content::types::{
+    Agg, MetricDef, MetricKind, Op, UseForm, ViewName, Window, WindowName,
+};
 use crate::evidence::{combine, fidelity, reason, unavailable};
 use crate::observables::{Lengths, ObservableFrame};
 use bansayo_contracts::{
-    CalibrationKind, CalibrationState, Evidence, Grade, MethodId, MetricMeasurement, Provenance,
-    Reason,
+    CalibrationKind, CalibrationState, Evidence, Grade, MethodId, MetricMeasurement, PlanarView,
+    Provenance, Reason,
 };
 use std::collections::BTreeMap;
 
@@ -41,6 +43,8 @@ pub struct RepWindow<'a> {
     pub strike: Option<u64>,
     /// Observables whose evidence stands for phase events (the technique's required ones).
     pub event_inputs: Vec<Obs>,
+    /// View of the camera image-plane observables came from (04 §4), if any.
+    pub planar_view: Option<PlanarView>,
 }
 
 impl RepWindow<'_> {
@@ -135,10 +139,112 @@ fn x(
 
 fn sample(f: &ObservableFrame, obs: &Obs) -> Option<(f64, Option<f64>, Evidence)> {
     let v = f.get(obs.index?);
+    // Image-plane positions and speeds carry only the normalised form (04 §6.2).
+    let x = match v.value {
+        Some(x) => x,
+        None if v.evidence.method == MethodId::ImagePlane => v.norm?,
+        None => return None,
+    };
     Some((
-        v.value? * obs.sign,
+        x * obs.sign,
         v.norm.map(|n| n * obs.sign),
         v.evidence.clone(),
+    ))
+}
+
+/// How a metric realised by `image_plane` is graded at profile `basic` (05 §10.6, 22 §3).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Planar {
+    /// Suppressed with this reason.
+    Suppressed(Reason),
+    /// Graded normally up to B, or C (indicative) at a low camera rate; reasons for the record.
+    Graded {
+        cap: Grade,
+        form: Option<UseForm>,
+        reasons: Vec<Reason>,
+    },
+}
+
+fn view_name(v: PlanarView) -> Option<ViewName> {
+    match v {
+        PlanarView::Frontal => Some(ViewName::Frontal),
+        PlanarView::Lateral => Some(ViewName::Lateral),
+        PlanarView::Oblique => Some(ViewName::Oblique),
+        PlanarView::Unknown => None,
+    }
+}
+
+/// The image-plane rule for metric `d` at input rate `rate` and camera view `view`. Reasons are
+/// worded for the readiness text of 22 §5 ("status (reason)").
+pub fn planar_rule(d: &MetricDef, rate: Option<f64>, view: Option<PlanarView>) -> Planar {
+    let g = &d.gates;
+    if let (Some(min), Some(r)) = (g.min_rate_hz, rate)
+        && r < min * 0.95
+    {
+        return Planar::Suppressed(reason(
+            "rate_too_low",
+            Some(&d.id),
+            "sampling rate insufficient",
+        ));
+    }
+    if let Some(gate) = &g.image_plane {
+        if !view
+            .and_then(view_name)
+            .is_some_and(|v| gate.views.contains(&v))
+        {
+            return Planar::Suppressed(reason(
+                "view_unsuitable",
+                Some(&d.id),
+                "camera view unsuitable for this measurement",
+            ));
+        }
+        let mut reasons = vec![];
+        if gate.use_form == UseForm::Norm {
+            reasons.push(reason("normalised_only", Some(&d.id), "body-relative only"));
+        }
+        if g.calibration.contains(&CalibrationKind::FloorPlane) {
+            reasons.push(reason(
+                "calibration_missing",
+                Some("floor_plane"),
+                "no floor calibration",
+            ));
+        } else {
+            reasons.push(reason("estimated", None, "single camera"));
+        }
+        return Planar::Graded {
+            cap: Grade::B,
+            form: Some(gate.use_form),
+            reasons,
+        };
+    }
+    if g.grade_a_methods.contains(&MethodId::ImagePlane)
+        || g.grade_b_methods.contains(&MethodId::ImagePlane)
+    {
+        // 22 §3.1: phase durations are indicative at 30 fps and estimated at 60 fps; the line
+        // is half the rate grade A needs.
+        if let (Some(need), Some(r)) = (g.rate_for_a_hz, rate)
+            && r < need * 0.5
+        {
+            return Planar::Graded {
+                cap: Grade::C,
+                form: None,
+                reasons: vec![reason(
+                    "camera_rate",
+                    Some(&d.id),
+                    &format!("camera rate {r:.0} fps"),
+                )],
+            };
+        }
+        return Planar::Graded {
+            cap: Grade::B,
+            form: None,
+            reasons: vec![reason("estimated", None, "single camera")],
+        };
+    }
+    Planar::Suppressed(reason(
+        "needs_calibrated_cameras",
+        Some(&d.id),
+        "needs two calibrated cameras",
     ))
 }
 
@@ -448,6 +554,22 @@ pub fn measure(
         ));
     }
     let class = class_for(ev.method);
+    let planar = (ev.method == MethodId::ImagePlane).then(|| planar_rule(d, rate, w.planar_view));
+    match &planar {
+        Some(Planar::Suppressed(r)) => {
+            // An input gap is the more specific reason; otherwise the planar one replaces the
+            // world gates (calibration and method), which do not apply to one camera.
+            let gap = why.iter().find(|r| r.code == "input_gap").cloned();
+            return x(m, None, &d.unit, ev, vec![gap.unwrap_or(r.clone())], class);
+        }
+        Some(Planar::Graded { .. }) => why.retain(|r| {
+            !matches!(
+                r.code.as_str(),
+                "calibration_missing" | "calibration_stale" | "method_not_accepted" | "model_fill"
+            )
+        }),
+        None => {}
+    }
     if !why.is_empty() {
         return x(m, None, &d.unit, ev, why, class);
     }
@@ -510,6 +632,23 @@ pub fn measure(
         .and_then(|x| x.min_confidence)
         .unwrap_or(0.4);
     let conf = ev.confidence.map_or(1.0, f64::from);
+    if let Some(Planar::Graded { cap, form, reasons }) = planar {
+        let grade = if conf >= min_b { cap } else { Grade::C };
+        return MetricMeasurement {
+            metric: m.reference.clone(),
+            value: if form == Some(UseForm::Norm) {
+                None
+            } else {
+                Some(value)
+            },
+            norm,
+            unit: d.unit.clone(),
+            grade,
+            evidence: ev,
+            comparability_class: class,
+            reasons,
+        };
+    }
     let capped = gates
         .rate_for_a_hz
         .zip(rate)

@@ -2,7 +2,7 @@
  * Display of training values. Unit conversion and number formatting are the only arithmetic the
  * UI performs on measurements (martial-arts 10 §4); grades, scores and cues come from the engine.
  */
-import type { Grade, MetricMeasurement, TextParam, TextRef } from "@contracts";
+import type { Grade, MetricMeasurement, Reason, TextParam, TextRef } from "@contracts";
 import { EM_DASH, radToDeg } from "./format";
 
 /** Grade wording (17 §4.2); shape and text, never colour alone. */
@@ -57,9 +57,41 @@ export function describeMeasurement(m: MetricMeasurement): {
   grade: { label: string; mark: string };
   assessed: boolean;
 } {
-  const assessed = m.grade !== "X" && m.value !== null;
-  const v = assessed ? formatValue(m.value, m.unit) : { text: EM_DASH, unit: "" };
+  // One camera gives some measurements only relative to body size (`value` null, `norm` set).
+  const normalisedOnly = m.grade !== "X" && m.value === null && m.norm !== null;
+  const assessed = m.grade !== "X" && (m.value !== null || normalisedOnly);
+  const v = !assessed
+    ? { text: EM_DASH, unit: "" }
+    : normalisedOnly
+      ? { text: (m.norm as number).toFixed(2), unit: "body-relative" }
+      : formatValue(m.value, m.unit);
   return { value: v.text, unit: v.unit, grade: gradeOf(m.grade), assessed };
+}
+
+/** Status words of 22 §2 by best attainable grade. */
+const STATUS: Record<Grade, string> = {
+  A: "available",
+  B: "estimated",
+  C: "indicative",
+  X: "unavailable",
+};
+
+/**
+ * One line of the readiness text (22 §5): `label: status (first reason).` The engine decides
+ * availability and gives the reasons; this only words them. A body-relative-only value reads
+ * "estimated, body-relative only", and a quantity withheld for its sampling rate "not reported".
+ */
+export function readinessPhrase(label: string, grade: string, reasons: Reason[]): string {
+  let status = Object.hasOwn(STATUS, grade) ? STATUS[grade as Grade] : grade;
+  let rest = reasons;
+  if (rest[0]?.code === "normalised_only") {
+    status += `, ${rest[0].message}`;
+    rest = rest.slice(1);
+  } else if (grade === "X" && rest[0]?.code === "rate_too_low") {
+    status = "not reported";
+  }
+  const why = grade === "A" ? undefined : rest[0]?.message;
+  return `${label}: ${status}${why ? ` (${why})` : ""}.`;
 }
 
 function formatParam(p: TextParam | number | string): string {

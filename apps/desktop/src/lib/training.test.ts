@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MetricMeasurement } from "@contracts";
-import { contentId, describeMeasurement, formatValue, gradeOf, resolveText } from "./training";
+import { contentId, describeMeasurement, formatValue, gradeOf, readinessPhrase, resolveText } from "./training";
 
 const m = (over: Partial<MetricMeasurement>): MetricMeasurement => ({
   metric: "kick.total_time@1",
@@ -39,5 +39,37 @@ describe("training display", () => {
     ).toBe("Turned 15° less.");
     expect(resolveText("missing.key", {}, texts)).toBe("missing.key");
     expect(contentId("kick.total_time@1")).toBe("kick.total_time");
+  });
+});
+
+const r = (code: string, message: string) => ({ code, subject: null, message });
+
+describe("readiness text (22 §5)", () => {
+  it("words the one-webcam roundhouse readiness from grades and reasons", () => {
+    expect(readinessPhrase("Repetitions", "A", [])).toBe("Repetitions: available.");
+    expect(readinessPhrase("Phase timing", "C", [r("camera_rate", "camera rate 30 fps")])).toBe(
+      "Phase timing: indicative (camera rate 30 fps).",
+    );
+    expect(
+      readinessPhrase("Kick height", "B", [
+        r("normalised_only", "body-relative only"),
+        r("calibration_missing", "no floor calibration"),
+      ]),
+    ).toBe("Kick height: estimated, body-relative only (no floor calibration).");
+    expect(readinessPhrase("Hip rotation", "X", [r("needs_calibrated_cameras", "needs two calibrated cameras")])).toBe(
+      "Hip rotation: unavailable (needs two calibrated cameras).",
+    );
+    expect(readinessPhrase("Support-foot pivot", "X", [r("detector_no_feet", "pose model has no foot points")])).toBe(
+      "Support-foot pivot: unavailable (pose model has no foot points).",
+    );
+    expect(readinessPhrase("Peak foot speed", "X", [r("rate_too_low", "sampling rate insufficient")])).toBe(
+      "Peak foot speed: not reported (sampling rate insufficient).",
+    );
+  });
+
+  it("shows body-relative values when only the normalised form exists", () => {
+    const d = describeMeasurement(m({ value: null, norm: 0.734, grade: "B", unit: "m" }));
+    expect(d).toMatchObject({ value: "0.73", unit: "body-relative", assessed: true });
+    expect(describeMeasurement(m({ value: null, norm: null, grade: "X" })).assessed).toBe(false);
   });
 });

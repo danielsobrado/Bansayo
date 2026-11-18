@@ -28,6 +28,7 @@ fn plan(sets: u32, reps: u32, rest_s: u32, demo: bool) -> CompiledPlan {
             max_reps_per_set: 20,
             max_gap_us: 80_000,
             instructions: vec!["instr.kick.clear_space".into()],
+            start_stance: None,
             required: [req("left"), req("right")],
         },
     }
@@ -476,4 +477,58 @@ fn property_any_command_sequence_leaves_a_defined_state() {
             }
         }
     }
+}
+
+/// 06 §3: with a start stance that cannot be assessed, a set waits for 500 ms of stillness.
+#[test]
+fn start_stance_gate_falls_back_to_stillness() {
+    let mut p = plan(1, 2, 0, false);
+    p.item.start_stance = Some("taekwondo.gyeorugi_junbi".into());
+    let mut r = Run::new(p, true).active();
+    assert_eq!(r.sub(), Some(SubState::WaitingStance));
+    // Moving: no arming, and movement is not counted.
+    r.e.set_still(false);
+    r.wait(800, true);
+    r.activity();
+    assert_eq!(r.sub(), Some(SubState::WaitingStance));
+    r.e.set_still(true);
+    r.wait(300, true);
+    assert_eq!(r.sub(), Some(SubState::WaitingStance));
+    r.wait(300, true);
+    assert_eq!(r.sub(), Some(SubState::Armed));
+    let ready = r
+        .events
+        .iter()
+        .find(|e| e.event_type == "stance_ready")
+        .unwrap();
+    assert_eq!(ready.data["assessed"], false);
+    assert_eq!(ready.data["rule"], "stillness");
+}
+
+/// 08 §10: tracking lost for 3 s pauses; observables back for 500 ms resume without a command.
+#[test]
+fn a_tracking_loss_pause_resumes_when_tracking_returns() {
+    let mut r = Run::new(plan(1, 3, 0, false), true).active();
+    assert_eq!(r.sub(), Some(SubState::Armed));
+    r.wait(1100, false);
+    assert_eq!(r.sub(), Some(SubState::TrackingLost));
+    r.wait(3000, false);
+    assert_eq!(r.e.phase(), SessionPhase::Paused);
+    r.wait(300, true);
+    assert_eq!(r.e.phase(), SessionPhase::Paused);
+    r.wait(300, true);
+    assert_eq!(r.e.phase(), SessionPhase::Active);
+    assert_eq!(r.sub(), Some(SubState::Armed));
+    let resumed = r
+        .events
+        .iter()
+        .rfind(|e| e.event_type == "session_resumed")
+        .unwrap();
+    assert_eq!(resumed.data["cause"], "tracking_restored");
+    // A pause by command does not end by itself.
+    assert!(r.cmd(TrainingCommand::Pause));
+    r.wait(1000, true);
+    assert_eq!(r.e.phase(), SessionPhase::Paused);
+    assert!(r.cmd(TrainingCommand::Resume));
+    assert_eq!(r.e.phase(), SessionPhase::Active);
 }

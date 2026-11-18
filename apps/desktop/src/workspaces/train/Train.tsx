@@ -12,7 +12,7 @@ import { contentCache, queryCache, useQuery } from "../../engine/queries";
 import { observablesStore, trainingEvents, trainingStore } from "../../engine/training";
 import { paths, trainingActions } from "../../engine/trainingActions";
 import { formatDurationUs } from "../../lib/format";
-import { contentId, formatValue, resolveText } from "../../lib/training";
+import { contentId, formatValue, readinessPhrase, resolveText } from "../../lib/training";
 import { Button } from "../../ui/Button";
 import { CapabilityBadge } from "../../ui/CapabilityBadge";
 import { CueBanner } from "../../ui/CueBanner";
@@ -360,13 +360,17 @@ function LiveSession({ training, state }: { training: TrainingState; state: Syst
                   </Button>
                 </>
               )}
-              <h2>Metrics on this setup</h2>
-              <ul className={styles.gates}>
+              <h2>What this setup measures</h2>
+              <ul className={styles.gates} aria-label="Measurements on this setup">
+                <li>
+                  {readinessPhrase(
+                    "Repetitions",
+                    training.readiness.find((g) => g.gate === "tracking_minimum")?.state === "pass" ? "A" : "X",
+                    training.readiness.find((g) => g.gate === "tracking_minimum")?.reasons ?? [],
+                  )}
+                </li>
                 {training.metric_availability.map((m) => (
-                  <li key={m.metric}>
-                    {nameOf(index, m.metric)}: <strong>{m.best_grade === "X" ? "not assessed" : `best grade ${m.best_grade}`}</strong>
-                    {m.best_grade === "X" && <span className={styles.muted}> — {m.reasons.map((r) => r.message).join(" ")}</span>}
-                  </li>
+                  <li key={m.metric}>{readinessPhrase(nameOf(index, m.metric), m.best_grade, m.reasons)}</li>
                 ))}
               </ul>
             </section>

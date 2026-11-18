@@ -25,6 +25,10 @@ pub struct ItemPlan {
     pub max_reps_per_set: u32,
     pub max_gap_us: u64,
     pub instructions: Vec<String>,
+    /// The technique's start stance. Stance geometry needs world keypoints and no stance
+    /// definition ships yet, so the gate is 500 ms of stillness and the stance is reported as
+    /// not assessed (06 §3).
+    pub start_stance: Option<String>,
     /// Required observables per active side `[left, right]`, as catalogue indices.
     pub required: [Vec<Option<usize>>; 2],
 }
@@ -72,6 +76,8 @@ pub struct Rejected {
 pub const BETWEEN_REPS_US: u64 = 1_000_000;
 pub const ARMED_LOSS_US: u64 = 1_000_000;
 pub const RESTORE_US: u64 = 500_000;
+/// Stillness that replaces the start-stance gate (06 §3).
+pub const STILL_US: u64 = 500_000;
 
 #[derive(Debug, Clone)]
 pub struct ExerciseEngine {
@@ -100,6 +106,9 @@ pub struct ExerciseEngine {
     lost_since: Option<u64>,
     back_since: Option<u64>,
     missing_since: Option<u64>,
+    still_since: Option<u64>,
+    /// The current pause was caused by tracking loss and ends when tracking returns (08 §10).
+    paused_by_loss: bool,
     space_confirmed: bool,
     strikes: u32,
     duration_notice: bool,
@@ -157,6 +166,8 @@ impl ExerciseEngine {
             lost_since: None,
             back_since: None,
             missing_since: None,
+            still_since: None,
+            paused_by_loss: false,
             space_confirmed: false,
             strikes: 0,
             duration_notice: false,
@@ -348,17 +359,31 @@ impl ExerciseEngine {
             self.rev += 1;
         }
         let mut out = self.readiness_transition();
+        out.extend(self.stance_gate());
         out.extend(self.tracking());
         out.extend(self.tick(f.t_us));
         out
     }
 
     fn tracking(&mut self) -> Vec<TrainingEvent> {
+        let a = self.available.clone().unwrap_or_default();
+        let all = !a.is_empty() && a.iter().all(|x| *x);
+        // 08 §10: after an automatic pause the session resumes when the observables return.
+        if self.phase == SessionPhase::Paused && self.paused_by_loss {
+            if !all {
+                self.back_since = None;
+                return vec![];
+            }
+            let since = *self.back_since.get_or_insert(self.now);
+            if self.now - since < RESTORE_US {
+                return vec![];
+            }
+            self.back_since = None;
+            return self.resume("tracking_restored");
+        }
         if self.phase != SessionPhase::Active || !self.set_open {
             return vec![];
         }
-        let a = self.available.clone().unwrap_or_default();
-        let all = !a.is_empty() && a.iter().all(|x| *x);
         let none = !a.iter().any(|x| *x);
         let missing: Vec<String> = self
             .required()
@@ -422,6 +447,41 @@ impl ExerciseEngine {
         self.set_sub(SubState::TrackingLost);
         self.phase_id = None;
         vec![self.event("tracking_lost", json!({ "missing": missing }))]
+    }
+
+    /// Whether the segmenter's driver is below its end threshold now (06 §3 stillness).
+    pub fn set_still(&mut self, still: bool) {
+        self.still_since = if still {
+            Some(self.still_since.unwrap_or(self.now))
+        } else {
+            None
+        };
+    }
+
+    /// The set's first armed state: the start-stance gate when the technique has a start stance.
+    fn ready_sub(&self) -> SubState {
+        if self.plan.item.start_stance.is_some() {
+            SubState::WaitingStance
+        } else {
+            SubState::Armed
+        }
+    }
+
+    /// `waiting_stance` → `armed` after 500 ms of stillness; the stance itself is not assessed.
+    fn stance_gate(&mut self) -> Vec<TrainingEvent> {
+        if self.phase != SessionPhase::Active || self.sub != Some(SubState::WaitingStance) {
+            return vec![];
+        }
+        match self.still_since {
+            Some(s) if self.now.saturating_sub(s) >= STILL_US => {
+                self.set_sub(SubState::Armed);
+                vec![self.event(
+                    "stance_ready",
+                    json!({ "stance": self.plan.item.start_stance, "assessed": false, "rule": "stillness" }),
+                )]
+            }
+            _ => vec![],
+        }
     }
 
     fn set_sub(&mut self, s: SubState) {
@@ -509,7 +569,7 @@ impl ExerciseEngine {
         self.sub = Some(if self.plan.item.has_demo && self.set_index == 1 {
             SubState::Prompting
         } else {
-            SubState::Armed
+            self.ready_sub()
         });
         self.sub_t = self.now;
         vec![self.event(
@@ -572,7 +632,21 @@ impl ExerciseEngine {
         vec![self.event(kind, summary)]
     }
 
+    fn resume(&mut self, cause: &str) -> Vec<TrainingEvent> {
+        let (back, elapsed) = self.paused_from.take().unwrap_or((SessionPhase::Active, 0));
+        self.paused_by_loss = false;
+        self.enter(back);
+        // Timers continue where they stopped.
+        self.phase_t = self.now - elapsed.min(self.now);
+        if self.sub == Some(SubState::TrackingLost) {
+            self.lost_since = None;
+            self.set_sub(SubState::Armed);
+        }
+        vec![self.event("session_resumed", json!({ "cause": cause }))]
+    }
+
     fn pause(&mut self, cause: &str) -> Vec<TrainingEvent> {
+        self.paused_by_loss = cause == "tracking_lost";
         self.paused_from = Some((self.phase, self.now - self.phase_t));
         self.enter(SessionPhase::Paused);
         vec![self.event("session_paused", json!({ "cause": cause }))]
@@ -747,16 +821,7 @@ impl ExerciseEngine {
                 self.enter(P::Countdown);
             }
             C::Pause => out.extend(self.pause("command")),
-            C::Resume => {
-                let (back, elapsed) = self.paused_from.take().unwrap_or((P::Active, 0));
-                self.enter(back);
-                // Timers continue where they stopped.
-                self.phase_t = self.now - elapsed.min(self.now);
-                if self.sub == Some(SubState::TrackingLost) {
-                    self.set_sub(SubState::Armed);
-                }
-                out.push(self.event("session_resumed", json!({})));
-            }
+            C::Resume => out.extend(self.resume("command")),
             C::SkipRest => {
                 out.push(self.event("rest_ended", json!({ "skipped": true })));
                 self.enter(P::Active);
@@ -778,7 +843,7 @@ impl ExerciseEngine {
                 }
                 out.extend(self.start_set());
             }
-            C::SkipDemo => self.set_sub(SubState::Armed),
+            C::SkipDemo => self.set_sub(self.ready_sub()),
             C::SetSide => {
                 if let Some(s) = args.side {
                     self.side = s;

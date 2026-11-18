@@ -827,6 +827,8 @@ pub struct Observer {
     /// Image-plane realisations are served only while this holds: at profile `basic` (08 §10,
     /// "only one camera left"). A multi-view rig's momentary loss of the world body stays a gap.
     planar_allowed: bool,
+    /// View of the planar body observables were last served from.
+    planar_view: Option<PlanarView>,
     /// Per camera: smoothed mean keypoint confidence and the floor captured with its reference.
     planar: std::collections::BTreeMap<DeviceId, PlanarTrack>,
     scalars: Vec<ScalarState>,
@@ -890,6 +892,7 @@ impl Observer {
             cutoffs,
             planar_camera,
             planar_allowed: true,
+            planar_view: None,
             planar: Default::default(),
             scalars,
             points,
@@ -906,6 +909,11 @@ impl Observer {
         entry(index)
             .norm
             .map(|n| value / self.geometry.lengths.by(n))
+    }
+
+    /// View of the camera image-plane observables are served from, while they are.
+    pub fn planar_view(&self) -> Option<PlanarView> {
+        self.planar_view
     }
 
     /// Whether image-plane realisations may stand in for a missing world body.
@@ -978,6 +986,10 @@ impl Observer {
     /// Advances by one solver tick and returns every observable (latest held between inputs).
     pub fn step(&mut self, sample: &MotionSample) -> ObservableFrame {
         let input = self.input(sample);
+        self.planar_view = match input {
+            Input::Planar(p) => Some(p.body.view),
+            _ => None,
+        };
         let (values, points) = raw(input, &self.geometry);
         let mut fresh_any = false;
         let mut row_values = values.clone();

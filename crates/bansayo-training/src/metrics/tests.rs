@@ -89,6 +89,7 @@ fn window(frames: &[ObservableFrame]) -> RepWindow<'_> {
             None,
             true,
         )],
+        planar_view: None,
     }
 }
 
@@ -144,7 +145,7 @@ fn every_suppression_gate_yields_x_with_a_reason() {
     let img = frames("ankle_height.left", |_| 0.1, ev(MethodId::ImagePlane, 0.9));
     assert_eq!(
         code(measure(&m, &window(&img), &ctx(true), &lengths())),
-        "method_not_accepted"
+        "needs_calibrated_cameras"
     );
     let slow: Vec<ObservableFrame> = fr.iter().step_by(4).cloned().collect();
     assert_eq!(
@@ -251,4 +252,174 @@ fn comparability_class_separates_methods_detectors_and_versions() {
         comparability_class("m", 1, MethodId::ImuGyro, "det-b", "raw"),
         "detector ignored for inertial"
     );
+}
+
+/// Frames at `hz` where `id` carries only its normalised form from one camera.
+fn planar_frames(id: &str, hz: u64, conf: f32) -> Vec<ObservableFrame> {
+    let i = index(id).unwrap();
+    (0..=hz)
+        .map(|k| {
+            let t = k * 1_000_000 / hz;
+            let y = 0.2 + (t as f64 * 1e-6 - 0.5).abs().mul_add(-1.0, 0.5);
+            ObservableFrame {
+                t_us: t,
+                values: ids()
+                    .iter()
+                    .enumerate()
+                    .map(|(j, (name, _))| ObservableValue {
+                        id: name.clone(),
+                        value: None,
+                        norm: (j == i).then_some(y),
+                        evidence: if j == i {
+                            ev(MethodId::ImagePlane, conf)
+                        } else {
+                            unavailable()
+                        },
+                        fresh: true,
+                        reasons: vec![],
+                    })
+                    .collect(),
+            }
+        })
+        .collect()
+}
+
+fn planar_window(frames: &[ObservableFrame], view: PlanarView) -> RepWindow<'_> {
+    let mut w = window(frames);
+    w.planar_view = Some(view);
+    w
+}
+
+fn codes(r: &MetricMeasurement) -> Vec<&str> {
+    r.reasons.iter().map(|r| r.code.as_str()).collect()
+}
+
+/// 05 §10.6 and 22 §3 at profile `basic`: heights B normalised only; durations B at 60 fps and
+/// C (indicative) at 30 fps; speeds and methods without an image-plane rule suppressed.
+#[test]
+fn image_plane_metrics_grade_as_basic_allows() {
+    let gated = format!(
+        "{HEIGHT}  image_plane: {{ views: [frontal, lateral, oblique], use: norm }}
+"
+    );
+    let m = metric(&gated);
+    let fr = planar_frames("ankle_height.left", 60, 0.8);
+    let r = measure(
+        &m,
+        &planar_window(&fr, PlanarView::Lateral),
+        &ctx(true),
+        &lengths(),
+    );
+    assert_eq!(r.grade, Grade::B, "{r:?}");
+    assert!(r.value.is_none(), "{r:?}");
+    assert!((r.norm.unwrap() - 0.7).abs() < 1e-9, "{r:?}");
+    assert_eq!(codes(&r), ["normalised_only", "calibration_missing"]);
+    assert_eq!(r.reasons[1].message, "no floor calibration");
+    // Low confidence: indicative.
+    let low = planar_frames("ankle_height.left", 60, 0.2);
+    let r = measure(
+        &m,
+        &planar_window(&low, PlanarView::Lateral),
+        &ctx(true),
+        &lengths(),
+    );
+    assert_eq!(r.grade, Grade::C);
+    // Without the image-plane gate a height is suppressed.
+    let r = measure(
+        &metric(HEIGHT),
+        &planar_window(&fr, PlanarView::Lateral),
+        &ctx(true),
+        &lengths(),
+    );
+    assert_eq!(
+        (r.grade, codes(&r)),
+        (Grade::X, vec!["needs_calibrated_cameras"])
+    );
+    // A gate listing views suppresses the others.
+    let side_only = format!(
+        "{HEIGHT}  image_plane: {{ views: [lateral], use: norm }}
+"
+    );
+    let r = measure(
+        &metric(&side_only),
+        &planar_window(&fr, PlanarView::Frontal),
+        &ctx(true),
+        &lengths(),
+    );
+    assert_eq!((r.grade, codes(&r)), (Grade::X, vec!["view_unsuitable"]));
+
+    let duration = "id: kick.extension_time
+version: 1
+label: e
+kind: duration
+from: \"phase_start:extension\"
+to: strike
+unit: ms
+direction: lower_is_more
+gates:
+  min_rate_hz: 30
+  rate_for_a_hz: 100
+  grade_a_methods: [triangulated]
+  grade_b_methods: [fk, image_plane]
+";
+    let m = metric(duration);
+    let r = measure(
+        &m,
+        &planar_window(&fr, PlanarView::Lateral),
+        &ctx(true),
+        &lengths(),
+    );
+    assert_eq!((r.grade, r.value), (Grade::B, Some(100.0)), "{r:?}");
+    let fr30 = planar_frames("ankle_height.left", 30, 0.8);
+    let r = measure(
+        &m,
+        &planar_window(&fr30, PlanarView::Lateral),
+        &ctx(true),
+        &lengths(),
+    );
+    assert_eq!(
+        (r.grade, codes(&r)),
+        (Grade::C, vec!["camera_rate"]),
+        "{r:?}"
+    );
+    assert_eq!(r.reasons[0].message, "camera rate 30 fps");
+
+    let speed = "id: kick.peak_ankle_speed
+version: 1
+label: s
+kind: extremum
+obs: ankle_speed.active
+agg: max
+window: rep
+unit: m_s
+direction: higher_is_more
+gates:
+  min_rate_hz: 50
+  rate_for_a_hz: 100
+  calibration: [camera_intrinsics, camera_extrinsics]
+  grade_a_methods: [triangulated]
+  grade_b_methods: [fk]
+";
+    let m = metric(speed);
+    let sp30 = planar_frames("ankle_speed.left", 30, 0.8);
+    let r = measure(
+        &m,
+        &planar_window(&sp30, PlanarView::Lateral),
+        &ctx(true),
+        &lengths(),
+    );
+    assert_eq!((r.grade, codes(&r)), (Grade::X, vec!["rate_too_low"]));
+    assert_eq!(r.reasons[0].message, "sampling rate insufficient");
+    let sp60 = planar_frames("ankle_speed.left", 60, 0.8);
+    let r = measure(
+        &m,
+        &planar_window(&sp60, PlanarView::Lateral),
+        &ctx(true),
+        &lengths(),
+    );
+    assert_eq!(
+        (r.grade, codes(&r)),
+        (Grade::X, vec!["needs_calibrated_cameras"])
+    );
+    assert!(r.value.is_none() && r.norm.is_none());
 }

@@ -229,6 +229,7 @@ pub fn compile_workout(
         max_reps_per_set: def.safety.max_reps_per_set,
         max_gap_us: u64::from(def.max_gap_ms.unwrap_or(80)) * 1000,
         instructions: def.instructions.clone(),
+        start_stance: def.start_stance.clone(),
         required: [required(Side::Left), required(Side::Right)],
     };
     Ok((

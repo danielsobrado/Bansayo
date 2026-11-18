@@ -329,6 +329,13 @@ impl Session {
         let availability = self.availability(&frame);
         self.engine
             .set_metric_availability(availability, self.setup.capability_profile);
+        // Stillness for the start-stance gate: the segmentation driver below its end threshold.
+        let still = self.expected().and_then(|t| {
+            let v = frame.get(t.driver.index?);
+            let x = if t.driver.norm { v.norm } else { v.value }?;
+            Some(x.abs() < t.end_below)
+        });
+        self.engine.set_still(still.unwrap_or(false));
         events.extend(self.engine.sample(&frame));
         Output {
             events: self.post(events),
@@ -444,6 +451,7 @@ impl Session {
                 phases,
                 strike: fin.strike.map(|s| s.0),
                 event_inputs: tech.required.clone(),
+                planar_view: self.observer.planar_view(),
             };
             tech.metrics
                 .iter()
@@ -597,6 +605,24 @@ impl Session {
                     let Some(e) = combine(ev.iter()) else {
                         return Grade::X;
                     };
+                    if e.method == MethodId::ImagePlane {
+                        return match crate::metrics::planar_rule(
+                            d,
+                            rate,
+                            self.observer.planar_view(),
+                        ) {
+                            crate::metrics::Planar::Suppressed(r) => {
+                                reasons.push(r);
+                                Grade::X
+                            }
+                            crate::metrics::Planar::Graded {
+                                cap, reasons: r, ..
+                            } => {
+                                reasons.extend(r);
+                                cap
+                            }
+                        };
+                    }
                     if e.provenance == Provenance::Inferred {
                         reasons.push(reason(
                             "model_fill",
