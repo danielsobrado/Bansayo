@@ -1,0 +1,29 @@
+# One USB webcam at capability profile `basic` (martial-arts roadmap Phase 2): image-plane
+# observables only, so counts, phase durations and body-relative heights; nothing in metres,
+# no speeds, no headings. `python scripts/setup.py cameras` writes config/local-cameras.yaml
+# from this file when exactly one camera is attached. Owner steps:
+# docs/validation/PHASE2-OWNER-CHECKLIST.md.
+schema_version: 2
+engine:
+  publish_rate_hz: 60
+  stale_after_ms: 250
+  data_dir: ./data
+api:
+  bind: 127.0.0.1:7700
+content:
+  dirs: [./content]
+analysis:
+  planar_camera: auto
+diagnostics:
+  timing: false            # true: per-stage latency on the diagnostics topic and in the log
+sources:
+  - id: cams
+    kind: camera
+    models_dir: ./models
+    execution: auto          # DirectML on Windows when available, else CPU; or `cpu`
+    min_person_score: 0.5
+    min_keypoint_score: 0.3
+    cameras:
+      # Manual exposure is needed for kicks (08 §3.2): 0.004 s is the longest that keeps a fast
+      # foot to about 10 px of blur at 2.5 m; shorten it if the room is bright enough.
+      - { id: CAM-FRONT, device: 0, resolution_px: [1280, 720], rate_hz: 30, exposure_s: 0.004 }

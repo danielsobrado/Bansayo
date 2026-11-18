@@ -243,14 +243,18 @@ def step_cameras(a):
     """Writes config/local-cameras.yaml with every attached camera (git-ignored)."""
     listed = subprocess.run(["cargo", "run", "--release", "-q", "-p", "bansayo-engine", "--", "--list-cameras"],
                             cwd=ROOT, capture_output=True, text=True)
-    rows = [line.split("\t", 1) for line in listed.stdout.splitlines() if "\t" in line]
+    # Camera lines are "<index>\t<name>"; the indented lines under each list its formats.
+    rows = [line.split("\t", 1) for line in listed.stdout.splitlines()
+            if "\t" in line and not line.startswith("\t")]
     if listed.returncode or not rows:
         say((listed.stderr or listed.stdout).strip() or "no cameras found")
         return False
+    # Manual exposure for kicks (08 §3.2); a camera that cannot take it reports which setting failed.
     cameras = "\n".join(
-        f"      - {{ id: CAM{i + 1}, device: {index}, resolution_px: [1280, 720], rate_hz: 30 }}   # {name}"
+        f"      - {{ id: CAM{i + 1}, device: {index}, resolution_px: [1280, 720], rate_hz: 30, exposure_s: 0.004 }}   # {name}"
         for i, (index, name) in enumerate(rows[:8]))
-    template = (ROOT / "config" / "cameras-two.yaml").read_text(encoding="utf-8")
+    template_name = "one-webcam.yaml" if len(rows) == 1 else "cameras-two.yaml"
+    template = (ROOT / "config" / template_name).read_text(encoding="utf-8")
     head = template[:template.index("    cameras:")]
     out = ROOT / "config" / "local-cameras.yaml"
     out.write_text(head + "    cameras:\n" + cameras + "\n", encoding="utf-8")
