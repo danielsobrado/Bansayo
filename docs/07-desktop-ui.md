@@ -12,7 +12,7 @@ monospaced face, colour reserved for meaning.
 
 | Decision | Choice |
 |---|---|
-| Theme | Dark, blue-graphite. One theme, done properly |
+| Theme | Graphite by default; Silver and Onyx are visual alternatives. Tracking and provenance colours remain semantic. |
 | Layout | Docked panels with hairline dividers. No floating cards on a background, no card grids as the default layout |
 | Typography | IBM Plex Sans for interface text, IBM Plex Mono for every number, identifier and timestamp. Self-hosted; the app works offline |
 | Colour | Semantic only. Hue means state or provenance; nothing is coloured for decoration |
@@ -491,3 +491,22 @@ the cut is reported.
 | 6 | Overview |
 | 7 | Viewport extras: tracker markers, camera frustums, trails, angle arcs |
 | 8 | Tauri shell |
+
+## Workbench shell (2026-11)
+
+The desktop interface keeps the React, Tauri and imperative Three.js architecture. The shared
+workbench includes a compact menu, workspace tabs, an expandable icon rail, and a persistent status
+and transport area. Menu entries route to existing workspaces or trigger existing actions.
+
+Studio has a compact view/layer toolbar, a searchable scene explorer synchronized with skeleton
+selection, and a joint/segment property inspector. Desktop widths are adjustable by pointer or
+keyboard, persisted locally under `bansayo.studio.docks.v1`. The Analysis, Capture and Focus
+presets reset widths. Below 1280px, existing mobile/tablet drawers replace desktop resizing.
+
+Visual theme (Graphite, Silver, Onyx), density (Compact, Comfortable), and rail expansion
+persist under `bansayo.ui.preferences.v1`. Semantic tracking states, provenance marks,
+disabled controls, and numerical validity labels must remain legible in every theme.
+
+The renderer is not remounted by adjusting panel widths or changing visual preferences.
+Camera sources, training logic, API contracts, and VR presentation are unaffected. The workbench
+does not introduce fake tool actions: its controls navigate or operate existing capabilities.

@@ -26,19 +26,22 @@ import { Technique } from "../workspaces/technique/Technique";
 import { Progress } from "../workspaces/progress/Progress";
 import { CapabilityBadge } from "../ui/CapabilityBadge";
 import { TransportBar } from "./TransportBar";
+import { WorkbenchMenu } from "./WorkbenchMenu";
+import { usePreferences } from "./preferences";
+import { Icon } from "../ui/Icon";
 import { RecordingDialog } from "./RecordingDialog";
 
 // Keys follow martial-arts 10 §2; Workouts (3) and Calibration (9) appear once implemented.
 const NAV = [
-  { id: "train", label: "Train", icon: "▶", key: "1" },
-  { id: "technique", label: "Technique", icon: "◎", key: "2" },
-  { id: "progress", label: "Progress", icon: "↗", key: "4" },
-  { id: "overview", label: "Overview", icon: "▣", key: "5" },
-  { id: "studio", label: "Studio", icon: "◇", key: "6" },
-  { id: "devices", label: "Devices", icon: "⌬", key: "7" },
-  { id: "cameras", label: "Cameras", icon: "◉", key: "8" },
-  { id: "sessions", label: "Sessions", icon: "▤", key: "0" },
-];
+  { id: "train", label: "Train", icon: "play", key: "1" },
+  { id: "technique", label: "Technique", icon: "target", key: "2" },
+  { id: "progress", label: "Progress", icon: "chart", key: "4" },
+  { id: "overview", label: "Overview", icon: "monitor", key: "5" },
+  { id: "studio", label: "Studio", icon: "crosshair", key: "6" },
+  { id: "devices", label: "Devices", icon: "usb", key: "7" },
+  { id: "cameras", label: "Cameras", icon: "camera", key: "8" },
+  { id: "sessions", label: "Sessions", icon: "folder", key: "0" },
+] as const;
 const WORKSPACES = NAV.map((item) => item.id);
 export function App() {
   const connection = useConnection();
@@ -51,6 +54,7 @@ export function App() {
   );
   const [calibrating, setCalibrating] = useState(false);
   const [recording, setRecording] = useState(false);
+  const { preferences, update: updatePreferences } = usePreferences();
   const { workspace: route, rest } = useHashRoute(WORKSPACES, "train");
   useEffect(() => {
     if (!location.hash) location.hash = "#/train";
@@ -80,7 +84,9 @@ export function App() {
   );
   const calibrate = () => setCalibrating(true);
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${preferences.rail === "expanded" ? "rail-expanded" : ""}`}>
+      <WorkbenchMenu items={NAV} active={route} connected={connected}
+        preferences={preferences} onChange={updatePreferences} onCalibrate={calibrate} />
       <nav className="navigation" aria-label="Workspaces">
         <div className="brand">
           <span className="brand-mark">B</span>
@@ -88,6 +94,12 @@ export function App() {
             bansayo<span>motion platform</span>
           </span>
         </div>
+        <button type="button" className="rail-toggle"
+          title={preferences.rail === "compact" ? "Expand navigation" : "Collapse navigation"}
+          aria-label={preferences.rail === "compact" ? "Expand navigation" : "Collapse navigation"}
+          onClick={() => updatePreferences({ rail: preferences.rail === "compact" ? "expanded" : "compact" })}>
+          <Icon name="panel-left" />
+        </button>
         <span className="rail-label">Workspace</span>
         {NAV.map((item) => (
           <a
@@ -97,7 +109,7 @@ export function App() {
             title={`${item.label} (${item.key})`}
           >
             <span className="nav-icon" aria-hidden="true">
-              {item.icon}
+              <Icon name={item.icon} />
             </span>
             <span className="nav-text">{item.label}</span>
             <kbd>{item.key}</kbd>

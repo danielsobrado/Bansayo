@@ -1,0 +1,43 @@
+/* Visual themes only. Measurement and tracking states retain semantic meaning. */
+:root[data-theme="silver"] {
+  color-scheme: light;
+  --surface-0: #d9e0e8;
+  --surface-1: #f0f3f7;
+  --surface-2: #e3e9f0;
+  --surface-3: #cbd9e7;
+  --line: #b8c4d1;
+  --ink-1: #1d2a38;
+  --ink-2: #37495c;
+  --ink-3: #4a5c6e;
+  --accent: #125f9a;
+  --state-tracking: #176b4e;
+  --state-degraded: #895500;
+  --state-acquiring: #2d5797;
+  --state-disconnected: #515b67;
+  --state-unavailable: #a12630;
+  --prov-measured: #223142;
+  --prov-derived: #125f9a;
+  --prov-inferred: #6a348c;
+  --prov-unavailable: #667382;
+  --shadow-float: 0 8px 24px #1a273344;
+  --scrim: #1a273355;
+}
+:root[data-theme="onyx"] {
+  color-scheme: dark;
+  --surface-0: #0b0c0e;
+  --surface-1: #17191c;
+  --surface-2: #24272b;
+  --surface-3: #333940;
+  --line: #434951;
+  --ink-1: #f4f5f6;
+  --ink-2: #d2d6da;
+  --ink-3: #a3abb3;
+  --accent: #a4d8ee;
+  --shadow-float: 0 8px 24px #000a;
+}
+:root[data-density="comfortable"] {
+  --control-height: 32px;
+  --row-height: 32px;
+  --panel-padding: 16px;
+  --transport-height: 46px;
+}

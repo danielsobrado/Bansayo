@@ -1,4 +1,8 @@
 import { useMemo, useState } from "react";
+import type { CSSProperties } from "react";
+import { Icon } from "../../ui/Icon";
+import { SceneExplorer } from "./SceneExplorer";
+import { DockDivider, useDockWidths, type LayoutPreset } from "./useDockWidths";
 import type { SkeletonDefinition, SystemState } from "@contracts";
 import { calibratedCameras } from "../../engine/cameraCalibration";
 import { readouts } from "../../engine/readouts";
@@ -41,6 +45,7 @@ export function Studio({
   const [skeletonVisible, setSkeletonVisible] = useState(true);
   const [floorVisible, setFloorVisible] = useState(true);
   const [camerasVisible, setCamerasVisible] = useState(false);
+  const { layout, resize, setPreset } = useDockWidths();
   const calibration = state?.calibration;
   const poses = useMemo(
     () => calibratedCameras(calibration ?? []),
@@ -110,7 +115,31 @@ export function Studio({
           </button>
         </div>
       </header>
-      <div className="studio-grid">
+      <div className="studio-toolstrip" role="toolbar" aria-label="Motion viewport tools">
+        {VIEWS.map((preset) => (
+          <button type="button" key={preset} aria-pressed={view === preset}
+            title={`${preset} camera view`} onClick={() => setView(preset)}>
+            <Icon name={preset === "3D" ? "rotate" : "monitor"} size={14} />
+            {preset}
+          </button>
+        ))}
+        <span className="tool-separator" aria-hidden="true" />
+        <button type="button" aria-pressed={floorVisible} onClick={() => setFloorVisible(!floorVisible)}
+          title="Show or hide floor grid"><Icon name="grid" size={14} /> Floor</button>
+        <button type="button" aria-pressed={camerasVisible} onClick={() => setCamerasVisible(!camerasVisible)}
+          title="Show or hide calibrated cameras"><Icon name="camera" size={14} /> Cameras</button>
+        <label className="studio-layout-select">
+          Layout
+          <select aria-label="Studio layout preset" value={layout.preset}
+            onChange={(event) => setPreset(event.target.value as LayoutPreset)}>
+            <option value="analysis">Analysis</option>
+            <option value="capture">Capture</option>
+            <option value="focus">Focus</option>
+          </select>
+        </label>
+      </div>
+      <div className={`studio-grid workbench-studio-grid ${layout.preset === "focus" ? "focus-layout" : ""}`}
+        style={{ "--dock-left": `${layout.left}px`, "--dock-right": `${layout.right}px` } as CSSProperties}>
         {(leftOpen || rightOpen) && (
           <button
             className={`panel-backdrop ${leftOpen ? "left-backdrop" : ""}`}
@@ -207,6 +236,7 @@ export function Studio({
             <span className="mono">+Y up · +Z forward · m</span>
           </div>
         </aside>
+        <DockDivider side="left" width={layout.left} onResize={resize} />
         <section
           className={`viewport-panel ${cameraOnly ? "camera-only-viewport" : ""}`}
           aria-label="Motion viewport"
@@ -279,10 +309,14 @@ export function Studio({
             segment to inspect
           </div>
         </section>
+        <DockDivider side="right" width={layout.right} onResize={resize} />
         <aside
           className={`inspector-panel dock ${rightOpen ? "sheet-open" : ""}`}
           aria-label="Inspector"
         >
+          <SceneExplorer rows={rows} cameras={cameras} selectedSegment={selectedSegment}
+            onSelectSegment={selectSegment} />
+          <div className="studio-properties">
           <div className="panel-heading">
             INSPECTOR
             <button
@@ -424,6 +458,7 @@ export function Studio({
             <br />
             Joint angles are not clinically validated.
           </p>
+          </div>
         </aside>
       </div>
     </div>
