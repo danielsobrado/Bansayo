@@ -4,8 +4,8 @@
 //! Fractions of body height H, from docs/03-domain-model.md §3 (Drillis and Contini via Winter).
 
 use bansayo_contracts::{
-    AngleUnit, CalibrationState, JointDef, JointMethod, Provenance, SegmentDef, SegmentPose,
-    SkeletonDefinition, Vec3,
+    AngleUnit, CalibrationState, JointDef, JointMethod, MethodId, Provenance, SegmentDef,
+    SegmentPose, SkeletonDefinition, Vec3,
 };
 
 use super::{dev, seg};
@@ -286,6 +286,12 @@ pub fn rest_pose_segments() -> Vec<SegmentPose> {
                 },
                 confidence: tracker.map(|_| 0.97),
                 sources: tracker.map(|(d, _)| vec![dev(d)]).unwrap_or_default(),
+                method: Some(if tracker.is_some() {
+                    MethodId::ImuMounted
+                } else {
+                    MethodId::RestFill
+                }),
+                t_obs_us: tracker.map(|_| 303_812_000),
             }
         })
         .collect()

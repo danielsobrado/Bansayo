@@ -30,7 +30,9 @@
         "confidence": 0.97,
         "sources": [
           "SIM-T01"
-        ]
+        ],
+        "method": "imu_mounted",
+        "t_obs_us": 303812000
       },
       {
         "rotation": [
@@ -46,7 +48,8 @@
         ],
         "provenance": "inferred",
         "confidence": null,
-        "sources": []
+        "sources": [],
+        "method": "rest_fill"
       },
       {
         "rotation": [
@@ -64,7 +67,9 @@
         "confidence": 0.97,
         "sources": [
           "SIM-T02"
-        ]
+        ],
+        "method": "imu_mounted",
+        "t_obs_us": 303812000
       },
       {
         "rotation": [
@@ -80,7 +85,8 @@
         ],
         "provenance": "inferred",
         "confidence": null,
-        "sources": []
+        "sources": [],
+        "method": "rest_fill"
       },
       {
         "rotation": [
@@ -96,7 +102,8 @@
         ],
         "provenance": "inferred",
         "confidence": null,
-        "sources": []
+        "sources": [],
+        "method": "rest_fill"
       },
       {
         "rotation": [
@@ -112,7 +119,8 @@
         ],
         "provenance": "inferred",
         "confidence": null,
-        "sources": []
+        "sources": [],
+        "method": "rest_fill"
       },
       {
         "rotation": [
@@ -128,7 +136,8 @@
         ],
         "provenance": "inferred",
         "confidence": null,
-        "sources": []
+        "sources": [],
+        "method": "rest_fill"
       },
       {
         "rotation": [
@@ -144,7 +153,8 @@
         ],
         "provenance": "inferred",
         "confidence": null,
-        "sources": []
+        "sources": [],
+        "method": "rest_fill"
       },
       {
         "rotation": [
@@ -160,7 +170,8 @@
         ],
         "provenance": "inferred",
         "confidence": null,
-        "sources": []
+        "sources": [],
+        "method": "rest_fill"
       },
       {
         "rotation": [
@@ -176,7 +187,8 @@
         ],
         "provenance": "inferred",
         "confidence": null,
-        "sources": []
+        "sources": [],
+        "method": "rest_fill"
       },
       {
         "rotation": [
@@ -192,7 +204,8 @@
         ],
         "provenance": "inferred",
         "confidence": null,
-        "sources": []
+        "sources": [],
+        "method": "rest_fill"
       },
       {
         "rotation": [
@@ -208,7 +221,8 @@
         ],
         "provenance": "inferred",
         "confidence": null,
-        "sources": []
+        "sources": [],
+        "method": "rest_fill"
       },
       {
         "rotation": [
@@ -224,7 +238,8 @@
         ],
         "provenance": "inferred",
         "confidence": null,
-        "sources": []
+        "sources": [],
+        "method": "rest_fill"
       },
       {
         "rotation": [
@@ -242,7 +257,9 @@
         "confidence": 0.97,
         "sources": [
           "SIM-T03"
-        ]
+        ],
+        "method": "imu_mounted",
+        "t_obs_us": 303812000
       },
       {
         "rotation": [
@@ -260,7 +277,9 @@
         "confidence": 0.97,
         "sources": [
           "SIM-T04"
-        ]
+        ],
+        "method": "imu_mounted",
+        "t_obs_us": 303812000
       },
       {
         "rotation": [
@@ -276,7 +295,8 @@
         ],
         "provenance": "inferred",
         "confidence": null,
-        "sources": []
+        "sources": [],
+        "method": "rest_fill"
       },
       {
         "rotation": [
@@ -292,7 +312,8 @@
         ],
         "provenance": "inferred",
         "confidence": null,
-        "sources": []
+        "sources": [],
+        "method": "rest_fill"
       },
       {
         "rotation": [
@@ -308,7 +329,8 @@
         ],
         "provenance": "inferred",
         "confidence": null,
-        "sources": []
+        "sources": [],
+        "method": "rest_fill"
       },
       {
         "rotation": [
@@ -324,7 +346,8 @@
         ],
         "provenance": "inferred",
         "confidence": null,
-        "sources": []
+        "sources": [],
+        "method": "rest_fill"
       }
     ]
   },

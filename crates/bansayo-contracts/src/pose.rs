@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::{DeviceId, Provenance, Quat, Reason, Vec3};
+use crate::{DeviceId, MethodId, Provenance, Quat, Reason, TimeUs, Vec3};
 
 /// Pose of one segment, world frame.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -16,6 +16,15 @@ pub struct SegmentPose {
     pub provenance: Provenance,
     pub confidence: Option<f32>,
     pub sources: Vec<DeviceId>,
+    /// How the rotation was obtained (camera fit, tracker, tracker heading-corrected by cameras,
+    /// rest fill). Additive under protocol version 1.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub method: Option<MethodId>,
+    /// Session time the rotation was measured at; the frame's `t_us` minus this is its age.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub t_obs_us: Option<TimeUs>,
 }
 
 /// Pose of the whole skeleton at one tick.

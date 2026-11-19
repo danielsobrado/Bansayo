@@ -380,6 +380,8 @@ pub fn solve(
                 },
                 confidence: confidence[i],
                 sources: sources[i].clone(),
+                method: Some(methods[i]),
+                t_obs_us: t_obs[i],
             })
             .collect(),
     });

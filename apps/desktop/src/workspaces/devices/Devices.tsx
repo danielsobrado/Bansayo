@@ -11,6 +11,7 @@ import { OriginBadge } from "../../ui/OriginBadge";
 import { Reasons } from "../../ui/Reasons";
 import { formatConfidence, humanizeId } from "../../lib/format";
 import { PhonePairing } from "./PhonePairing";
+import { SegmentEvidence } from "./SegmentEvidence";
 
 interface Change {
   device: DeviceStatus;
@@ -109,6 +110,7 @@ export function Devices({
                 .join(", ") || "—"}
             </p>
           </div>
+          <SegmentEvidence skeleton={skeleton} />
           <PhonePairing />
         </aside>
       </div>

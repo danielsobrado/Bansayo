@@ -16,7 +16,8 @@ record when an item is run. Last updated 19 November 2026.
 
 ## Notes for whoever runs these
 
-- Bitdefender webcam protection blocks each new `bansayo-engine.exe` build until it is allowed
-  (symptom: `Access is denied`, 0x80070005, while ffmpeg still reads the camera).
+- Bitdefender webcam protection blocks `bansayo-engine.exe` until it is allowed (symptom:
+  `Access is denied`, 0x80070005, while ffmpeg still reads the camera). Once allowed, a rebuild at
+  the same path stayed allowed; a release build at another path needs allowing again.
 - Keep the paging file large or reboot after long test sessions: with low free commit the engine
   fails frame allocations (`memory allocation of 2764800 bytes failed`).
