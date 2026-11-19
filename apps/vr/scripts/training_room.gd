@@ -8,6 +8,7 @@ const StatusPanel = preload("res://scripts/status_panel.gd")
 const EngineActions = preload("res://scripts/engine_actions.gd")
 const ComfortSettings = preload("res://scripts/comfort_settings.gd")
 const VrInputRouter = preload("res://scripts/vr_input_router.gd")
+const PoseMirror = preload("res://scripts/pose_mirror.gd")
 const Clinic = preload("res://scripts/clinic.gd")
 const ALIGNMENT_FILE := "user://xr_alignment.cfg"
 const STUDIO_DARK := [Color("#1c2931"), Color("#273d48"), Color("#344650"), Color("#588a93"), Color("#111a24")]
@@ -18,6 +19,7 @@ var _dev := DevRig.new()
 var _panel := StatusPanel.new()
 var _actions := EngineActions.new()
 var _clinic := Clinic.new()
+var _mirror := PoseMirror.new()
 var _input_router := VrInputRouter.new()
 var _comfort := ComfortSettings.new()
 var _room_materials: Array[StandardMaterial3D] = []
@@ -45,6 +47,9 @@ func _ready() -> void:
 	client.skeleton_changed.connect(_panel.skeleton_changed)
 	client.skeleton_changed.connect(_clinic.build)
 	client.training_changed.connect(_clinic.stream_state_changed)
+	client.training_changed.connect(_mirror.training_changed)
+	client.landmarks_received.connect(_mirror.landmarks_received)
+	client.state_changed.connect(_mirror.engine_state)
 	client.training_event.connect(_clinic.event_received)
 	client.state_changed.connect(_panel.state_changed)
 	client.state_changed.connect(_actions.set_state)
@@ -56,6 +61,7 @@ func _ready() -> void:
 	client.connection_changed.connect(func(connected: bool, message: String):
 		_panel.connection(connected, message)
 		_clinic.connection(connected)
+		_mirror.connection(connected)
 		if not connected:
 			_buffer.clear()
 	)
@@ -69,6 +75,10 @@ func _ready() -> void:
 	_clinic.world_frame = _root
 	add_child(_clinic)
 	_clinic.closed.connect(_show_setup)
+	_clinic.mirror_requested.connect(_open_mirror)
+	_clinic.controls_required.connect(_close_mirror)
+	add_child(_mirror)
+	_mirror.closed.connect(_close_mirror)
 	_comfort.load_saved()
 	_apply_preferences()
 	_initialise_xr()
@@ -94,10 +104,11 @@ func _on_setup_option(index: int) -> void:
 	else:
 		match index:
 			0: _open_clinic()
-			1: _panel.set_diagnostics(true)
-			2: _panel.set_preferences(_comfort.options())
-			3: _show_setup()
-			4: _panel.hide()
+			1: _open_mirror()
+			2: _panel.set_diagnostics(true)
+			3: _panel.set_preferences(_comfort.options())
+			4: _show_setup()
+			5: _panel.hide()
 
 func _change_preference(index: int) -> void:
 	match index:
@@ -116,7 +127,7 @@ func _change_preference(index: int) -> void:
 	_panel.set_preferences(_comfort.options())
 
 func _apply_preferences() -> void:
-	for panel in [_panel.panel, _clinic.panel]:
+	for panel in [_panel.panel, _clinic.panel, _mirror.panel]:
 		panel.size_multiplier = ComfortSettings.SCALE[_comfort.scale_index]
 		panel.height_offset = ComfortSettings.HEIGHT[_comfort.height_index]
 	_body.set_mannequin(_comfort.mannequin)
@@ -133,8 +144,29 @@ func _open_clinic() -> void:
 	_clinic.show_menu()
 	_input_router.set_panel(_clinic.panel)
 
-func _toggle_menu() -> void:
+func _open_mirror() -> void:
+	if _mirror.visible or _clinic._walls.opened:
+		return
+	var camera: Camera3D = _xr_camera if _xr_interface else _dev.camera
+	_panel.hide()
+	_clinic.set_mirror_open(true)
+	_mirror.open(camera, _xr_interface != null)
+	_input_router.set_panel(_mirror.panel)
+
+func _close_mirror() -> void:
+	if not _mirror.visible:
+		return
+	_mirror.hide()
+	_clinic.set_mirror_open(false)
 	if _clinic.opened:
+		_input_router.set_panel(_clinic.panel)
+	else:
+		_show_setup()
+
+func _toggle_menu() -> void:
+	if _mirror.visible:
+		_close_mirror()
+	elif _clinic.opened:
 		_clinic.toggle_controls()
 	elif _panel.visible:
 		if not _panel.preferences.is_empty():
@@ -152,6 +184,13 @@ func _input(event: InputEvent) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
+		if _mirror.visible:
+			if event.keycode in [KEY_M, KEY_ESCAPE]:
+				_close_mirror()
+			return
+		if event.keycode == KEY_M:
+			_open_mirror()
+			return
 		if _clinic.opened:
 			match event.keycode:
 				KEY_TAB: _clinic.next()
@@ -179,7 +218,7 @@ func _on_button(action: String, controller: XRController3D) -> void:
 		"menu_button":
 			_toggle_menu()
 		"by_button":
-			if _clinic.opened or _panel.visible:
+			if _mirror.visible or _clinic.opened or _panel.visible:
 				_toggle_menu()
 			else:
 				_show_setup()
@@ -190,7 +229,7 @@ func _on_button(action: String, controller: XRController3D) -> void:
 			if controller == _right_hand:
 				if not _clinic.opened or (not _clinic._walls.opened and _clinic._phase() in ["setup", "preparing", "ready"]):
 					_align_to(controller)
-			elif _clinic.opened:
+			elif _mirror.visible or _clinic.opened:
 				_toggle_menu()
 			else:
 				_open_clinic()
@@ -234,7 +273,8 @@ func _process(_delta: float) -> void:
 	_clinic.pose_available = not pose.is_empty()
 	_panel.set_gap(pose.is_empty())
 	_clinic.set_tracking(_panel.tracking_label())
-	_input_router.set_panel(_clinic.panel if _clinic.opened else _panel.panel)
+	if not _mirror.visible:
+		_input_router.set_panel(_clinic.panel if _clinic.opened else _panel.panel)
 	_input_router.focused = _clinic.xr_focused
 	if _xr_interface and not _xr_interface.is_initialized():
 		_return_to_desktop()
@@ -319,7 +359,9 @@ func _initialise_xr() -> void:
 			_clinic.aligned = false
 			_panel.alignment_text = "XR alignment: headset recentered · align again"
 			_clinic.suspend()
-			if _clinic.opened:
+			if _mirror.visible:
+				_mirror.open(_xr_camera, true)
+			elif _clinic.opened:
 				_clinic.recenter()
 			elif _panel.visible:
 				_show_setup()
@@ -349,7 +391,9 @@ func _return_to_desktop() -> void:
 	_dev.enabled = true
 	_dev.camera.current = true
 	_xr_interface = null
-	if _clinic.opened:
+	if _mirror.visible:
+		_mirror.open(_dev.camera, false)
+	elif _clinic.opened:
 		_clinic.recenter()
 	else:
 		_show_setup()

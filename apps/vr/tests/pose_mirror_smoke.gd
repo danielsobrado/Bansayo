@@ -50,6 +50,10 @@ func _run() -> void:
 	mirror.choose_flexibility()
 	if not _check(not mirror.view.guide_pose.is_empty(), "A flexibility guide should be available without an active session."):
 		return
+	await create_timer(0.6).timeout
+	if not _check(mirror.view.live_pose.is_empty(), "The reflection must expire when landmarks stop arriving."):
+		return
+	mirror.landmarks_received(frame)
 	mirror.connection(false)
 	if not _check(mirror.view.live_pose.is_empty(), "Disconnect must clear the reflection."):
 		return

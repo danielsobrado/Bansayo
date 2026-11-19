@@ -48,6 +48,14 @@ func _run() -> void:
 		await create_timer(0.1).timeout
 	if not _check(room._clinic.connected, "Clinic did not connect"):
 		return
+	room._open_mirror()
+	for i in range(50):
+		if not room._mirror.view.live_pose.is_empty():
+			break
+		await create_timer(0.1).timeout
+	if not _check(not room._mirror.view.live_pose.is_empty() and room._mirror.view.live_caption.begins_with("Simulated · "), "Mirror did not receive the simulated camera WebSocket stream"):
+		return
+	room._close_mirror()
 	var actions = room._actions
 	const POST := HTTPClient.METHOD_POST
 	const PUT := HTTPClient.METHOD_PUT
@@ -76,6 +84,10 @@ func _run() -> void:
 	await _choose("Acknowledge safety notes")
 	if not _check(await _wait_phase("ready", 12), "Clinic did not become ready"):
 		return
+	await _choose("Pose mirror")
+	if not _check(room._mirror.visible and not room._clinic.panel.visible and not room._mirror.view.guide_pose.is_empty(), "Clinic mirror should follow the prepared session"):
+		return
+	room._close_mirror()
 	await _choose("Confirm clear area & start")
 	if not _check(await _wait_phase("active", 12), "Clinic did not start"):
 		return
@@ -113,5 +125,19 @@ func _run() -> void:
 	if not _check(room._clinic._session != previous and await _wait_phase("ready", 12), "Repeat clinic did not prepare"):
 		return
 	await _choose("End clinic")
-	print("Bansayo Godot clinic smoke passed")
+	var workout: Variant = await actions.request(POST, "/training/sessions", JSON.stringify({
+		"athlete_id": athlete, "plan": {"kind": "workout", "workout": "general.workout.full_body_in_20"}}))
+	if not _check(workout is Dictionary, "Timed workout did not prepare"):
+		return
+	var workout_id: String = workout["session_id"]
+	await actions.request(POST, "/training/command", JSON.stringify({"session_id": workout_id, "command": "start"}))
+	room._open_mirror()
+	for i in range(100):
+		if room._mirror._training.get("session_id") == workout_id and room._mirror._training.get("phase") == "active":
+			break
+		await create_timer(0.1).timeout
+	if not _check(room._mirror._training.get("phase") == "active" and room._mirror._guide().get("title") == "March", "Mirror did not follow the timed workout's current item"):
+		return
+	await actions.request(POST, "/training/command", JSON.stringify({"session_id": workout_id, "command": "end"}))
+	print("Bansayo Godot clinic and workout mirror smoke passed")
 	quit(0)

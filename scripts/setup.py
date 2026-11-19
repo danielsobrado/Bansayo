@@ -231,6 +231,7 @@ def step_godot(a):
     run(["godot", "--headless", "--path", ROOT / "apps" / "vr", "--xr-mode", "off", "--editor", "--quit"])
     run(["godot", "--headless", "--path", ROOT / "apps" / "vr", "--xr-mode", "off", "--script", "tests/contract_smoke.gd"])
     run(["godot", "--headless", "--path", ROOT / "apps" / "vr", "--xr-mode", "off", "--script", "tests/spatial_ui_smoke.gd"])
+    run(["godot", "--headless", "--path", ROOT / "apps" / "vr", "--xr-mode", "off", "--script", "tests/pose_mirror_smoke.gd", "--", "--desktop"])
     return True
 
 

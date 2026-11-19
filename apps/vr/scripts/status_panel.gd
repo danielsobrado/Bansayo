@@ -111,7 +111,7 @@ func _refresh() -> void:
 		lines.append_array(_camera_lines())
 		if not action_text.is_empty():
 			lines.append(action_text)
-		var options: Array[String] = ["Taekwondo clinic", "Tracking diagnostics", "Preferences", "Recenter", "Dismiss"]
+		var options: Array[String] = ["Taekwondo clinic", "Pose mirror", "Tracking diagnostics", "Preferences", "Recenter", "Dismiss"]
 		var status := tracking_label()
 		panel.present("Bansayo", status, lines, options, -1, false, status not in ["Tracking ready", "Simulated tracking"], not _connected)
 		return

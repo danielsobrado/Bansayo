@@ -22,6 +22,7 @@ var _options_scroll := ScrollContainer.new()
 var _details_scroll := ScrollContainer.new()
 var _options := VBoxContainer.new()
 var _details := Label.new()
+var _detail_column := VBoxContainer.new()
 var play_area := PlayAreaPreview.new()
 var _buttons: Array[Button] = []
 var _labels: Array[String] = []
@@ -71,10 +72,9 @@ func _ready() -> void:
 	_options.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_options.add_theme_constant_override("separation", 8)
 	columns.add_child(_options_scroll)
-	var detail_column := VBoxContainer.new()
-	detail_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	detail_column.add_theme_constant_override("separation", 14)
-	detail_column.add_child(play_area)
+	_detail_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_detail_column.add_theme_constant_override("separation", 14)
+	_detail_column.add_child(play_area)
 	_details_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_details_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -82,10 +82,15 @@ func _ready() -> void:
 	_label_style(_details, 28, MUTED)
 	_details.add_theme_constant_override("line_spacing", 7)
 	_details_scroll.add_child(_details)
-	detail_column.add_child(_details_scroll)
-	columns.add_child(detail_column)
+	_detail_column.add_child(_details_scroll)
+	columns.add_child(_detail_column)
 	visibility_changed.connect(_update_visibility)
 	_update_visibility()
+
+func set_visual(visual: Control) -> void:
+	_options_scroll.custom_minimum_size.x = 280
+	_detail_column.add_child(visual)
+	_detail_column.move_child(visual, 0)
 
 func _update_visibility() -> void:
 	_viewport.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE if is_visible_in_tree() else SubViewport.UPDATE_DISABLED

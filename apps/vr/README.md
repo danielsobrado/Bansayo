@@ -66,6 +66,24 @@ that corner pointing along +X and click the thumbstick: the figure is then place
 cameras see you, at the headset's floor height. The alignment is saved in
 `user://xr_alignment.cfg`; without it the figure stands at the room origin in front of you.
 
+### Pose mirror
+
+Open **Pose mirror** from setup or the Taekwondo clinic. In desktop preview, press **M**.
+The cyan figure reflects the selected camera's 2D landmarks horizontally. The purple figure
+shows an illustrated reference. Use **Switch camera** to pick the view that best matches the
+guide. Low-confidence points are omitted and the reflection clears when camera frames stop.
+
+**Follow session** shows the current item in Full Body in 20 or the current phase and side
+of the front or roundhouse kick, including in the clinic. **Workout guides**, **Technique
+guides**, and **Flexibility guides** also work before a session. Use **Next guide** to browse.
+Technique previews have separate phase and side controls. The flexibility previews include
+overhead reach, side bend, and calf stretch.
+
+On physical cameras configured for body detection, the engine uses YOLOX to locate the person
+and RTMPose to estimate the landmarks. The mirror works with one camera and draws an
+approximate silhouette around its detected joints. The guide is an unscored 2D example.
+Camera viewpoint and occlusion affect what the reflection can show.
+
 ### Taekwondo clinic
 
 Open the clinic, pick an athlete, kick and side, and use **Sets** and **Rest** to configure the

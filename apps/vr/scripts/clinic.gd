@@ -1,6 +1,8 @@
 extends Node3D
 
 signal closed
+signal mirror_requested
+signal controls_required
 
 const SpatialPanel = preload("res://scripts/spatial_panel.gd")
 const Ghost = preload("res://scripts/clinic_ghost.gd")
@@ -24,6 +26,7 @@ var pose_available := false
 var panel := SpatialPanel.new()
 var _hud := Label3D.new()
 var _controls_open := true
+var _mirror_open := false
 var _tracking := "Waiting for tracking"
 var _ghost := Ghost.new()
 var _target := ClinicTarget.new()
@@ -126,6 +129,10 @@ func set_tracking(text: String) -> void:
 	if text != _tracking:
 		_tracking = text
 		_refresh()
+
+func set_mirror_open(active: bool) -> void:
+	_mirror_open = active
+	_refresh()
 
 func toggle_controls() -> void:
 	if opened:
@@ -263,9 +270,10 @@ func _select_option(index: int) -> void:
 		if index >= menu_count:
 			match index - menu_count:
 				0: recenter()
-				1: _ghost.paused = not _ghost.paused
-				2: _ghost.cycle_speed()
-				3: _ghost.restart()
+				1: mirror_requested.emit()
+				2: _ghost.paused = not _ghost.paused
+				3: _ghost.cycle_speed()
+				4: _ghost.restart()
 			_refresh()
 			return
 		_choice = index
@@ -505,6 +513,8 @@ func suspend() -> void:
 	_ghost.hide()
 	_target.clear()
 	_notice = "Stop and return to the centre of your clear area."
+	if _mirror_open:
+		controls_required.emit()
 	_refresh()
 	var now := Time.get_ticks_msec()
 	if not _pending and connected and now >= _next_safety_ms:
@@ -573,6 +583,10 @@ func _metric(m: Variant) -> String:
 
 func _refresh() -> void:
 	if not opened:
+		return
+	if _mirror_open:
+		panel.hide()
+		_hud.hide()
 		return
 	if _walls.opened or xr == null or _phase() not in ["preparing", "ready"]:
 		panel.play_area.hide()
@@ -666,7 +680,7 @@ func _refresh() -> void:
 	if not _notice.is_empty():
 		lines.append(_notice)
 	var options := _menu()
-	options.append("Recenter")
+	options.append_array(["Recenter", "Pose mirror"])
 	if _ghost.visible and _phase() in ["setup", "completed", "aborted"]:
 		options.append_array(["Resume replay" if _ghost.paused else "Pause replay", "Cycle replay speed", "Restart replay"])
 	panel.present("Taekwondo clinic", status, lines, options, -1 if xr != null else _choice, _pending, warning, stop_practice)
