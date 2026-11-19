@@ -287,7 +287,14 @@ impl<'a> Lifecycle<'a> {
                     "camera_unavailable"
                 },
                 Some(self.id.to_string()),
-                failure,
+                &if failure.contains("0x80070005") {
+                    // Seen with Bitdefender webcam protection after an engine rebuild (19 Nov 2026).
+                    format!(
+                        "{failure}. Windows camera privacy settings or an antivirus webcam protection (e.g. Bitdefender) are blocking this program; allow bansayo-engine.exe there."
+                    )
+                } else {
+                    failure.to_owned()
+                },
             ));
             self.set(next);
         }

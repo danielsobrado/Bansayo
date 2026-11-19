@@ -11,7 +11,7 @@ Checklist: [HYBRID-OWNER-CHECKLIST.md](HYBRID-OWNER-CHECKLIST.md). Hardware: UGR
 | C-03 | **Pass** | Requested and negotiated `MJPEG 1280×720 @ 30` with `camera_mode_not_as_requested: 120 fps is not offered; using fallback 30 fps`; measured 30.05 fps, interval mean 33.3 ms, p95 47.9 ms, p99 48.3 ms, jitter 4.3 ms |
 | C-04 | **Pass** (by exposure, not by covering the lens) | `exposure_s: 0.1` (driver step 0.125 s) → measured 15.0 fps, lifecycle `degraded`, `camera_rate_below_requested: Requested 30 fps, measured 15.0 fps` |
 | C-05 | **Pass** | `exposure_s: 0.004` applied as 0.0039 s (1/256); 30.0 fps |
-| C-06 | Pending | Needs a physical unplug and replug into another port |
+| C-06 | **Pass** (after a reboot) | Unplugged while streaming: `Could not capture frame` at 14:53:17, `no connected camera matches the configured identity` while out, reopened 14:53:33; reconnects 1, identity confirmed, 30 fps, no crash; private memory flat at ~922 MB through the unplug (108 samples at 0.5 s). The webcam keeps the same interface id on any port: Windows keys its composite parent on the device's serial `SN0001` |
 | C-07 | **Pass after fixes** | Profile fingerprint edited (file saved by PowerShell, UTF-8 with BOM) → `camera_identity_changed`, identity unconfirmed, 2D continues; `POST /cameras/CAM-FRONT/identity/confirm` → confirmed and still confirmed 4 s later |
 | C-08, C-09 | Not run | Need a second identical camera / a calibrated rig |
 
@@ -29,3 +29,13 @@ a release build is needed for rate checks of the full pipeline.
 4. `exposure_automatic` claimed the camera was in automatic exposure; after a session that set
    manual exposure, the camera keeps it (8.1 fps observed). The message now says the camera keeps
    its own setting. The webcam was returned to automatic exposure after this run.
+
+## Environment findings
+
+- Before a reboot the engine crashed twice (`memory allocation of 2764800 bytes failed`, one
+  1280×720 RGB frame) with 26 GB of RAM free but only ~2.3 GB of commit free (small paging file,
+  many test runs). After the reboot (73 GB commit free) the same unplug passed with flat memory.
+- After rebuilding `bansayo-engine.exe`, Media Foundation returned `Access is denied`
+  (0x80070005) while ffmpeg read the camera through DirectShow. Cause: **Bitdefender webcam
+  protection** blocks each new executable until allowed. The `camera_unavailable` reason now names
+  privacy settings and antivirus webcam protection for this error code.
