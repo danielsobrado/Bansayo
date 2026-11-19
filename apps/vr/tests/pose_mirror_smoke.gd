@@ -1,5 +1,7 @@
 extends SceneTree
 
+const Anatomy := preload("res://scripts/pose_anatomy_2d.gd")
+
 func _initialize() -> void:
 	_run.call_deferred()
 
@@ -39,6 +41,12 @@ func _run() -> void:
 	]}
 	mirror.landmarks_received(frame)
 	var reflected: Dictionary = mirror.view.live_pose
+	var edges := Anatomy.skeleton_edges(reflected)
+	if not _check(not edges.is_empty(), "The mirror should draw bones between observed joints."):
+		return
+	for edge in edges:
+		if not _check(reflected.has_all([edge[0], edge[1]]), "A bone cannot imply a missing landmark."):
+			return
 	if not _check(reflected.get("left_shoulder") == Vector2(400, 200) and not reflected.has("left_knee"), "Mirror must flip horizontal pixels and omit unreliable points."):
 		return
 	mirror.training_changed({"phase": "active", "current": {"title": "Front kick", "phase_id": "chamber",
