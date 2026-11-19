@@ -5,6 +5,9 @@ signal selected(index: int)
 const PlayAreaPreview = preload("res://scripts/play_area_preview.gd")
 const PIXELS := Vector2i(1024, 704)
 const SIZE := Vector2(1.0, 0.6875)
+const COACHING_PIXELS := Vector2i(1536, 960)
+const COACHING_SIZE := Vector2(1.56, 0.975)
+const MODE_BUTTONS := 4
 const NO_HIT := Vector2(-1, -1)
 const INK := Color("#f0f6fa")
 const MUTED := Color("#a8bdcc")
@@ -12,33 +15,41 @@ const ACCENT := Color("#74e6ed")
 const WARNING := Color("#ffcb8a")
 const STOP := Color("#ff9b9b")
 
+var coaching_layout := false
 var size_multiplier := 1.0
 var height_offset := -0.18
 
 var _viewport := SubViewport.new()
 var _title := Label.new()
 var _status := Label.new()
-var _options_scroll := ScrollContainer.new()
-var _details_scroll := ScrollContainer.new()
-var _options := VBoxContainer.new()
+var _options_scroll: ScrollContainer
+var _details_scroll: ScrollContainer
+var _options: VBoxContainer
+var _mode_bar: HBoxContainer
+var _action_bar: HBoxContainer
+var _size := SIZE
 var _details := Label.new()
 var _detail_column := VBoxContainer.new()
-var play_area := PlayAreaPreview.new()
+var play_area: PlayAreaPreview
 var _buttons: Array[Button] = []
 var _labels: Array[String] = []
 var _choice := -1
 var _hover := -1
 
 func _ready() -> void:
-	_viewport.size = PIXELS
+	_size = COACHING_SIZE if coaching_layout else SIZE
+	_viewport.size = COACHING_PIXELS if coaching_layout else PIXELS
+	_viewport.transparent_bg = coaching_layout
 	_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	add_child(_viewport)
 
 	var quad := QuadMesh.new()
-	quad.size = SIZE
+	quad.size = _size
 	var material := StandardMaterial3D.new()
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.albedo_texture = _viewport.get_texture()
+	if coaching_layout:
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
 	var display := MeshInstance3D.new()
 	display.mesh = quad
 	display.material_override = material
@@ -46,22 +57,50 @@ func _ready() -> void:
 	add_child(display)
 
 	var frame := PanelContainer.new()
-	frame.add_theme_stylebox_override("panel", _box(Color("#101d29"), ACCENT, 2))
+	var shell := _box(Color("#121923"), Color("#3b4b5f"), 2) if coaching_layout else _box(Color("#101d29"), ACCENT, 2)
+	if coaching_layout:
+		shell.set_corner_radius_all(30)
+	frame.add_theme_stylebox_override("panel", shell)
 	_viewport.add_child(frame)
 	frame.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var margin := MarginContainer.new()
 	for edge in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + edge, 30)
+		margin.add_theme_constant_override("margin_" + edge, 38 if coaching_layout else 30)
 	frame.add_child(margin)
 	var layout := VBoxContainer.new()
-	layout.add_theme_constant_override("separation", 12)
+	layout.add_theme_constant_override("separation", 16 if coaching_layout else 12)
 	margin.add_child(layout)
-	_label_style(_title, 46, INK)
-	_label_style(_status, 29, ACCENT)
+	_label_style(_title, 56 if coaching_layout else 46, INK)
+	_label_style(_status, 28 if coaching_layout else 29, ACCENT)
 	layout.add_child(_title)
 	layout.add_child(_status)
-	layout.add_child(HSeparator.new())
+	if coaching_layout:
+		_build_coaching_layout(layout)
+	else:
+		layout.add_child(HSeparator.new())
+		_build_standard_layout(layout)
+	visibility_changed.connect(_update_visibility)
+	_update_visibility()
 
+func _build_coaching_layout(layout: VBoxContainer) -> void:
+	_mode_bar = HBoxContainer.new()
+	_action_bar = HBoxContainer.new()
+	_details.hide()
+	_mode_bar.add_theme_constant_override("separation", 12)
+	_action_bar.add_theme_constant_override("separation", 12)
+	layout.add_child(_mode_bar)
+	_detail_column.add_theme_constant_override("separation", 10)
+	_detail_column.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	layout.add_child(_detail_column)
+	_label_style(_details, 25, MUTED)
+	_detail_column.add_child(_details)
+	layout.add_child(_action_bar)
+
+func _build_standard_layout(layout: VBoxContainer) -> void:
+	_options_scroll = ScrollContainer.new()
+	_details_scroll = ScrollContainer.new()
+	_options = VBoxContainer.new()
+	play_area = PlayAreaPreview.new()
 	var columns := HBoxContainer.new()
 	columns.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	columns.add_theme_constant_override("separation", 30)
@@ -84,11 +123,8 @@ func _ready() -> void:
 	_details_scroll.add_child(_details)
 	_detail_column.add_child(_details_scroll)
 	columns.add_child(_detail_column)
-	visibility_changed.connect(_update_visibility)
-	_update_visibility()
 
 func set_visual(visual: Control) -> void:
-	_options_scroll.custom_minimum_size.x = 280
 	_detail_column.add_child(visual)
 	_detail_column.move_child(visual, 0)
 
@@ -119,7 +155,8 @@ func recenter(camera: Camera3D, distance := 1.4) -> void:
 func present(title: String, status: String, lines: Array[String], options: Array[String], choice: int, disabled: bool, warning := false, stop := false) -> void:
 	if _title.text != title:
 		_title.text = title
-		_details_scroll.scroll_vertical = 0
+		if not coaching_layout:
+			_details_scroll.scroll_vertical = 0
 	if _status.text != status:
 		_status.text = status
 	var color := STOP if stop else (WARNING if warning else ACCENT)
@@ -128,18 +165,19 @@ func present(title: String, status: String, lines: Array[String], options: Array
 	var details := "\n\n".join(lines)
 	if _details.text != details:
 		_details.text = details
+		_details.visible = not coaching_layout or not details.is_empty()
 	if options != _labels:
 		var count_changed := options.size() != _labels.size()
 		_labels = options.duplicate()
 		while _buttons.size() > options.size():
 			var button: Button = _buttons.pop_back()
-			_options.remove_child(button)
+			button.get_parent().remove_child(button)
 			button.queue_free()
 		while _buttons.size() < options.size():
 			_add_button()
 		for i in range(options.size()):
 			_buttons[i].text = options[i]
-		if count_changed:
+		if count_changed and not coaching_layout:
 			_options_scroll.scroll_vertical = 0
 	_choice = choice
 	for i in range(_buttons.size()):
@@ -149,7 +187,9 @@ func present(title: String, status: String, lines: Array[String], options: Array
 func _add_button() -> void:
 	var button := Button.new()
 	var index := _buttons.size()
-	button.custom_minimum_size.y = 64
+	button.custom_minimum_size.y = 68 if coaching_layout else 64
+	if coaching_layout:
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	button.add_theme_font_size_override("font_size", 25)
 	button.add_theme_color_override("font_color", INK)
 	button.add_theme_color_override("font_pressed_color", INK)
@@ -157,12 +197,21 @@ func _add_button() -> void:
 	button.add_theme_stylebox_override("normal", _box(Color("#1c3343"), Color("#33536a"), 2))
 	button.add_theme_stylebox_override("pressed", _box(Color("#214857"), ACCENT, 3))
 	button.add_theme_stylebox_override("disabled", _box(Color("#152431"), Color("#293d4d"), 2))
+	if coaching_layout:
+		var mode := index < MODE_BUTTONS
+		button.add_theme_font_size_override("font_size", 28 if mode else 25)
+		button.add_theme_stylebox_override("normal", _box(Color("#1b2632") if mode else Color("#19212c"), Color("#303d4d"), 1))
+		button.add_theme_stylebox_override("pressed", _box(Color("#254152"), Color("#7dbdc7"), 2))
 	button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	button.toggle_mode = true
 	button.focus_mode = Control.FOCUS_NONE
 	button.pressed.connect(func(): selected.emit(index))
 	_buttons.append(button)
-	_options.add_child(button)
+	if coaching_layout:
+		var bar := _mode_bar if index < MODE_BUTTONS else _action_bar
+		bar.add_child(button)
+	else:
+		_options.add_child(button)
 
 func intersect_ray(origin: Vector3, direction: Vector3) -> Vector2:
 	if not is_visible_in_tree():
@@ -172,20 +221,20 @@ func intersect_ray(origin: Vector3, direction: Vector3) -> Vector2:
 	if local.z <= 0.0 or aim.z >= -0.0001:
 		return NO_HIT
 	var at := local - aim * (local.z / aim.z)
-	var uv := Vector2(at.x / SIZE.x + 0.5, 0.5 - at.y / SIZE.y)
+	var uv := Vector2(at.x / _size.x + 0.5, 0.5 - at.y / _size.y)
 	if not Rect2(Vector2.ZERO, Vector2.ONE).has_point(uv):
 		return NO_HIT
-	return uv * Vector2(PIXELS)
+	return uv * Vector2(_viewport.size)
 
 func world_point(pixel: Vector2) -> Vector3:
-	var uv := pixel / Vector2(PIXELS) - Vector2(0.5, 0.5)
-	return to_global(Vector3(uv.x * SIZE.x, -uv.y * SIZE.y, 0.0))
+	var uv := pixel / Vector2(_viewport.size) - Vector2(0.5, 0.5)
+	return to_global(Vector3(uv.x * _size.x, -uv.y * _size.y, 0.0))
 
 func button_world_point(index: int) -> Vector3:
 	return world_point(_buttons[index].get_global_rect().get_center())
 
 func _button_at(pixel: Vector2) -> int:
-	if not is_visible_in_tree() or not _options_scroll.get_global_rect().has_point(pixel):
+	if not is_visible_in_tree() or (not coaching_layout and not _options_scroll.get_global_rect().has_point(pixel)):
 		return -1
 	for i in range(_buttons.size()):
 		if not _buttons[i].disabled and _buttons[i].get_global_rect().has_point(pixel):
@@ -212,11 +261,13 @@ func press_at(pixel: Vector2) -> bool:
 	return true
 
 func scroll_at(pixel: Vector2, amount: int) -> void:
+	if coaching_layout:
+		return
 	if _options_scroll.get_global_rect().has_point(pixel):
 		_options_scroll.scroll_vertical += amount
 	elif _details_scroll.get_global_rect().has_point(pixel):
 		_details_scroll.scroll_vertical += amount
 
 func show_choice(index: int) -> void:
-	if index >= 0 and index < _buttons.size():
+	if not coaching_layout and index >= 0 and index < _buttons.size():
 		_options_scroll.ensure_control_visible(_buttons[index])

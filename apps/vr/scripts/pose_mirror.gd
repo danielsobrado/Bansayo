@@ -37,6 +37,7 @@ var _left := true
 var _connected := false
 
 func _ready() -> void:
+	panel.coaching_layout = true
 	add_child(panel)
 	panel.set_visual(view)
 	panel.selected.connect(_choose)
@@ -53,15 +54,16 @@ func _recenter() -> void:
 	panel.recenter(_camera, 1.4 if _xr else 2.0)
 
 func _process(_delta: float) -> void:
-	if visible and not view.live_pose.is_empty() and _live_frame().is_empty():
+	if is_node_ready() and is_visible_in_tree() and not view.live_pose.is_empty() and _live_frame().is_empty():
 		_refresh()
 
 func connection(connected: bool) -> void:
 	_connected = connected
 	if not connected:
+		view.reset_framing()
 		_frames.clear()
 		_training = {}
-	if visible:
+	if is_node_ready() and is_visible_in_tree():
 		_refresh()
 
 func engine_state(state: Dictionary) -> void:
@@ -75,14 +77,15 @@ func engine_state(state: Dictionary) -> void:
 		if schemas.get(id) != _schemas.get(id):
 			_frames.erase(id)
 	_schemas = schemas
-	if not _schemas.has(_camera_id):
+	if not _camera_id.is_empty() and not _schemas.has(_camera_id):
 		_camera_id = ""
-	if visible:
+		view.reset_framing()
+	if is_node_ready() and is_visible_in_tree():
 		_refresh()
 
 func training_changed(state: Dictionary) -> void:
 	_training = state
-	if visible and _mode == "session":
+	if is_node_ready() and is_visible_in_tree() and _mode == "session":
 		_refresh()
 
 func landmarks_received(frame: Dictionary) -> void:
@@ -99,6 +102,7 @@ func landmarks_received(frame: Dictionary) -> void:
 		return
 	var names: Array = schema.get("names", [])
 	var points := {}
+	var scores := {}
 	for i in range(mini(samples.size(), names.size())):
 		var point: Variant = samples[i]
 		if not point is Dictionary or float(point.get("confidence", 0.0)) < CONFIDENCE:
@@ -112,10 +116,16 @@ func landmarks_received(frame: Dictionary) -> void:
 		var position := Vector2(float(x), float(y))
 		if position.is_finite() and Rect2(0, 0, width, height).has_point(position):
 			points[name] = Vector2(width - position.x, position.y)
-	_frames[id] = {"points": points, "received_ms": Time.get_ticks_msec(), "origin": frame.get("origin")}
+			scores[name] = float(point["confidence"])
+	var confidence := 0.0
+	for score: float in scores.values():
+		confidence += score
+	_frames[id] = {"points": points, "received_ms": Time.get_ticks_msec(), "origin": frame.get("origin"),
+		"confidence": confidence / maxi(1, scores.size())}
 	if _camera_id.is_empty() and not points.is_empty():
 		_camera_id = id
-	if visible and id == _camera_id:
+		view.reset_framing()
+	if is_node_ready() and is_visible_in_tree() and id == _camera_id:
 		_refresh()
 
 func _live_frame() -> Dictionary:
@@ -145,29 +155,30 @@ func _guide() -> Dictionary:
 	return Guides.for_session(_training)
 
 func _choose(index: int) -> void:
-	match index:
-		0: closed.emit()
-		1: _set_mode("session")
-		2: _set_mode("workout")
-		3: _set_mode("technique")
-		4: choose_flexibility()
-		5:
+	match panel._labels[index]:
+		"Follow session": _set_mode("session")
+		"Workouts": _set_mode("workout")
+		"Techniques": _set_mode("technique")
+		"Flexibility": choose_flexibility()
+		"Back": closed.emit()
+		"Next guide":
 			match _mode:
 				"workout": _guide_index = (_guide_index + 1) % Guides.WORKOUT_ITEMS.size()
 				"technique": _guide_index = (_guide_index + 1) % Guides.TECHNIQUES.size()
 				"flexibility": _guide_index = (_guide_index + 1) % Guides.FLEXIBILITY.size()
 			_refresh()
-		6:
+		"Switch camera":
 			var cameras := _schemas.keys()
 			cameras.sort()
-			if not cameras.is_empty():
+			if cameras.size() > 1:
 				_camera_id = cameras[(cameras.find(_camera_id) + 1) % cameras.size()]
+				view.reset_framing()
 			_refresh()
-		7: _recenter()
-		8:
+		"Recenter": _recenter()
+		"Next phase":
 			_phase_index = (_phase_index + 1) % 5
 			_refresh()
-		9:
+		"Switch side":
 			_left = not _left
 			_refresh()
 
@@ -182,25 +193,38 @@ func _refresh() -> void:
 		source = "Recorded · " + _camera_id
 	var guide := _guide()
 	var title := str(guide.get("title", "Pose mirror"))
-	var status := "Camera pose unavailable"
+	var status := "Camera tracking unavailable"
 	if not points.is_empty():
-		status = "Partial camera pose" if points.size() < JOINTS.size() else "Camera pose available"
+		status = "Partial camera tracking" if points.size() < JOINTS.size() else "Camera tracking available"
 	elif not _connected:
 		status = "Engine disconnected"
+	if not _camera_id.is_empty():
+		status += "  ·  " + _camera_id
+	if frame.get("origin") == "simulated":
+		status += "  ·  Simulator"
+	elif frame.get("origin") == "fixture":
+		status += "  ·  Replay"
 	var current: Variant = _training.get("current")
-	var details: Array[String] = ["Illustrated guide · 2D, unscored"]
+	var details: Array[String] = []
 	if _mode == "session":
 		var phase: String = str(_training.get("phase", "")).capitalize()
 		if guide.is_empty() and current is Dictionary and not phase in ["Completed", "Aborted"]:
 			title = str(current.get("title", "Pose mirror"))
-			details = ["%s · No guide for this exercise" % phase]
+			details = ["%s · Reference unavailable for this exercise" % phase]
 		elif phase.is_empty() or phase in ["Completed", "Aborted"]:
-			details = ["Choose a guide or start an exercise in Bansayo."]
+			details = ["Choose a guide or start a session in Bansayo."]
 		else:
-			details[0] = phase + " · " + details[0]
-	view.present(points, guide.get("points", {}), source, str(guide.get("caption", "")))
-	var options: Array[String] = ["Back", "Follow session", "Workout guides", "Technique guides", "Flexibility guides",
-		"Next guide", "Switch camera", "Recenter"]
+			details = ["Session · " + phase]
+	var confidence := ""
+	if not points.is_empty():
+		confidence = "%d%% keypoint confidence" % roundi(clampf(float(frame.get("confidence", 0.0)), 0.0, 1.0) * 100.0)
+	view.present(points, guide.get("points", {}), source, str(guide.get("caption", "")), confidence)
+	var options: Array[String] = ["Follow session", "Workouts", "Techniques", "Flexibility", "Back", "Recenter"]
+	if _schemas.size() > 1:
+		options.append("Switch camera")
+	if _mode != "session":
+		options.append("Next guide")
 	if _mode == "technique":
-		options.append_array(["Next phase", "Switch guide side"])
-	panel.present(title, status, details, options, -1, false, points.size() < JOINTS.size())
+		options.append_array(["Next phase", "Switch side"])
+	var mode := ["session", "workout", "technique", "flexibility"].find(_mode)
+	panel.present(title.to_upper(), "●  " + status, details, options, mode, false, points.size() < JOINTS.size())

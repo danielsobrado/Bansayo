@@ -1,109 +1,100 @@
 extends Control
-## Two dimensionless camera-plane figures. Body volumes are drawn around visible joints.
-const LIVE := Color("#74e6ed")
-const GUIDE := Color("#c8b5ff")
-const MUTED := Color("#b6c9d8")
-const LIMBS := [
-	["left_shoulder", "left_elbow", 0.16], ["left_elbow", "left_wrist", 0.13],
-	["right_shoulder", "right_elbow", 0.16], ["right_elbow", "right_wrist", 0.13],
-	["left_hip", "left_knee", 0.24], ["left_knee", "left_ankle", 0.17],
-	["right_hip", "right_knee", 0.24], ["right_knee", "right_ankle", 0.17],
-]
-const TORSO := ["left_shoulder", "right_shoulder", "right_hip", "left_hip"]
+## Side-by-side planar figures with shared framing, anatomy and provenance labels.
+const Anatomy := preload("res://scripts/pose_anatomy_2d.gd")
+const LIVE := Color("#82dce4")
+const GUIDE := Color("#c7b6ee")
+const MUTED := Color("#b6c3d4")
+const INK := Color("#edf2f9")
+const GAP := 18.0
 var live_pose := {}
 var guide_pose := {}
 var live_caption := ""
 var guide_caption := ""
+var _confidence := ""
+var _live_torso := 0.0
+var _last_sample_ms := 0
+var _card_style := StyleBoxFlat.new()
 
 func _ready() -> void:
 	custom_minimum_size.y = 420
+	size_flags_vertical = Control.SIZE_EXPAND_FILL
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_card_style.bg_color = Color("#191f2a")
+	_card_style.border_color = Color("#3a475a")
+	_card_style.set_border_width_all(2)
+	_card_style.set_corner_radius_all(22)
+	_card_style.anti_aliasing = true
 
-func present(live: Dictionary, guide: Dictionary, camera_text: String, guide_text: String) -> void:
-	if live == live_pose and guide == guide_pose and camera_text == live_caption and guide_text == guide_caption:
+func reset_framing() -> void:
+	_live_torso = 0.0
+	_last_sample_ms = 0
+
+func present(live: Dictionary, guide: Dictionary, camera_text: String, guide_text: String, confidence := "") -> void:
+	if live == live_pose and guide == guide_pose and camera_text == live_caption and guide_text == guide_caption and confidence == _confidence:
 		return
+	if not live.is_empty() and (live != live_pose or _live_torso <= 0.0):
+		var torso := Anatomy.torso_length(live)
+		if torso > 0.0:
+			var now := Time.get_ticks_msec()
+			var weight := 1.0 - exp(-float(now - _last_sample_ms) / 2400.0)
+			_live_torso = torso if _live_torso <= 0.0 else lerpf(_live_torso, torso, weight)
+			_last_sample_ms = now
 	live_pose = live
 	guide_pose = guide
 	live_caption = camera_text
 	guide_caption = guide_text
+	_confidence = confidence
 	queue_redraw()
 
 func _draw() -> void:
-	var width := (size.x - 12) * 0.5
-	_draw_card(Rect2(0, 0, width, size.y), "Your reflection", live_caption, live_pose, LIVE)
-	_draw_card(Rect2(width + 12, 0, width, size.y), "Reference pose", guide_caption, guide_pose, GUIDE)
+	var width := (size.x - GAP) * 0.5
+	_draw_card(Rect2(0, 0, width, size.y), "YOUR REFLECTION", live_caption, _confidence, live_pose, LIVE, _live_torso)
+	_draw_card(Rect2(width + GAP, 0, width, size.y), "REFERENCE POSE", guide_caption, "Illustrated  ·  Unscored", guide_pose, GUIDE, Anatomy.torso_length(guide_pose))
 
-func _draw_card(card: Rect2, title: String, caption: String, joints: Dictionary, ink: Color) -> void:
-	draw_rect(card, Color("#152734"))
-	draw_rect(card, Color("#365163"), false, 2)
+func _draw_card(card: Rect2, title: String, caption: String, note: String, joints: Dictionary, ink: Color, torso: float) -> void:
+	draw_style_box(_card_style, card)
 	var font := ThemeDB.fallback_font
-	draw_string(font, card.position + Vector2(12, 30), title, HORIZONTAL_ALIGNMENT_LEFT, card.size.x - 24, 23, ink)
-	draw_string(font, card.position + Vector2(12, card.size.y - 16), caption, HORIZONTAL_ALIGNMENT_LEFT, card.size.x - 24, 18, MUTED)
+	var left := card.position + Vector2(26, 0)
+	var text_width := card.size.x - 52
+	draw_circle(left + Vector2(6, 34), 5, ink, true, -1, true)
+	draw_string(font, left + Vector2(24, 44), title, HORIZONTAL_ALIGNMENT_LEFT, text_width - 24, 28, INK)
+	var footer := card.size.y - 70
+	draw_line(left + Vector2(0, footer), left + Vector2(text_width, footer), Color("#394456"), 1.0, true)
+	draw_string(font, left + Vector2(0, footer + 41), caption, HORIZONTAL_ALIGNMENT_LEFT, text_width * 0.50, 23, ink)
+	draw_string(font, left + Vector2(text_width * 0.48, footer + 41), note, HORIZONTAL_ALIGNMENT_RIGHT, text_width * 0.52, 21, MUTED)
 	if joints.is_empty():
-		draw_string(font, card.position + Vector2(12, card.size.y * 0.52), "Pose unavailable", HORIZONTAL_ALIGNMENT_CENTER, card.size.x - 24, 19, MUTED)
+		draw_string(font, left + Vector2(0, card.size.y * 0.51), "Pose unavailable", HORIZONTAL_ALIGNMENT_CENTER, text_width, 28, MUTED)
 		return
-	_draw_body(Rect2(card.position + Vector2(20, 56), card.size - Vector2(40, 96)), joints, ink)
+	var stage := Rect2(card.position + Vector2(35, 63), card.size - Vector2(70, 143))
+	var floor_y := stage.end.y - 2.0
+	draw_line(Vector2(stage.position.x + 38, floor_y), Vector2(stage.end.x - 38, floor_y), Color("#303a4b"), 1.0, true)
+	var result := _project(stage.grow(-12.0), joints, torso)
+	Anatomy.draw(self, result.points, result.unit, ink)
 
-func _draw_body(area: Rect2, joints: Dictionary, ink: Color) -> void:
+func _project(area: Rect2, joints: Dictionary, torso: float) -> Dictionary:
 	var bounds := Rect2(joints.values()[0], Vector2.ZERO)
 	for point: Vector2 in joints.values():
 		bounds = bounds.expand(point)
-	var torso_length := 0.0
 	var pivot := bounds.get_center()
-	var projected_pivot := area.get_center()
-	if joints.has_all(TORSO):
-		var shoulders: Vector2 = (joints["left_shoulder"] + joints["right_shoulder"]) * 0.5
-		pivot = (joints["left_hip"] + joints["right_hip"]) * 0.5
-		torso_length = shoulders.distance_to(pivot)
-		projected_pivot.y += area.size.y * 0.10
-	var fit := minf(
-		(projected_pivot.x - area.position.x) / maxf(pivot.x - bounds.position.x, 0.001),
-		(area.end.x - projected_pivot.x) / maxf(bounds.end.x - pivot.x, 0.001))
-	fit = minf(fit, minf(
-		(projected_pivot.y - area.position.y) / maxf(pivot.y - bounds.position.y, 0.001),
-		(area.end.y - projected_pivot.y) / maxf(bounds.end.y - pivot.y, 0.001)))
-	if torso_length > 0.001:
-		fit = minf(fit, area.size.y * 0.27 / torso_length)
-	var offset := projected_pivot - pivot * fit
-	var points := {}
-	for key in joints:
-		points[key] = joints[key] * fit + offset
-	var unit := clampf(torso_length * fit, 42.0, 90.0) if torso_length > 0.001 else 42.0
-	var fill := Color("#152734").lerp(ink, 0.7)
-	for limb in LIMBS:
-		if not points.has_all([limb[0], limb[1]]):
-			continue
-		var start: Vector2 = points[limb[0]]
-		var finish: Vector2 = points[limb[1]]
-		var radius: float = limb[2] * unit * 0.62
-		var tip_radius := radius * 0.70
-		var axis := start.direction_to(finish).orthogonal()
-		if not axis.is_zero_approx():
-			draw_colored_polygon(PackedVector2Array([
-				start + axis * radius, start - axis * radius,
-				finish - axis * tip_radius, finish + axis * tip_radius]), fill)
-		draw_circle(start, radius, fill, true, -1, true)
-		draw_circle(finish, tip_radius, fill, true, -1, true)
-	if points.has_all(TORSO):
-		var polygon := PackedVector2Array()
-		for name in TORSO:
-			polygon.append(points[name])
-		# Near-profile and overlapping landmarks can collapse or cross the torso corners.
-		var triangles := Geometry2D.triangulate_polygon(polygon)
-		if triangles.size() > 0:
-			draw_colored_polygon(polygon, fill)
-			for i in range(polygon.size()):
-				draw_line(polygon[i], polygon[(i + 1) % polygon.size()], fill, unit * 0.10, true)
-				draw_circle(polygon[i], unit * 0.05, fill, true, -1, true)
-	if points.has("head"):
-		var center: Vector2 = points["head"]
-		if points.has_all(["left_shoulder", "right_shoulder"]):
-			var neck: Vector2 = (points["left_shoulder"] + points["right_shoulder"]) * 0.5
-			draw_line(neck, neck.move_toward(center, unit * 0.28), fill, unit * 0.20, true)
-		var head := PackedVector2Array()
-		for i in range(32):
-			var angle := TAU * i / 32.0
-			head.append(center + Vector2(cos(angle) * 0.18, sin(angle) * 0.24) * unit)
-		draw_colored_polygon(head, fill)
-	for point: Vector2 in points.values():
-		draw_circle(point, 3, ink, true, -1, true)
+	if joints.has_all(Anatomy.HIPS):
+		pivot = (joints[Anatomy.HIPS[0]] + joints[Anatomy.HIPS[1]]) * 0.5
+	var anchor := area.position + area.size * Vector2(0.5, 0.565)
+	var unit := area.size.y * 0.288
+	var scale_factor := unit / torso if torso > 0.0 else area.size.y * 0.72 / maxf(bounds.size.y, 1.0)
+	# Only constrain the stable scale when a pose approaches the card edges.
+	var room_before := anchor - area.position
+	var room_after := area.end - anchor
+	var extent_before := pivot - bounds.position
+	var extent_after := bounds.end - pivot
+	if extent_before.x > 0.0:
+		scale_factor = minf(scale_factor, room_before.x / extent_before.x)
+	if extent_before.y > 0.0:
+		scale_factor = minf(scale_factor, room_before.y / extent_before.y)
+	if extent_after.x > 0.0:
+		scale_factor = minf(scale_factor, room_after.x / extent_after.x)
+	if extent_after.y > 0.0:
+		scale_factor = minf(scale_factor, room_after.y / extent_after.y)
+	var projected := {}
+	for name in joints:
+		projected[name] = anchor + (joints[name] - pivot) * scale_factor
+	return {"points": projected, "unit": clampf(torso * scale_factor, unit * 0.67, unit)}

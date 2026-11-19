@@ -11,7 +11,7 @@ const VrInputRouter = preload("res://scripts/vr_input_router.gd")
 const PoseMirror = preload("res://scripts/pose_mirror.gd")
 const Clinic = preload("res://scripts/clinic.gd")
 const ALIGNMENT_FILE := "user://xr_alignment.cfg"
-const STUDIO_DARK := [Color("#1c2931"), Color("#273d48"), Color("#344650"), Color("#588a93"), Color("#111a24")]
+const STUDIO_DARK := [Color("#202a35"), Color("#273543"), Color("#344150"), Color("#5d7880"), Color("#121a25")]
 const STUDIO_LIGHT := [Color("#958979"), Color("#668082"), Color("#cbbba3"), Color("#49686a"), Color("#c4cbd0")]
 var _buffer := PoseBuffer.new()
 var _body := AvatarRenderer.new()
@@ -283,18 +283,25 @@ func _build_room() -> void:
 	var environment := WorldEnvironment.new()
 	_room_environment.background_mode = Environment.BG_COLOR
 	_room_environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	_room_environment.ambient_light_color = Color(0.77, 0.82, 0.86)
-	_room_environment.ambient_light_energy = 0.76
+	_room_environment.ambient_light_color = Color(0.79, 0.84, 0.94)
+	_room_environment.ambient_light_energy = 0.54
 	environment.environment = _room_environment
 	add_child(environment)
 	var light := DirectionalLight3D.new()
-	light.rotation_degrees = Vector3(-44, -28, 0)
-	light.light_energy = 1.15
+	light.rotation_degrees = Vector3(-54, -28, 0)
+	light.light_color = Color("#e4efff")
+	light.light_energy = 0.86
 	add_child(light)
+	var fill := OmniLight3D.new()
+	fill.position = Vector3(-2.8, 3.6, -5.5)
+	fill.light_color = Color("#d5def5")
+	fill.light_energy = 0.80
+	fill.omni_range = 10.0
+	add_child(fill)
 
 	for i in range(STUDIO_DARK.size() - 1):
 		var material := StandardMaterial3D.new()
-		material.roughness = 0.94
+		material.roughness = 0.88
 		_room_materials.append(material)
 	_surface(Vector3(16, 0.12, 16), Vector3(0, -0.064, 0), _room_materials[0])
 	_surface(Vector3(5.8, 0.018, 5.8), Vector3(0, -0.01, 0), _room_materials[1])
@@ -309,6 +316,8 @@ func _build_room() -> void:
 	for x in [-5.5, -3.0, -0.5, 2.0, 4.5, 7.0]:
 		_surface(Vector3(0.07, 4.0, 0.10), Vector3(x, 2, -7.71), _room_materials[0])
 	_surface(Vector3(15.8, 0.035, 0.055), Vector3(0, 2.95, -7.7), _room_materials[3])
+	_surface(Vector3(15.8, 0.16, 0.08), Vector3(0, 0.08, -7.68), _room_materials[0])
+	_surface(Vector3(0.08, 0.16, 15.8), Vector3(-7.68, 0.08, 0), _room_materials[0])
 
 func _surface(size: Vector3, at: Vector3, material: StandardMaterial3D) -> void:
 	var instance := MeshInstance3D.new()

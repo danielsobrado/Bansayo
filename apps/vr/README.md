@@ -74,8 +74,7 @@ shows an illustrated reference. Use **Switch camera** to pick the view that best
 guide. Low-confidence points are omitted and the reflection clears when camera frames stop.
 
 **Follow session** shows the current item in Full Body in 20 or the current phase and side
-of the front or roundhouse kick, including in the clinic. **Workout guides**, **Technique
-guides**, and **Flexibility guides** also work before a session. Use **Next guide** to browse.
+of the front or roundhouse kick, including in the clinic. **Workouts**, **Techniques**, and **Flexibility** also work before a session. Use **Next guide** to browse.
 Technique previews have separate phase and side controls. The flexibility previews include
 overhead reach, side bend, and calf stretch.
 
@@ -83,6 +82,9 @@ On physical cameras configured for body detection, the engine uses YOLOX to loca
 and RTMPose to estimate the landmarks. The mirror works with one camera and draws an
 approximate silhouette around its detected joints. The guide is an unscored 2D example.
 Camera viewpoint and occlusion affect what the reflection can show.
+The cyan and violet avatars share the same planar anatomy renderer. Framing uses a slowly
+updated torso scale and preserves partially observed poses. The confidence label summarizes
+the available keypoints. [Redesign screenshot and matching camera settings](../../docs/validation/2026-11-19-vr-coaching-visuals.md)
 
 ### Taekwondo clinic
 

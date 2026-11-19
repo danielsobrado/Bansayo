@@ -69,6 +69,14 @@ func _check_avatar() -> bool:
 	var foot := {"position_m": [0, 0, 0], "rotation": [0, 0, 0, 1], "provenance": "inferred"}
 	avatar.apply_pose({"skeleton_rev": 1, "segments": [foot]})
 	assert(avatar._segments[0].visible and avatar._meshes[0].scale.is_equal_approx(Vector3.ONE * 0.06))
+	foot["provenance"] = "derived"
+	foot["position_m"] = [0.4, 0.3, -0.2]
+	avatar.apply_pose({"skeleton_rev": 1, "segments": [foot]})
+	assert(avatar._meshes[0].mesh is ArrayMesh)
+	assert(avatar._segments[0].position.is_equal_approx(Vector3(0.4, 0.3, -0.2)))
+	avatar.set_mannequin(false)
+	avatar.apply_pose({"skeleton_rev": 1, "segments": [foot]})
+	assert(avatar._segments[0].visible and avatar._meshes[0].mesh is CapsuleMesh)
 	avatar.apply_pose({"skeleton_rev": 1, "segments": []})
 	assert(not avatar._segments[0].visible)
 	avatar.queue_free()
