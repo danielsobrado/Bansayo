@@ -118,6 +118,10 @@ pub fn router(api: Api) -> Router {
         )
         .route("/api/v1/training/reps/{id}/{rep}", get(training::rep_get))
         .route(
+            "/api/v1/training/sessions/{id}/clinic-review",
+            get(training::clinic_review),
+        )
+        .route(
             "/api/v1/training/reps/{id}/{rep}/trace",
             get(training::rep_trace),
         )

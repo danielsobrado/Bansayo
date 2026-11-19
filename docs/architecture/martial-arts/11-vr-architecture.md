@@ -145,6 +145,12 @@ A translucent reference avatar next to the mirror image (default) or superimpose
 
 ### 4.4 Target training
 
+The clinic pilot uses one stationary target per session. The athlete places it with the right
+controller after room alignment. The engine checks height and distance against the tracked stance
+and publishes the position and radius. The headset checks clearance against its play-area polygon.
+A fresh camera-observed ankle inside the radius during extension produces one reach event per
+attempt, rendered as a local ring burst and spatial chime. [Clinic target controls](../../../apps/vr/README.md#floating-kick-targets)
+
 Targets are **engine-defined** so that desktop and VR agree and so that reaching one is graded like
 any other measurement.
 

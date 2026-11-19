@@ -103,7 +103,8 @@ func _refresh() -> void:
 		lines.append("Max ankle height %s · Min pelvis height %s" % [ankle, pelvis])
 	lines.append("")
 	lines.append(alignment_text)
-	lines.append("A/X or R: record · B/Y or P: replay · stick click: align · C: reset counts")
+	lines.append("Left stick or T: clinic · Right stick: align")
+	lines.append("A/X or R: record · B/Y or P: replay · C: reset counts")
 	if not action_text.is_empty():
 		lines.append(action_text)
 	lines.append("50 ms interpolation buffer · joint angles not validated")

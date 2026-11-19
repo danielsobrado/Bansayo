@@ -1,0 +1,50 @@
+schema: bansayo.timed-workout/v1
+id: general.workout.full_body_in_20
+version: 1
+names: { display: Full Body in 20 }
+blocks:
+  - id: warmup
+    title: Warm-up
+    items:
+      - { id: march, title: March, duration_s: 60, instruction: March in place with easy steps., easier: Keep the steps small. }
+      - { id: side_steps, title: Side steps, duration_s: 60, instruction: Step to either side and bring your feet together., easier: Tap your toe to the side. }
+      - { id: arm_swings, title: Step and swing, duration_s: 60, instruction: Let your arms swing gently as you step., easier: Keep the arm swings small. }
+  - id: cardio
+    title: Cardio
+    items:
+      - &reach { id: reach, title: Step and reach, duration_s: 60, instruction: Do a step-touch to each side with an overhead reach., easier: March with low reaches. }
+      - &knees { id: knees, title: Alternating knee lifts, duration_s: 60, instruction: Alternate gentle knee lifts as you step., easier: March with small steps. }
+      - *reach
+      - *knees
+  - id: strength
+    title: Full-body strength
+    items:
+      - &squat { id: squat, title: Squat, duration_s: 40, instruction: Sit your hips back and stand tall at a steady pace., easier: Use a shallower squat. }
+      - &recover { id: recover, title: Recover, duration_s: 20, instruction: Breathe and get into position for the next move. }
+      - &push { id: push, title: Wall push-up, duration_s: 40, instruction: With hands on a stable wall bend your arms and press away., easier: Stand closer to the wall. }
+      - *recover
+      - { id: hinge, title: Hip hinge, duration_s: 40, instruction: Soften your knees and send your hips back before standing tall., easier: Make the movement smaller. }
+      - *recover
+      - *push
+      - *recover
+      - *squat
+      - *recover
+  - id: core
+    title: Core and coordination
+    items:
+      - &cross { id: cross, title: Standing cross-crawl, duration_s: 40, instruction: Lift one knee and reach across with the opposite hand. Switch sides., easier: Tap the opposite toe forward instead. }
+      - *recover
+      - &sweep { id: sweep, title: Side step with arm sweeps, duration_s: 40, instruction: Step side to side and sweep your arms gently across your body., easier: Take a smaller step and lower your arms. }
+      - *recover
+      - *cross
+      - *recover
+      - *sweep
+      - *recover
+      - *cross
+      - *recover
+  - id: cooldown
+    title: Cooldown
+    items:
+      - { id: walk, title: Easy walk, duration_s: 60, instruction: Walk in place and let your breathing settle., easier: Use a slow march with small steps. }
+      - { id: shoulders, title: Shoulder circles, duration_s: 60, instruction: Lower your arms and make relaxed shoulder circles., easier: Make smaller circles. }
+      - { id: calves, title: Calf movements, duration_s: 60, instruction: Alternate slow heel lifts within a comfortable range., easier: Keep your hands on a stable wall. }

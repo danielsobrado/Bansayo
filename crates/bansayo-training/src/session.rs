@@ -91,6 +91,13 @@ pub struct Session {
     fresh_times: VecDeque<u64>,
     live_ids: Vec<String>,
     no_body_since: Option<u64>,
+    stance_sample: Option<(TimeUs, Vec3)>,
+    target: Option<PracticeTarget>,
+}
+
+struct PracticeTarget {
+    placement: TargetPlacement,
+    reached: Option<bool>,
 }
 
 /// How long the world body must be absent before image-plane observables are served.
@@ -165,6 +172,8 @@ impl Session {
             fresh_times: VecDeque::new(),
             live_ids: vec![],
             no_body_since: None,
+            stance_sample: None,
+            target: None,
         };
         s.rebuild_recognizer(side);
         Ok((s, events))
@@ -212,6 +221,9 @@ impl Session {
     pub fn state(&self) -> TrainingState {
         let mut s = self.engine.state();
         s.live_observables = self.live_ids.clone();
+        if let (Some(item), Some(target)) = (&mut s.current, &self.target) {
+            item.targets.push(target.placement.clone());
+        }
         s
     }
 
@@ -233,8 +245,91 @@ impl Session {
         cmd: TrainingCommand,
         args: &TrainingCommandArgs,
     ) -> Result<Vec<TrainingEvent>, Rejected> {
+        let placement = args
+            .target_position_m
+            .map(|position| {
+                if cmd != TrainingCommand::Start {
+                    return Err(Rejected {
+                        reason: reason(
+                            "target_before_start",
+                            None,
+                            "Place the target before starting the clinic.",
+                        ),
+                    });
+                }
+                self.place_target(t_us, position)
+            })
+            .transpose()?;
         let ev = self.engine.command(t_us, cmd, args)?;
+        if cmd == TrainingCommand::Start {
+            self.target = placement.map(|placement| PracticeTarget {
+                placement,
+                reached: None,
+            });
+        }
         Ok(self.post(ev))
+    }
+
+    fn place_target(&self, t_us: TimeUs, position_m: Vec3) -> Result<TargetPlacement, Rejected> {
+        let reject = |code, message| Rejected {
+            reason: reason(code, None, message),
+        };
+        let Some(target) = self.expected().and_then(|t| {
+            let strike = t.def.strike.as_ref()?;
+            (strike.keypoint.as_deref() == Some("ankle.active"))
+                .then_some(t.def.target.as_ref())
+                .flatten()
+        }) else {
+            return Err(reject(
+                "target_unsupported",
+                "This technique has no spatial target.",
+            ));
+        };
+        if self.setup.grade.origin_live
+            && self
+                .setup
+                .grade
+                .calibration
+                .get(&CalibrationKind::FloorPlane)
+                != Some(&CalibrationState::Valid)
+        {
+            return Err(reject(
+                "target_floor",
+                "Calibrate the floor before using a spatial target.",
+            ));
+        }
+        let Some((seen, stance)) = self.stance_sample else {
+            return Err(reject(
+                "target_stance",
+                "Stand where the cameras can see your hips before placing a target.",
+            ));
+        };
+        if t_us.saturating_sub(seen) > self.setup.grade.max_gap_us {
+            return Err(reject(
+                "target_stance",
+                "Stand where the cameras can see your hips before placing a target.",
+            ));
+        }
+        let leg = self.observer.lengths().leg_length;
+        let x = f64::from(position_m[0] - stance[0]);
+        let z = f64::from(position_m[2] - stance[2]);
+        let radius = target.radius_m;
+        if !position_m.iter().all(|x| x.is_finite())
+            || !(0.05..=0.25).contains(&radius)
+            || !(0.25 * leg..=0.8 * leg).contains(&f64::from(position_m[1]))
+            || !(0.30 * leg..=(leg * target.distance.min(1.0) + radius)).contains(&x.hypot(z))
+        {
+            return Err(reject(
+                "target_out_of_reach",
+                "Place the target at a comfortable height below your hip and within one leg length.",
+            ));
+        }
+        Ok(TargetPlacement {
+            id: "clinic-target".into(),
+            position_m,
+            radius_m: radius,
+            step_id: None,
+        })
     }
 
     pub fn tick(&mut self, t_us: u64) -> Vec<TrainingEvent> {
@@ -267,6 +362,27 @@ impl Session {
 
     /// One solver tick.
     pub fn sample(&mut self, sample: &MotionSample) -> Output {
+        let observed = |p: &KeypointState| {
+            (p.evidence.provenance == Provenance::Measured
+                && p.evidence.method == MethodId::Triangulated
+                && p.position_m.iter().all(|v| v.is_finite())
+                && p.evidence.confidence.is_some_and(|c| c >= 0.65)
+                && p.evidence
+                    .t_obs_us
+                    .is_some_and(|t| sample.t_us.saturating_sub(t) <= self.setup.grade.max_gap_us))
+            .then_some(p.position_m)
+        };
+        self.stance_sample = sample
+            .body
+            .as_ref()
+            .and_then(|b| observed(&b.root))
+            .map(|point| (sample.t_us, point));
+        let foot = self.target.as_ref().and_then(|_| {
+            let ankle = sample.body.as_ref()?.observed_ankles.as_ref()?
+                [side_index(self.engine.side())]
+            .as_ref()?;
+            observed(ankle)
+        });
         // No world body for a second, i.e. one camera left (08 §10): image-plane values take over.
         // A multi-view rig dropping views for a moment stays on world observables with a gap.
         // Decided from the samples alone, so re-analysis decides the same way as the live run.
@@ -300,6 +416,9 @@ impl Session {
                         }
                         RecognitionEvent::ActivityEnd { .. } => vec![],
                         RecognitionEvent::RepStarted { t_us } => {
+                            if let Some(target) = &mut self.target {
+                                target.reached = None;
+                            }
                             self.engine.rep_started(self.next_rep, t_us)
                         }
                         RecognitionEvent::PhaseEnter { phase, t_us } => {
@@ -340,6 +459,27 @@ impl Session {
         });
         self.engine.set_still(still.unwrap_or(false));
         events.extend(self.engine.sample(&frame));
+        if let Some(point) = foot
+            && let Some(phase) = self.expected().and_then(|tech| tech.def.strike.as_ref())
+            && self.engine.in_phase(&phase.in_phase)
+            && let Some(target) = &mut self.target
+            && target.reached != Some(true)
+        {
+            let d2: f64 = point
+                .iter()
+                .zip(target.placement.position_m)
+                .map(|(a, b)| f64::from(a - b).powi(2))
+                .sum();
+            let reached = d2 <= target.placement.radius_m.powi(2);
+            target.reached = Some(reached);
+            if reached {
+                events.push(self.engine.target_reached(
+                    sample.t_us,
+                    &target.placement.id,
+                    self.next_rep,
+                ));
+            }
+        }
         Output {
             events: self.post(events),
             frame: Some(frame),
@@ -372,7 +512,16 @@ impl Session {
         };
         let rep_index = self.next_rep;
         self.next_rep += 1;
-        let r = self.analyse(&f, outcome, rep_index);
+        let mut r = self.analyse(&f, outcome, rep_index);
+        if let Some(target) = &mut self.target {
+            r.targets.push(TargetResult {
+                id: target.placement.id.clone(),
+                reached: target
+                    .reached
+                    .take()
+                    .filter(|_| outcome == RepOutcome::Completed),
+            });
+        }
         self.set_results.push(r.clone());
         self.engine.repetition(&r)
     }

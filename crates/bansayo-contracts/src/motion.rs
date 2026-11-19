@@ -84,6 +84,10 @@ pub struct BodyState {
     pub segments: Vec<SegmentState>,
     pub keypoints: Vec<Option<KeypointState>>,
     pub root: KeypointState,
+    /// Camera observations for spatial target checks, ordered left then right.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub observed_ankles: Option<[Option<KeypointState>; 2]>,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct PlanarKeypoint {

@@ -13,16 +13,16 @@ func set_state(state: Dictionary) -> void:
 
 func toggle_recording() -> void:
 	if recording:
-		_call(HTTPClient.METHOD_POST, "/recording/stop", "{}", "Recording saved")
+		request(HTTPClient.METHOD_POST, "/recording/stop", "{}", "Recording saved")
 	else:
-		_call(HTTPClient.METHOD_POST, "/recording/start", "{}", "Recording")
+		request(HTTPClient.METHOD_POST, "/recording/start", "{}", "Recording")
 
 ## Replays the newest session, or returns to live input while replaying.
 func toggle_replay() -> void:
 	if replaying:
-		_call(HTTPClient.METHOD_POST, "/playback/stop", "{}", "Live")
+		request(HTTPClient.METHOD_POST, "/playback/stop", "{}", "Live")
 		return
-	var sessions: Variant = await _call(HTTPClient.METHOD_GET, "/sessions", "", "")
+	var sessions: Variant = await request(HTTPClient.METHOD_GET, "/sessions")
 	if not sessions is Array or sessions.is_empty():
 		message.emit("No recorded session to replay")
 		return
@@ -30,24 +30,33 @@ func toggle_replay() -> void:
 	for session in sessions:
 		if str(session.get("created_utc", "")) > str(newest.get("created_utc", "")):
 			newest = session
-	_call(HTTPClient.METHOD_POST, "/playback/start", JSON.stringify({"session_id": newest["id"], "looping": true}), "Replaying " + str(newest.get("name", newest["id"])))
+	request(HTTPClient.METHOD_POST, "/playback/start", JSON.stringify({"session_id": newest["id"], "looping": true}), "Replaying " + str(newest.get("name", newest["id"])))
 
-func _call(method: int, path: String, body: String, done: String) -> Variant:
+func request(method: int, path: String, body: String = "", done: String = "", quiet := false) -> Variant:
 	if _busy:
 		return null
 	_busy = true
 	var http := HTTPRequest.new()
+	http.timeout = 5.0
 	add_child(http)
-	http.request(engine_url.trim_suffix("/") + "/api/v1" + path, ["Content-Type: application/json"], method, body)
+	var result_code := http.request(engine_url.trim_suffix("/") + "/api/v1" + path, ["Content-Type: application/json"], method, body)
+	if result_code != OK:
+		http.queue_free()
+		_busy = false
+		if not quiet:
+			message.emit("The engine request could not start")
+		return null
 	var result: Array = await http.request_completed
 	http.queue_free()
 	_busy = false
 	var parsed: Variant = JSON.parse_string((result[3] as PackedByteArray).get_string_from_utf8())
 	if result[0] != HTTPRequest.RESULT_SUCCESS or not parsed is Dictionary:
-		message.emit("Engine not reachable")
+		if not quiet:
+			message.emit("Engine not reachable")
 		return null
 	if not parsed.get("ok", false):
-		message.emit(str(parsed.get("error", {}).get("message", "Request failed")))
+		if not quiet:
+			message.emit(str(parsed.get("error", {}).get("message", "Request failed")))
 		return null
 	if not done.is_empty():
 		message.emit(done)

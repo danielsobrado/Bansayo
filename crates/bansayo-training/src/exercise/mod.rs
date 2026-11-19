@@ -6,6 +6,8 @@ use crate::observables::ObservableFrame;
 use bansayo_contracts::*;
 use serde_json::{Value, json};
 
+pub mod timed;
+
 /// One workout item: a technique practised for `sets` × `reps`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ItemPlan {
@@ -701,6 +703,17 @@ impl ExerciseEngine {
     /// Whether a repetition result would be counted now.
     pub fn accepts_results(&self) -> bool {
         self.phase == SessionPhase::Active && self.set_open
+    }
+
+    pub(crate) fn in_phase(&self, id: &str) -> bool {
+        self.phase == SessionPhase::Active
+            && self.sub == Some(SubState::InRep)
+            && self.phase_id.as_deref() == Some(id)
+    }
+
+    pub(crate) fn target_reached(&mut self, t_us: TimeUs, id: &str, rep: u32) -> TrainingEvent {
+        self.now = self.now.max(t_us);
+        self.event("target_reached", json!({ "id": id, "rep_index": rep }))
     }
 
     /// A classified repetition (completed, incomplete, rejected or wrong side).

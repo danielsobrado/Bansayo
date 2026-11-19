@@ -124,7 +124,13 @@ pub fn compile_workout(
         }
     };
     let _ = block;
-    let Plan::Technique(p) = &item.plan;
+    let Plan::Technique(p) = &item.plan else {
+        return Err(vec![problem(
+            "plan",
+            "invalid_kind",
+            "expected a technique item",
+        )]);
+    };
     let Some(def) = lib.techniques.get(&p.technique) else {
         return Err(vec![problem(
             "plan.technique",

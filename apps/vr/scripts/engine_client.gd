@@ -4,6 +4,8 @@ signal hello_received(message: Dictionary)
 signal skeleton_changed(definition: Dictionary)
 signal state_changed(state: Dictionary)
 signal frame_received(frame: Dictionary)
+signal training_changed(state: Dictionary)
+signal training_event(session_id: String, event: Dictionary)
 signal connection_changed(connected: bool, message: String)
 
 const PROTOCOL_VERSION := 1
@@ -33,7 +35,7 @@ func _connect() -> void:
 	_socket.max_queued_packets = MAX_PACKETS_PER_PROCESS
 	var url := engine_url.replace("https://", "wss://").replace("http://", "ws://").trim_suffix("/")
 	connection_changed.emit(false, "Connecting to " + engine_url)
-	var error := _socket.connect_to_url(url + "/api/v1/stream?topics=frame,state")
+	var error := _socket.connect_to_url(url + "/api/v1/stream?topics=frame,state,training")
 	if error != OK:
 		_disconnected("Engine not connected: " + engine_url)
 
@@ -81,6 +83,11 @@ func _handle_message(message: Dictionary) -> void:
 		skeleton_changed.emit(message["skeleton"])
 	elif _greeted and kind == "state" and message.get("state") is Dictionary:
 		state_changed.emit(message["state"])
+	elif _greeted and kind == "training_state":
+		var training: Variant = message.get("state")
+		training_changed.emit(training if training is Dictionary else {})
+	elif _greeted and kind == "training_event" and message.get("event") is Dictionary:
+		training_event.emit(str(message.get("session_id", "")), message["event"])
 	elif _greeted and kind == "frame":
 		var sequence := int(message.get("seq", -1))
 		if sequence <= _last_seq:

@@ -61,6 +61,8 @@ Start the engine. Windows asks whether `bansayo-engine.exe` may use the network:
    state, counts and cues.
 5. **Admin**: create athletes (tick consent to save sessions), make one active, create a session,
    acknowledge the safety notes, then Start / Pause / Resume / End; set USB camera exposure.
+6. **Train**: see the active athlete and session, open the live viewer, and browse saved
+   desktop and VR sessions. A saved clinic shows the same graded set comparison as desktop Train.
 
 ## What was tested (18 November 2026)
 

@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type {
   AthleteProfile,
+  CueInstance,
   PlanSide,
   SystemState,
   TrainingEvent,
+  TrainingSessionDetail,
   TrainingSessionSummary,
   TrainingState,
 } from "@contracts";
@@ -12,7 +14,7 @@ import { contentCache, queryCache, useQuery } from "../../engine/queries";
 import { observablesStore, trainingEvents, trainingStore } from "../../engine/training";
 import { paths, trainingActions } from "../../engine/trainingActions";
 import { formatDurationUs } from "../../lib/format";
-import { contentId, formatValue, readinessPhrase, resolveText } from "../../lib/training";
+import { contentId, formatValue, readinessPhrase, resolveText, textOf } from "../../lib/training";
 import { Button } from "../../ui/Button";
 import { CapabilityBadge } from "../../ui/CapabilityBadge";
 import { CueBanner } from "../../ui/CueBanner";
@@ -23,6 +25,8 @@ import { OriginBadge } from "../../ui/OriginBadge";
 import { Select } from "../../ui/Select";
 import { ViewportCanvas } from "../../viewport/ViewportCanvas";
 import { formatUtc, nameOf, SESSION_ID, useContentIndex, useTexts } from "./common";
+import { FollowAlong, WorkoutResults } from "./FollowAlong";
+import { SetComparison } from "./SetComparison";
 import styles from "./train.module.css";
 
 export function useTraining(): TrainingState | null {
@@ -34,9 +38,21 @@ export function Train({ state, rest }: { state: SystemState | null; rest: string
   const training = useTraining();
   if (rest[0] === "summary") {
     const id = rest[1] ?? "";
-    return SESSION_ID.test(id) ? <Summary id={id} state={state} /> : <EmptyState title="No such session" />;
+    return SESSION_ID.test(id) ? <Summary id={id} state={state} training={training} /> : <EmptyState title="No such session" />;
   }
-  if (rest[0] === "live" && training) return <LiveSession training={training} state={state} />;
+  if (rest[0] === "live" && training?.plan.kind === "workout") return (
+    <div className="workspace-page">
+      <Heading title={training.plan.title} />
+      <FollowAlong key={training.session_id} training={training} />
+    </div>
+  );
+  if (rest[0] === "live" && training) return <LiveSession key={training.session_id} training={training} state={state} />;
+  if (rest[0] === "history" && state?.athlete) return (
+    <div className="workspace-page">
+      <Heading title="Training history"><a href="#/train">Back to Train</a></Heading>
+      <div className={styles.page}><RecentSessions athleteId={state.athlete.id} history /></div>
+    </div>
+  );
   return <Dashboard state={state} training={training} />;
 }
 
@@ -73,7 +89,7 @@ function Dashboard({ state, training }: { state: SystemState | null; training: T
               <a href="#/train/live">Open the live session</a>
             </section>
           ) : (
-            athlete && <PlanPicker />
+            athlete && <PlanPicker athleteId={athlete.id} />
           )}
         </div>
         <div className={styles.stack}>{athlete && <RecentSessions athleteId={athlete.id} />}</div>
@@ -152,29 +168,44 @@ function AthletePanel({ state }: { state: SystemState | null }) {
   );
 }
 
-function PlanPicker() {
+function PlanPicker({ athleteId }: { athleteId: string }) {
   const index = useContentIndex();
+  const workouts = index?.entries.filter((e) => e.kind === "workouts" && e.valid) ?? [];
   const disciplines = index?.entries.filter((e) => e.kind === "disciplines" && e.valid) ?? [];
   const [discipline, setDiscipline] = useState<string>("");
   const d = discipline || disciplines[0]?.id || "";
   const techniques = index?.entries.filter((e) => e.kind === "techniques" && e.valid && e.discipline === d) ?? [];
   const [technique, setTechnique] = useState("");
-  const t = technique || techniques[0]?.id || "";
+  const chosen = techniques.find((e) => e.id === technique) ?? techniques[0];
+  const t = chosen?.id ?? "";
+  const clinic = d === "taekwondo" && chosen?.family?.startsWith("kick.");
   const [side, setSide] = useState<PlanSide>("right");
   const [sets, setSets] = useState("3");
   const [reps, setReps] = useState("10");
   const [rest, setRest] = useState("30");
   const [create, status] = useAction(trainingActions.createSession);
-  async function prepare() {
-    const r = await create({
-      plan: { kind: "technique", technique: t, side, sets: Number(sets), reps: Number(reps), rest_s: Number(rest) },
-    });
+  async function prepare(plan: import("@contracts").Plan) {
+    const r = await create({ plan, athlete_id: athleteId });
     if (r.ok) location.hash = "#/train/live";
   }
   if (!index) return <section className={styles.card}><h2>Plan</h2><p className={styles.muted}>Loading content…</p></section>;
   return (
     <section className={styles.card} aria-label="Plan">
       <h2>Plan</h2>
+      {workouts.length > 0 && (
+        <div className={styles.stack}>
+          <h3>Follow-along classes</h3>
+          <div className={styles.row}>
+            {workouts.map((w) => (
+              <Button key={w.id} variant="primary" disabled={status.pending}
+                onClick={() => void prepare({ kind: "workout", workout: w.id })}>
+                {w.names.display}
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
+      <h3>Technique practice</h3>
       <div className={styles.row}>
         <Select label="Discipline" value={d} options={disciplines.map((e) => ({ value: e.id, label: e.names.display }))} onChange={(e) => setDiscipline(e.target.value)} />
         <Select label="Technique" value={t} options={techniques.map((e) => ({ value: e.id, label: e.names.native ? `${e.names.display} (${e.names.native})` : e.names.display }))} onChange={(e) => setTechnique(e.target.value)} />
@@ -189,13 +220,28 @@ function PlanPicker() {
           onChange={(e) => setSide(e.target.value as PlanSide)}
         />
       </div>
+      {clinic && (
+        <div>
+          <Button variant="primary" disabled={side === "alternate" || status.pending}
+            aria-describedby="clinic-description"
+            onClick={() => void prepare({ kind: "technique", technique: t, side, sets: 2, reps: 4, rest_s: 30, stages: ["normal"], coaching: "minimal" })}>
+            Prepare Taekwondo clinic
+          </Button>
+          <p id="clinic-description" className={styles.muted}>
+            {side === "alternate"
+              ? "Choose left or right to practise on the same side in both clinic sets."
+              : "Two sets of four at normal pace, with 30 seconds to review between sets."}
+          </p>
+        </div>
+      )}
       <div className={styles.row}>
         <Field label="Sets" type="number" min={1} max={8} value={sets} onChange={(e) => setSets(e.target.value)} />
         <Field label="Repetitions" type="number" min={1} max={20} value={reps} onChange={(e) => setReps(e.target.value)} />
         <Field label="Rest (s)" type="number" min={0} max={600} value={rest} onChange={(e) => setRest(e.target.value)} />
       </div>
       <div className={styles.row}>
-        <Button variant="primary" disabled={!t || status.pending} onClick={() => void prepare()}>
+        <Button variant={clinic ? "default" : "primary"} disabled={!t || status.pending}
+          onClick={() => void prepare({ kind: "technique", technique: t, side, sets: Number(sets), reps: Number(reps), rest_s: Number(rest) })}>
           Prepare session
         </Button>
       </div>
@@ -204,11 +250,12 @@ function PlanPicker() {
   );
 }
 
-function RecentSessions({ athleteId }: { athleteId: string }) {
-  const sessions = useQuery<TrainingSessionSummary[]>(paths.sessions(athleteId, 5));
+function RecentSessions({ athleteId, history = false }: { athleteId: string; history?: boolean }) {
+  const sessions = useQuery<TrainingSessionSummary[]>(paths.sessions(athleteId, history ? 50 : 5));
   return (
-    <section className={styles.card} aria-label="Recent sessions">
-      <h2>Recent sessions</h2>
+    <section className={styles.card} aria-label={history ? "Saved sessions" : "Recent sessions"}>
+      <h2>{history ? "Saved sessions" : "Recent sessions"}</h2>
+      {!history && <a href="#/train/history">Open training history</a>}
       {sessions.data?.length ? (
         <table className={styles.table}>
           <tbody>
@@ -218,7 +265,7 @@ function RecentSessions({ athleteId }: { athleteId: string }) {
                   <a href={`#/train/summary/${s.id}`}>{s.title}</a>
                   <div className={styles.muted}>{formatUtc(s.started_utc)}</div>
                 </td>
-                <td className="mono">{s.reps_completed} reps</td>
+                <td className="mono">{s.plan_kind === "workout" ? "Class" : `${s.reps_completed} reps`}</td>
                 <td>{s.origin !== "live" && <OriginBadge label={s.origin} />}</td>
               </tr>
             ))}
@@ -282,7 +329,9 @@ function LiveSession({ training, state }: { training: TrainingState; state: Syst
   const cur = training.current;
   const ended = training.phase === "completed" || training.phase === "aborted";
   const safety = training.readiness.find((g) => g.gate === "safety_ack" && g.state === "fail");
-  const lastSet = [...events].reverse().find((e) => e.type === "set_completed");
+  const lastSet = trainingEvents.session() === training.session_id
+    ? [...events].reverse().find((e) => e.type === "set_completed" && e.position.set === training.position.set)
+    : undefined;
   const lost = cur?.sub_state === "tracking_lost";
   const last = training.last_rep;
   return (
@@ -301,19 +350,19 @@ function LiveSession({ training, state }: { training: TrainingState; state: Syst
           <Gauges ids={training.live_observables.slice(0, 8)} />
           <div className={styles.transport} role="toolbar" aria-label="Session controls">
             {(training.phase === "preparing" || training.phase === "ready") && (
-              <Button variant="primary" disabled={training.phase !== "ready" || status.pending} onClick={() => void command({ command: "start" })}>
+              <Button variant="primary" disabled={training.phase !== "ready" || status.pending} onClick={() => void command(training.session_id, { command: "start" })}>
                 ▶ Start
               </Button>
             )}
             {training.phase === "paused" ? (
-              <Button onClick={() => void command({ command: "resume" })}>▶ Resume</Button>
+              <Button disabled={status.pending} onClick={() => void command(training.session_id, { command: "resume" })}>▶ Resume</Button>
             ) : (
-              !ended && training.phase !== "preparing" && training.phase !== "ready" && <Button onClick={() => void command({ command: "pause" })}>⏸ Pause</Button>
+              !ended && training.phase !== "preparing" && training.phase !== "ready" && <Button disabled={status.pending} onClick={() => void command(training.session_id, { command: "pause" })}>⏸ Pause</Button>
             )}
-            {training.phase === "resting" && <Button onClick={() => void command({ command: "skip_rest" })}>⏭ Skip rest</Button>}
-            {!ended && training.phase !== "preparing" && training.phase !== "ready" && <Button onClick={() => void command({ command: "repeat_item" })}>↻ Repeat</Button>}
+            {training.phase === "resting" && <Button disabled={status.pending} onClick={() => void command(training.session_id, { command: "skip_rest" })}>⏭ Skip rest</Button>}
+            {!ended && training.phase !== "preparing" && training.phase !== "ready" && <Button disabled={status.pending} onClick={() => void command(training.session_id, { command: "repeat_item" })}>↻ Repeat</Button>}
             {!ended && (
-              <Button variant="danger" onClick={() => void command({ command: "end" })}>
+              <Button variant="danger" disabled={status.pending} onClick={() => void command(training.session_id, { command: "end" })}>
                 ■ End
               </Button>
             )}
@@ -352,10 +401,11 @@ function LiveSession({ training, state }: { training: TrainingState; state: Syst
                   </li>
                 ))}
               </ul>
+              {cur && <TechniqueGuide exerciseRef={cur.exercise.ref} instructions={cur.instructions} texts={texts} />}
               {safety && cur && (
                 <>
                   <SafetyNotes technique={contentId(cur.exercise.ref)} texts={texts} />
-                  <Button onClick={() => void command({ command: "ack_safety", args: { content_refs: [cur.exercise.ref] } })}>
+                  <Button disabled={status.pending} onClick={() => void command(training.session_id, { command: "ack_safety", args: { content_refs: [cur.exercise.ref] } })}>
                     I have read the safety notes
                   </Button>
                 </>
@@ -385,7 +435,7 @@ function LiveSession({ training, state }: { training: TrainingState; state: Syst
               </ul>
             </section>
           )}
-          {training.phase === "resting" && lastSet && <SetSummary event={lastSet} texts={texts} />}
+          {training.phase === "resting" && lastSet && <SetSummary event={lastSet} texts={texts} remainingMs={cur?.timer?.duration_ms == null ? null : Math.max(0, cur.timer.duration_ms - cur.timer.elapsed_ms)} />}
           {last && (
             <section className={styles.card} aria-label="Last repetition">
               <h2>Last repetition · #{last.repetition.rep_index} · {last.repetition.outcome.replace("_", " ")}</h2>
@@ -431,25 +481,81 @@ function SafetyNotes({ technique, texts }: { technique: string; texts: Record<st
   );
 }
 
-function SetSummary({ event, texts }: { event: TrainingEvent; texts: Record<string, string> | null }) {
-  const cues = (event.data.cues as { observed: { key: string; params: Record<string, never> } }[] | undefined) ?? [];
+function TechniqueGuide({ exerciseRef, instructions, texts }: {
+  exerciseRef: string;
+  instructions: import("@contracts").TextRef[];
+  texts: Record<string, string> | null;
+}) {
+  const def = useQuery<{ phases?: { id: string; label?: string }[] }>(`/content/techniques/${contentId(exerciseRef)}`, contentCache);
+  return (
+    <>
+      <h2>Movement guide</h2>
+      {instructions.length > 0 && (
+        <ul className={styles.gates}>
+          {instructions.map((i) => <li key={i.key}>{textOf(i, texts)}</li>)}
+        </ul>
+      )}
+      {def.data?.phases?.length ? (
+        <ol className={styles.phaseGuide} aria-label="Movement phases">
+          {def.data.phases.map((p) => <li key={p.id}>{p.label ?? p.id}</li>)}
+        </ol>
+      ) : null}
+      <p className={styles.muted}>Warm up and try a few slow practice repetitions before starting.</p>
+    </>
+  );
+}
+
+function SetSummary({ event, texts, remainingMs }: {
+  event: TrainingEvent;
+  texts: Record<string, string> | null;
+  remainingMs: number | null;
+}) {
+  const cues = event.data.cues as CueInstance[] | undefined;
+  const cue = cues?.find((c) => !c.resolved && !c.id.startsWith("improved."));
   return (
     <section className={styles.card} aria-label="Set summary">
       <h2>Set {event.position.set ?? ""} complete · rest</h2>
-      {cues.map((c, i) => (
-        <p key={i}>{resolveText(c.observed.key, c.observed.params, texts)}</p>
-      ))}
+      {remainingMs !== null && (
+        <p className={styles.muted}>Next set in {formatDurationUs(Math.ceil(remainingMs / 1000) * 1_000_000)}</p>
+      )}
+      {cue ? (
+        <p role="status"><strong>Focus for the next set.</strong> {textOf(cue.suggestion, texts)}</p>
+      ) : (
+        <p>Repeat the same side and pace. No correction was available for this set.</p>
+      )}
     </section>
   );
 }
 
 // ---- summary ----------------------------------------------------------------------
 
-function Summary({ id, state }: { id: string; state: SystemState | null }) {
+function Summary({ id, state, training }: { id: string; state: SystemState | null; training: TrainingState | null }) {
   const index = useContentIndex();
-  const detail = useQuery<{ session: TrainingSessionSummary }>(paths.session(id));
-  const reps = useQuery<import("@contracts").RepetitionResult[]>(paths.reps(id));
+  const detail = useQuery<TrainingSessionDetail>(paths.session(id));
   const s = detail.data?.session;
+  const live = training?.session_id === id && training.plan.kind === "workout" ? training : null;
+  const workout = s?.plan_kind === "workout" || live !== null;
+  const reps = useQuery<import("@contracts").RepetitionResult[]>(workout ? null : paths.reps(id));
+  if (workout) {
+    const totals = detail.data?.summary?.totals as { active_ms?: number } | undefined;
+    const blocks = detail.data?.summary?.blocks_completed;
+    const completed = (live?.phase ?? s?.status) === "completed";
+    const running = live ? live.phase !== "completed" && live.phase !== "aborted" : s?.status === "active";
+    return (
+      <div className="workspace-page">
+        <Heading title={`Summary · ${s?.title ?? live?.plan.title}`} />
+        <div className={styles.page}>
+          {running && (live ? <a href="#/train/live">Open the class in progress</a> : <p>Class in progress</p>)}
+          {!running && <WorkoutResults
+            activeMs={live?.totals.active_ms ?? totals?.active_ms ?? null}
+            blocks={typeof blocks === "number" ? blocks : live ? (live.position.block ?? 0) + Number(completed) : null}
+            completed={completed}
+          />}
+          <a href="#/train">Back to Train</a>
+        </div>
+      </div>
+    );
+  }
   const metricIds = [...new Set((reps.data ?? []).flatMap((r) => r.measurements.map((m) => m.metric)))].slice(0, 4);
   return (
     <div className="workspace-page">
@@ -469,6 +575,7 @@ function Summary({ id, state }: { id: string; state: SystemState | null }) {
           {state?.training?.session_id === id ? " · live" : ""}
         </p>
       )}
+      {detail.data && detail.data.sets.length >= 2 && <SetComparison sessionId={id} />}
       {reps.data && (
         <table className={styles.table} aria-label="Repetitions">
           <thead>

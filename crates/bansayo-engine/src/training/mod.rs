@@ -9,6 +9,7 @@ use crate::pipeline::command::{Client, ControlError, TrainingContext, TrainingSa
 use crate::store::{SessionBegin, Write, Writer};
 use athletes::{AthleteError, Athletes};
 use bansayo_contracts::*;
+use bansayo_training::exercise::timed::TimedWorkout;
 use bansayo_training::metrics::{GradeContext, Qa};
 use bansayo_training::observables::{Cutoffs, ObservableFrame};
 use bansayo_training::recognize::RecognizerConfig;
@@ -151,13 +152,41 @@ struct Current {
     motion: Option<crate::recording::motion::MotionRecorder>,
     inputs: bool,
     closed: bool,
-    session: Session,
+    session: RunningSession,
     profile: AthleteProfile,
     stored: bool,
     log: Vec<TrainingEvent>,
     title: String,
     published_rev: u64,
     last_publish_us: u64,
+}
+
+enum RunningSession {
+    Technique(Box<Session>),
+    Workout(TimedWorkout),
+}
+
+impl RunningSession {
+    fn state(&self) -> TrainingState {
+        match self {
+            Self::Technique(s) => s.state(),
+            Self::Workout(s) => s.state(),
+        }
+    }
+
+    fn session_id(&self) -> &SessionId {
+        match self {
+            Self::Technique(s) => s.session_id(),
+            Self::Workout(s) => s.session_id(),
+        }
+    }
+
+    fn finished(&self) -> bool {
+        match self {
+            Self::Technique(s) => s.finished(),
+            Self::Workout(s) => s.finished(),
+        }
+    }
 }
 
 pub struct Runner {
@@ -292,6 +321,11 @@ impl Actor {
                     None => break,
                 },
                 _ = second.tick() => {
+                    let now = self.now();
+                    if let Some(Current { session: RunningSession::Workout(workout), .. }) = self.current.as_mut() {
+                        let events = workout.tick(now);
+                        self.emit(events);
+                    }
                     self.drain();
                     self.publish(true);
                 }
@@ -322,7 +356,9 @@ impl Actor {
             planar_from_us: self
                 .current
                 .as_ref()
-                .filter(|c| !c.session.finished())
+                .filter(|c| {
+                    matches!(c.session, RunningSession::Technique(_)) && !c.session.finished()
+                })
                 .map(|c| c.created_us),
             storage: StorageStatus {
                 state: if self.r.writer.is_none() {
@@ -488,6 +524,15 @@ impl Actor {
         if c.session.finished() {
             return;
         }
+        let session = match &mut c.session {
+            RunningSession::Technique(session) => session,
+            RunningSession::Workout(workout) => {
+                let events = workout.tick(sample.t_us);
+                self.emit(events);
+                self.publish(false);
+                return;
+            }
+        };
         let mut events = vec![];
         if gap > 0 {
             // Dropped samples are a tracking gap of that length (14 §3).
@@ -498,15 +543,15 @@ impl Actor {
                 body: None,
                 planar: vec![],
             };
-            events.extend(c.session.sample(&hole).events);
+            events.extend(session.sample(&hole).events);
         }
         if let Some(report) = self.r.system.borrow().capability_report.clone() {
-            c.session.capability(&report);
+            session.capability(&report);
         }
         let started = self.r.timing.on().then(std::time::Instant::now);
-        let out = c.session.sample(sample);
+        let out = session.sample(sample);
         events.extend(out.events);
-        events.extend(c.session.tick(sample.t_us));
+        events.extend(session.tick(sample.t_us));
         if let Some(s) = started {
             let d = s.elapsed().as_micros() as u64;
             self.r
@@ -642,11 +687,19 @@ impl Actor {
         let Some(c) = self.current.as_mut() else {
             return Err(conflict("No training session exists."));
         };
+        if req
+            .session_id
+            .as_ref()
+            .is_some_and(|id| id != c.session.session_id())
+        {
+            return Err(conflict("This training session is no longer current."));
+        }
         let args = req.args.unwrap_or_default();
-        let ev = c
-            .session
-            .command(now, req.command, &args)
-            .map_err(|r| conflict(&r.reason.message))?;
+        let ev = match &mut c.session {
+            RunningSession::Technique(s) => s.command(now, req.command, &args),
+            RunningSession::Workout(s) => s.command(now, req.command),
+        }
+        .map_err(|r| conflict(&r.reason.message))?;
         self.emit(ev);
         self.publish(false);
         self.current
@@ -662,6 +715,11 @@ impl Actor {
         let Some(profile) = self.active.clone() else {
             return Err(conflict("Select an athlete before starting a session."));
         };
+        if req.athlete_id.as_ref().is_some_and(|id| *id != profile.id) {
+            return Err(conflict(
+                "The active athlete changed. Select the athlete again.",
+            ));
+        }
         let Some(writer) = self.r.writer.clone() else {
             return Err(ControlError::new(
                 ApiErrorCode::Unavailable,
@@ -674,7 +732,12 @@ impl Actor {
                 "Training sessions cannot be created during playback.",
             ));
         }
-        let Plan::Technique(plan) = &req.plan;
+        let plan = match &req.plan {
+            Plan::Technique(plan) => plan,
+            Plan::Workout(plan) => {
+                return self.create_workout(plan, profile, writer, ctx).await;
+            }
+        };
         let lib = &self.r.content.library;
         let Some(def) = lib.techniques.get(&plan.technique) else {
             return Err(ControlError {
@@ -836,7 +899,7 @@ impl Actor {
             motion,
             inputs,
             closed: false,
-            session,
+            session: RunningSession::Technique(Box::new(session)),
             profile,
             stored: consent,
             log: vec![],
@@ -854,6 +917,92 @@ impl Actor {
         if !consent {
             tracing::info!(session=%session_id, "session runs without storage: no motion-data consent");
         }
+        Ok(state)
+    }
+
+    async fn create_workout(
+        &mut self,
+        plan: &WorkoutPlan,
+        profile: AthleteProfile,
+        writer: Writer,
+        ctx: TrainingContext,
+    ) -> Result<TrainingState, ControlError> {
+        let def = self
+            .r
+            .content
+            .get("workouts", &plan.workout)
+            .and_then(|body| serde_json::from_value::<TimedWorkoutDef>(body.clone()).ok())
+            .ok_or_else(|| {
+                ControlError::new(
+                    ApiErrorCode::InvalidRequest,
+                    "Unknown or invalid timed workout.",
+                )
+            })?;
+        let now = self.now();
+        let id = new_session_id();
+        let (workout, events) = TimedWorkout::new(
+            def,
+            id.clone(),
+            profile.id.clone(),
+            session_config(&self.r.config).countdown_ms,
+            now,
+        )
+        .map_err(|_| {
+            ControlError::new(
+                ApiErrorCode::InvalidRequest,
+                "The timed workout is invalid.",
+            )
+        })?;
+        let state = workout.state();
+        let consent = profile.consent.motion_data_utc.is_some();
+        if consent {
+            let begin = SessionBegin {
+                session_id: id,
+                athlete_id: profile.id.clone(),
+                started_utc: crate::clock::utc_now_rfc3339(),
+                plan: Plan::Workout(plan.clone()),
+                plan_ref: state.plan.plan_ref.clone(),
+                origin: ctx.origin,
+                capability_profile: CapabilityProfileId::None,
+                tracking_config: ctx.tracking,
+                calibration_set: ctx.calibration,
+                snapshots: self
+                    .r
+                    .content
+                    .snapshot("workouts", &plan.workout)
+                    .into_iter()
+                    .collect(),
+                has_inputs: false,
+                has_motion: false,
+                reanalysis_of: None,
+                analysis_rev: 1,
+                source_mask: None,
+            };
+            let (tx, rx) = oneshot::channel();
+            if writer.try_write(Write::Begin(Box::new(begin), tx)).is_err()
+                || !matches!(rx.await, Ok(Ok(())))
+            {
+                return Err(ControlError::new(
+                    ApiErrorCode::Unavailable,
+                    "The workout could not be saved. Check the data directory.",
+                ));
+            }
+        }
+        self.current = Some(Current {
+            created_us: now,
+            motion: None,
+            inputs: false,
+            closed: false,
+            session: RunningSession::Workout(workout),
+            profile,
+            stored: consent,
+            log: vec![],
+            title: state.plan.title.clone(),
+            published_rev: 0,
+            last_publish_us: 0,
+        });
+        self.emit(events);
+        self.publish(true);
         Ok(state)
     }
 }

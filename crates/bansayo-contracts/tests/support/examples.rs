@@ -620,6 +620,7 @@ fn movement_examples() -> Vec<Example> {
         segments,
         keypoints,
         root,
+        observed_ankles: None,
     };
     let planar = PlanarBody {
         camera_id: dev(CAMERA),

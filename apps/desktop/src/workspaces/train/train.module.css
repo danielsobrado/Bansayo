@@ -19,6 +19,16 @@
 .gauges dt { color: var(--ink-3); }
 .gauges dd { margin: 0; font-family: var(--font-mono); }
 .notice { padding: var(--space-8); border: var(--hairline) dashed var(--state-degraded); font-size: var(--text-small); }
+.followAlong { gap: var(--space-16); }
+.followAlong h3 { margin: var(--space-12) 0 var(--space-8); font-size: clamp(1.75rem, 4vw, 3.5rem); line-height: 1.1; }
+.followAlong p { margin: var(--space-4) 0; }
+.classTimer { font: 500 clamp(3rem, 8vw, 6rem) / 1 var(--font-mono); }
+.followAlong progress { width: 100%; accent-color: currentColor; }
+.nextMove { min-height: 1.5em; font-weight: 600; }
+.classOutline { display: grid; gap: var(--space-12); margin: var(--space-8) 0; padding-inline-start: 1.5em; }
+.classOutline [aria-current] { font-weight: 700; }
+.phaseGuide { display: flex; flex-wrap: wrap; gap: var(--space-8) var(--space-24); margin: 0; padding-inline-start: 1.5em; }
+.comparisonScroll { overflow-x: auto; }
 @media (max-width: 1100px) {
   .grid { grid-template-columns: minmax(0, 1fr); }
 }

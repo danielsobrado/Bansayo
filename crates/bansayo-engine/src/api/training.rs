@@ -207,7 +207,7 @@ pub async fn session_create(
 ) -> Response {
     let Ok(Json(r)) = body else {
         return bad(
-            "Provide { \"plan\": { \"kind\": \"technique\", \"technique\": <id>, \"side\": \"left\"|\"right\"|\"alternate\" } }.",
+            "Provide a technique plan with a technique id and side, or a workout plan with a workout id.",
         );
     };
     match api.training.ask(|tx| Request::CreateSession(r, tx)).await {
@@ -360,6 +360,17 @@ pub async fn session_reps(State(api): State<Api>, Path(id): Path<String>) -> Res
     };
     match query(&api, move |c| read::reps(c, &id)).await {
         Ok(v) => ok(v),
+        Err(r) => r,
+    }
+}
+
+pub async fn clinic_review(State(api): State<Api>, Path(id): Path<String>) -> Response {
+    let id = match session_id(&id) {
+        Ok(id) => id,
+        Err(r) => return *r,
+    };
+    match query(&api, move |c| read::clinic_review(c, &id)).await {
+        Ok(review) => ok(review),
         Err(r) => r,
     }
 }
@@ -815,7 +826,9 @@ pub async fn session_reanalyse(
             .map_or(CoachingLevel::Standard, |p| p.coaching.level),
         tolerance_scale: profile.as_ref().map_or(1.0, |p| p.coaching.tolerance_scale),
     };
-    let Plan::Technique(plan) = detail.plan.clone();
+    let Plan::Technique(plan) = detail.plan.clone() else {
+        return bad("Re-analysis requires a tracked technique session.");
+    };
     let original = crate::training::reanalyse::Original::from_events(plan, athlete, &events);
     let Some(writer) = api.store.clone() else {
         return no_store();

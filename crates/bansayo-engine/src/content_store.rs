@@ -2,6 +2,7 @@
 //! index and snapshot. Rescans happen at start (and after engine writes, a later phase).
 use bansayo_contracts::{
     ContentIndex, ContentIndexEntry, ContentNames, ContentProblem, ContentSource, Side,
+    TimedWorkoutDef,
 };
 use bansayo_training::content::compile::compile_technique;
 use bansayo_training::content::types::{DisciplineDef, ScoringModel, TechniqueDef};
@@ -15,7 +16,13 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 /// Kinds served by `GET /content/{kind}/{id}` that this phase loads.
-pub const KINDS: &[&str] = &["disciplines", "techniques", "metrics", "scoring"];
+pub const KINDS: &[&str] = &[
+    "disciplines",
+    "techniques",
+    "metrics",
+    "scoring",
+    "workouts",
+];
 
 #[derive(Debug, Clone)]
 struct Loaded {
@@ -116,15 +123,9 @@ impl ContentStore {
             .chain([(user_dir.to_owned(), ContentSource::User)])
             .collect();
         for (root, source) in &roots {
-            for (sub, kind) in [
-                ("disciplines", "disciplines"),
-                ("techniques", "techniques"),
-                ("metrics", "metrics"),
-                ("scoring", "scoring"),
-                ("i18n", "i18n"),
-            ] {
+            for kind in KINDS.iter().copied().chain(["i18n"]) {
                 let mut list = vec![];
-                files(&root.join(sub), &mut list);
+                files(&root.join(kind), &mut list);
                 for path in list {
                     let file = path
                         .strip_prefix(root)
@@ -135,11 +136,7 @@ impl ContentStore {
                         Ok(b) => b,
                         Err(p) => {
                             loaded.push(Loaded {
-                                kind: KINDS
-                                    .iter()
-                                    .find(|k| **k == kind)
-                                    .copied()
-                                    .unwrap_or("i18n"),
+                                kind,
                                 id: file.clone(),
                                 body: Value::Null,
                                 source: *source,
@@ -174,11 +171,7 @@ impl ContentStore {
                         .unwrap_or(&file)
                         .to_owned();
                     loaded.push(Loaded {
-                        kind: KINDS
-                            .iter()
-                            .find(|k| **k == kind)
-                            .copied()
-                            .unwrap_or("techniques"),
+                        kind,
                         id,
                         body,
                         source: *source,
@@ -297,6 +290,10 @@ impl ContentStore {
                 }
                 "scoring" => typed::<ScoringModel>(&l.body).map(|s| {
                     lib.scoring.insert(s.id.clone(), s);
+                }),
+                "workouts" => typed::<TimedWorkoutDef>(&l.body).map(|w| {
+                    l.problems
+                        .extend(bansayo_training::exercise::timed::validate(&w))
                 }),
                 _ => Ok(()),
             };
@@ -519,6 +516,10 @@ mod tests {
         assert!(bad.is_empty(), "{bad:#?}");
         assert!(s.library.techniques.contains_key("taekwondo.dollyeo_chagi"));
         assert!(s.library.techniques.contains_key("taekwondo.ap_chagi"));
+        assert!(
+            s.get("workouts", "general.workout.full_body_in_20")
+                .is_some()
+        );
         assert_eq!(s.library.metrics.len(), 11);
         assert!(s.i18n["en"].contains_key("cue.kick.pivot.observed"));
         let snaps = s.session_snapshots("taekwondo.dollyeo_chagi", None);

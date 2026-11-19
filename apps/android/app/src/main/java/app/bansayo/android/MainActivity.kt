@@ -34,6 +34,7 @@ class MainActivity : ComponentActivity() {
                     heading("Use the phone as"),
                     button("Camera — send this camera to the engine") { open(CameraActivity::class.java) },
                     button("Viewer — live pose, counts and cues") { open(ViewerActivity::class.java) },
+                    button("Train — dashboard and history") { open(TrainingHistoryActivity::class.java) },
                     button("Admin — athletes, sessions, cameras") { open(AdminActivity::class.java) },
                 ),
             ),

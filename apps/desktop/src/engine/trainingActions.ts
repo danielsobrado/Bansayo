@@ -35,6 +35,7 @@ export const paths = {
   sessions: (athleteId: string, limit?: number) =>
     `/training/sessions${qs({ athlete_id: athleteId, limit })}`,
   session: (id: string) => `/training/sessions/${seg(id)}`,
+  clinicReview: (id: string) => `/training/sessions/${seg(id)}/clinic-review`,
   reps: (id: string) => `/training/sessions/${seg(id)}/reps`,
   rep: (id: string, rep: number) => `/training/reps/${seg(id)}/${rep}`,
   trace: (id: string, rep: number) => `/training/reps/${seg(id)}/${rep}/trace`,
@@ -56,8 +57,8 @@ export const trainingActions = {
     request("GET", `/training/sessions/${seg(id)}/events${qs({ after_seq: afterSeq, limit: 1000 })}`),
   createSession: (body: CreateSessionRequest): R<TrainingState> =>
     request("POST", "/training/sessions", body),
-  command: (body: TrainingCommandRequest): R<TrainingState> =>
-    request("POST", "/training/command", body),
+  command: (sessionId: string, body: Omit<TrainingCommandRequest, "session_id">): R<TrainingState> =>
+    request("POST", "/training/command", { ...body, session_id: sessionId }),
   createAthlete: (body: {
     id: string;
     display_name: string;

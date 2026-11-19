@@ -5,8 +5,8 @@ A mode is not a code path in a client. This document fixes, for each mode, the p
 recognition context, what the athlete sees, what is stored, and what is withheld when observation
 is insufficient.
 
-The class and lessons below are **proposed**. For the sessions that run today and the order
-of the next releases, see the [training roadmap](18-implementation-roadmap.md#22-next-training-releases).
+For the sessions that run today and the order of the next releases, see the
+[training roadmap](18-implementation-roadmap.md#22-next-training-releases).
 
 ## 1. Common session skeleton
 
@@ -136,18 +136,23 @@ plan:
 
 ### First Taekwondo technique clinic
 
-Start with the two draft techniques already in the library, *ap chagi* (front kick) and
-*dollyeo chagi* (roundhouse). The athlete selects one kick and one side after warming up.
-Show a demonstration, allow slow solo practice, then run two normal-paced sets of four with
-rest between them. Offer the other side as a separate run. Use the same kick, side and stage
-for the repeat set so the athlete can tell what changed.
+In Train, select *ap chagi* (front kick) or *dollyeo chagi* (roundhouse) and choose left or
+right. **Prepare Taekwondo clinic** opens the movement guide. The athlete can warm up and
+practise slowly before starting two normal-paced sets of four, with 30 seconds of rest
+between them. Run another clinic to practise the other side. A reviewed demonstration clip
+is a later addition.
 
-Give the athlete one thing to work on between sets. For example, show the retraction phase
-on the attempt timeline and, when the timing cue meets its evidence gate, let them repeat the
-set with that cue in mind. On one webcam, label body-relative heights and timing estimates
-with their grades. If the support-foot pivot is out of view, show the reason and withhold
-that correction. Use comparable normal-paced sets for the side-by-side review and the
-existing grade and baseline rules for a trend across sessions. [Coaching rules](07-recognition-and-coaching.md) · [Progress rules](12-data-and-progress.md)
+During the rest, show the first corrective suggestion that meets the engine's evidence
+gate. The stored comparison uses the first completed attempt from the initial and latest
+matching sets. Review retraction time and foot height side by side, along with support-foot
+pivot when the kick defines it. Each value retains its grade and any reason it was
+withheld. Matching measurement classes and grades A or B are required for comparison.
+[Coaching rules](07-recognition-and-coaching.md) · [Progress rules](12-data-and-progress.md)
+
+The Godot clinic can run two to four sets, review the same comparison and repeat the
+session from inside VR. A saved motion clip supplies the ghost, and a graded height in
+metres enables its foot path and peak marker on the reference display. Desktop Train and
+Android Train read the same saved comparison. [VR clinic controls](../../../apps/vr/README.md#taekwondo-clinic)
 
 ## 5. Combinations and Drills
 
@@ -210,12 +215,12 @@ music. [Les Mills TONE](https://www.lesmills.com/workouts/les-mills-tone)
 | 12–17 min | Core and coordination | Alternate standing cross-crawls and side steps with arm sweeps for five one-minute stations, starting with cross-crawls. Keep the same 40/20 split. Offer alternating toe taps in place of knee lifts. |
 | 17–20 min | Cooldown | Ease back to a walk, lower the arms, then finish with comfortable shoulder and calf movements. |
 
-Use a `free` item with `coaching: off` and a `duration_s` target for each timed station.
-Key the movement prompt and easier option to the item ID. The engine owns block changes and
-remaining time. For the pilot, pair an original 120 BPM loop with a visual preview eight
-beats before each change. The 40-second work and 20-second recovery intervals then fall on
-whole eight-count phrases. Athletes can move at half time. Pause and resume the loop and
-prompts at the same position as the session clock. A muted class follows the same schedule.
+The desktop pilot is available in Train. Its timed workout definition supplies each station's
+duration, movement prompt and easier option. The engine owns block changes and remaining time.
+The desktop plays an original 120 BPM loop and previews the next change during the last eight
+beats. The 40-second work and 20-second recovery intervals fall on whole eight-count phrases.
+Athletes can move at half time. Pause and resume the loop and prompts with the session clock.
+A muted class follows the same schedule. [Class definition](../../../content/workouts/full_body_in_20.yaml)
 
 Credit active time and completed blocks for following along. An easier variation earns the
 same time credit. Attach a rep count or technique cue only to an explicitly tracked item

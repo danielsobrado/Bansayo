@@ -76,8 +76,8 @@ flowchart LR
 
 ### 2.2 Next training releases
 
-The desktop can run a single-technique session. The content library contains two draft
-Taekwondo kicks. Multi-item workouts, stable holds and forms still need engine support.
+The desktop can run single-technique sessions and the first timed workout. The content library
+contains two draft Taekwondo kicks. Counted workouts, stable holds and forms still need engine support.
 The first field task is to finish the one-webcam roundhouse checks with at least three
 consenting participants. Use those results for rep counts and phase timing before making
 athlete-facing accuracy claims. Class authoring and simulator work can proceed alongside
@@ -85,8 +85,8 @@ those recordings. [Phase 2 owner checklist](../../validation/PHASE2-OWNER-CHECKL
 
 | Order | First usable session | What earns the next step |
 |---|---|---|
-| 1 · Phase 3 | **Full Body in 20** on desktop. Support a `workout` with timed `free` items, block transitions and next-move prompts. Run one authored class with music and low-impact options. | From Train, start the class, pause during a station, resume and reach the cooldown at minute 17 on the session clock. Muting audio preserves every transition. The summary accounts for all 20 minutes on a complete run and excludes pauses on an early exit. |
-| 2 · Phase 3 | **Taekwondo clinic and kicking workout.** Reuse the two draft kicks for single-technique review first, then compile their counted sets into one workout. Add the two-kick sequence once combination matching works. | Review the same side across two sets. Test left and right counts separately, suppression of an unobservable pivot, and a reversed combination on replay. |
+| 1 · Phase 3 | **Full Body in 20** is available in desktop Train. A timed workout uses engine-owned station changes, next-move prompts, original music and low-impact options. | Cooldown starts at minute 17 on the session clock. Muting audio preserves every transition. The summary accounts for all 20 minutes on a complete run and excludes pauses on an early exit. |
+| 2 · Phase 3 | **Taekwondo clinic** is available in desktop Train. The next delivery compiles counted sets for both kicks and both sides into one workout. Add the two-kick sequence once combination matching works. | Review the same side across two sets. For the workout, test left and right counts separately, suppression of an unobservable pivot, and a reversed combination on replay. |
 | 3 · Phase 3 | **Flexibility practice.** Add the raise and stable-hold items, per-side results and mandatory rest. | Replay a hold with an occlusion. Only stable, visible intervals accrue time, rest follows the hold, and a one-camera raise is labelled as limb elevation. |
 | 4 · Phase 6c, after Phases 3 and 4 | **Kata and poomsae.** Author a section of each form while tracking work proceeds. Deliver section practice first, then guided and unprompted full runs once each complete form has been reviewed. | Recover a scripted missing or extra step in the correct section. Keep unobservable direction checks out of the score. Run the form cases in V-22. |
 

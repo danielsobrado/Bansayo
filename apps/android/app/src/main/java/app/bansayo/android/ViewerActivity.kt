@@ -105,6 +105,13 @@ class ViewerActivity : ComponentActivity() {
                 when (e.optString("type")) {
                     "session_paused" -> notice.text = "Paused: ${e.optJSONObject("data")?.optString("cause")}"
                     "tracking_lost" -> notice.text = "Tracking lost — step back into view."
+                    "set_completed" -> {
+                        val focus = Engine.list(e.optJSONObject("data")?.optJSONArray("cues")).firstOrNull {
+                            !it.optBoolean("resolved") && !it.optString("id").startsWith("improved.")
+                        }
+                        notice.text = focus?.optJSONObject("suggestion")?.optString("key")?.let { text(it) }
+                            ?: "Set complete"
+                    }
                 }
             }
             "notice" -> notice.text = m.optString("message")
@@ -125,8 +132,18 @@ class ViewerActivity : ComponentActivity() {
             cur?.takeUnless { it.isNull("sub_state") }?.optString("sub_state")?.let { append(" · ").append(it.replace('_', ' ')) }
             cur?.optString("phase_id")?.takeIf { it.isNotEmpty() && it != "null" }?.let { append(" · ").append(it) }
             append('\n')
-            if (counts != null) append("Reps ${counts.optInt("done")} / ${counts.optInt("target")}")
-            if (sets != null) append("   Set ${sets.optInt("done") + 1} of ${sets.optInt("target")}")
+            if (counts != null) {
+                val unit = if (counts.optString("unit") == "seconds") "Seconds" else "Reps"
+                append("$unit ${counts.optInt("done")} / ${counts.optInt("target")}")
+            }
+            s.optJSONObject("position")?.optInt("set", 0)?.takeIf { it > 0 }?.let {
+                append("   Set $it of ${sets?.optInt("target") ?: 0}")
+            }
+            val timer = cur?.optJSONObject("timer")
+            if (timer != null && timer.optString("kind") == "rest") {
+                val remaining = (timer.optLong("duration_ms") - timer.optLong("elapsed_ms")).coerceAtLeast(0)
+                append("\nRest ${(remaining + 999) / 1000} s")
+            }
             append("\nCompleted ${totals?.optInt("reps_completed") ?: 0}, other ${totals?.optInt("reps_other") ?: 0}")
             s.optJSONObject("last_rep")?.optJSONArray("measurements")?.let { ms ->
                 append("\nLast repetition:")

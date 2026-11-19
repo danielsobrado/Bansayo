@@ -121,6 +121,49 @@ fn count(c: &Connection, table: &str) -> i64 {
 }
 
 #[test]
+fn clinic_review_uses_the_recorded_set_for_an_attempt_spanning_a_boundary() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut c = open(&dir.path().join("review.sqlite")).unwrap();
+    let session = begin(2, Origin::Live, "cal", "detector");
+    super::begin(&mut c, &session).unwrap();
+    let mut set_by_session = Default::default();
+    let mut seq = 0;
+    for set in 1..=2 {
+        let mut attempt = rep(set, 120., "B", "class");
+        attempt["measurements"][0]["metric"] = json!("kick.retraction_time@1");
+        for (kind, data) in [
+            (
+                "set_started",
+                json!({"set_index": set, "technique": "taekwondo.dollyeo_chagi@1", "side": "right"}),
+            ),
+            ("rep_completed", attempt),
+            (
+                "set_completed",
+                json!({"set_index": set, "status": "completed"}),
+            ),
+        ] {
+            seq += 1;
+            let mut e = ev(seq, kind, data);
+            e.position.set = Some(set);
+            event(
+                &mut c,
+                &session.session_id,
+                &e,
+                "Roundhouse kick",
+                &mut set_by_session,
+            )
+            .unwrap();
+        }
+    }
+    let review = read::clinic_review(&c, &session.session_id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(review.first.rep_index, 1);
+    assert_eq!(review.second.unwrap().rep_index, 2);
+    assert!(review.measurements[0].comparable);
+}
+
+#[test]
 fn migration_round_trip_and_settings() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("db/bansayo.sqlite");

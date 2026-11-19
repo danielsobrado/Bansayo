@@ -245,14 +245,16 @@ fn readiness_gates_block_until_safety_and_tracking() {
         TrainingCommand::AckSafety,
         TrainingCommandArgs {
             side: None,
-            content_refs: Some(vec!["other@1".into()])
+            content_refs: Some(vec!["other@1".into()]),
+            ..Default::default()
         }
     ));
     assert!(r.cmd_args(
         TrainingCommand::AckSafety,
         TrainingCommandArgs {
             side: None,
-            content_refs: Some(vec!["taekwondo.dollyeo_chagi@1".into()])
+            content_refs: Some(vec!["taekwondo.dollyeo_chagi@1".into()]),
+            ..Default::default()
         }
     ));
     assert_eq!(
@@ -351,14 +353,14 @@ fn repeat_and_skip_item_and_set_side() {
         TrainingCommand::SetSide,
         TrainingCommandArgs {
             side: None,
-            content_refs: None
+            ..Default::default()
         }
     ));
     assert!(r.cmd_args(
         TrainingCommand::SetSide,
         TrainingCommandArgs {
             side: Some(Side::Left),
-            content_refs: None
+            ..Default::default()
         }
     ));
     assert_eq!(r.e.recognition_context().side, Side::Left);
@@ -452,6 +454,7 @@ fn property_any_command_sequence_leaves_a_defined_state() {
                             Side::Right
                         }),
                         content_refs: Some(vec!["taekwondo.dollyeo_chagi@1".into()]),
+                        ..Default::default()
                     };
                     r.cmd_args(c, args);
                 }

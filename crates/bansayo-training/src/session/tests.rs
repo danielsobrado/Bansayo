@@ -60,6 +60,17 @@ pub fn drive_with_origins(
     reps: u32,
     rate: f64,
 ) -> (Session, Vec<TrainingEvent>, Vec<u64>) {
+    drive_script(sets, reps, rate, None)
+}
+
+const TEST_TARGET: Vec3 = [0.40, 0.50, 0.0];
+
+fn drive_script(
+    sets: u32,
+    reps: u32,
+    rate: f64,
+    observed_ankle: Option<(Vec3, Provenance)>,
+) -> (Session, Vec<TrainingEvent>, Vec<u64>) {
     let mut origins = vec![];
     let sk = skeleton(1.75);
     let (mut s, mut events) =
@@ -87,6 +98,19 @@ pub fn drive_with_origins(
         let mut sample = roundhouse_sample(&sk, script);
         sample.t_us = t;
         if let Some(b) = sample.body.as_mut() {
+            b.root.evidence.t_obs_us = Some(t);
+            if let Some((position_m, provenance)) = observed_ankle {
+                b.observed_ankles = Some([
+                    None,
+                    Some(KeypointState {
+                        position_m,
+                        evidence: Evidence {
+                            provenance,
+                            ..crate::testkit::evidence(t)
+                        },
+                    }),
+                ]);
+            }
             for p in b.keypoints.iter_mut().flatten() {
                 p.evidence.t_obs_us = Some(t);
             }
@@ -100,8 +124,15 @@ pub fn drive_with_origins(
         events.extend(s.tick(t));
         if !started && s.engine.phase() == SessionPhase::Ready {
             events.extend(
-                s.command(t, TrainingCommand::Start, &TrainingCommandArgs::default())
-                    .unwrap(),
+                s.command(
+                    t,
+                    TrainingCommand::Start,
+                    &TrainingCommandArgs {
+                        target_position_m: observed_ankle.map(|_| TEST_TARGET),
+                        ..Default::default()
+                    },
+                )
+                .unwrap(),
             );
             started = true;
         }
@@ -110,6 +141,40 @@ pub fn drive_with_origins(
         }
     }
     (s, events, origins)
+}
+
+#[test]
+fn target_feedback_uses_observed_ankles_once_per_kick() {
+    for (point, provenance, reached) in [
+        (TEST_TARGET, Provenance::Measured, Some(true)),
+        ([1.40, 0.50, 0.0], Provenance::Measured, Some(false)),
+        (TEST_TARGET, Provenance::Inferred, None),
+    ] {
+        let (_, events, _) = drive_script(1, 2, 60.0, Some((point, provenance)));
+        let reps: Vec<_> = events
+            .iter()
+            .filter(|e| e.event_type == "rep_completed")
+            .collect();
+        assert_eq!(reps.len(), 2);
+        assert!(
+            reps.iter()
+                .all(|e| e.data["targets"][0]["reached"].as_bool() == reached)
+        );
+        let hits: Vec<_> = events
+            .iter()
+            .filter(|e| e.event_type == "target_reached")
+            .collect();
+        assert_eq!(hits.len(), if reached == Some(true) { 2 } else { 0 });
+        for hit in hits {
+            let before = events
+                .iter()
+                .take_while(|e| e.event_seq < hit.event_seq)
+                .filter(|e| e.event_type == "phase_changed")
+                .last()
+                .unwrap();
+            assert_eq!(before.data["phase_id"], "extension");
+        }
+    }
 }
 
 /// Phase starts of one scripted kick, seconds from the cycle start: the same definition run on a

@@ -240,7 +240,7 @@ fn begin(conn: &mut Connection, b: &SessionBegin) -> rusqlite::Result<()> {
     }
     tx.execute(
         "INSERT INTO training_sessions (id, athlete_id, started_utc, status, plan_kind, plan_ref, plan_json, origin, engine_version, observables_rev, capability_profile, tracking_config_id, calibration_set_id, has_inputs, has_motion, analysis_rev, reanalysis_of, source_mask_json)
-         VALUES (?1, ?2, ?3, 'active', 'technique', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+         VALUES (?1, ?2, ?3, 'active', ?17, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
         params![
             b.session_id.as_str(),
             b.athlete_id.as_str(),
@@ -258,6 +258,10 @@ fn begin(conn: &mut Connection, b: &SessionBegin) -> rusqlite::Result<()> {
             b.analysis_rev,
             b.reanalysis_of.as_ref().map(|s| s.as_str().to_owned()),
             b.source_mask.as_ref().map(json),
+            match b.plan {
+                bansayo_contracts::Plan::Technique(_) => "technique",
+                bansayo_contracts::Plan::Workout(_) => "workout",
+            },
         ],
     )?;
     for s in &b.snapshots {

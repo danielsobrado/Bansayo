@@ -86,9 +86,11 @@ pub fn typescript() -> BTreeMap<String, String> {
     c.visit::<TrainingCommandRequest>();
     c.visit::<TrainingSessionSummary>();
     c.visit::<TrainingSessionDetail>();
+    c.visit::<ClinicReview>();
     c.visit::<SessionProvenance>();
     c.visit::<RpeRequest>();
     c.visit::<ContentIndex>();
+    c.visit::<TimedWorkoutDef>();
     c.visit::<SeriesResponse>();
     c.visit::<ProgressSummary>();
     c.visit::<RepTrace>();

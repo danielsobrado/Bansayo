@@ -232,7 +232,9 @@ pub fn promote(data_dir: &Path, session: &str, golden_dir: &Path, rig: &str) -> 
     let detail = crate::store::read::session(&c, &id)
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("no stored session {session}"))?;
-    let Plan::Technique(plan) = detail.plan;
+    let Plan::Technique(plan) = detail.plan else {
+        return Err("A golden recording requires a tracked technique session.".into());
+    };
     let events = crate::store::read::events(&c, &id, 0, 10_000_000).map_err(|e| e.to_string())?;
     let snapshots = crate::store::read::snapshots(&c, &id).map_err(|e| e.to_string())?;
     let profile = crate::training::athletes::Athletes::new(data_dir)

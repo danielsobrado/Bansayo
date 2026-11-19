@@ -32,7 +32,12 @@ fn summary(
         .as_deref()
         .and_then(|s| serde_json::from_str::<Value>(s).ok())
         .and_then(|v| v["title"].as_str().map(String::from))
-        .or_else(|| plan.as_ref().map(|Plan::Technique(t)| t.technique.clone()))
+        .or_else(|| {
+            plan.as_ref().map(|p| match p {
+                Plan::Technique(t) => t.technique.clone(),
+                Plan::Workout(w) => w.workout.clone(),
+            })
+        })
         .unwrap_or_default();
     let id: String = r.get(0)?;
     let athlete: String = r.get(1)?;
@@ -136,8 +141,95 @@ pub fn events(
         .collect())
 }
 
+pub fn clinic_review(c: &Connection, id: &SessionId) -> rusqlite::Result<Option<ClinicReview>> {
+    let Some(detail) = session(c, id)? else {
+        return Ok(None);
+    };
+    let reps = reps_with_sets(c, id)?;
+    let first_attempt = |set: &SetRecord| {
+        reps.iter().find_map(|(set_index, r)| {
+            let rep = &r.repetition;
+            (*set_index == Some(set.set_index)
+                && !r.excluded
+                && rep.outcome == RepOutcome::Completed
+                && set.side == Some(rep.side)
+                && set.content_ref.as_deref() == Some(rep.technique.as_str()))
+            .then_some(r)
+        })
+    };
+    let Some(set) = detail.sets.first() else {
+        return Ok(None);
+    };
+    let Some(first) = first_attempt(set) else {
+        return Ok(None);
+    };
+    let attempt = |set: &SetRecord, rep: &RepetitionResult| ClinicAttempt {
+        set_index: set.set_index,
+        rep_index: rep.repetition.rep_index,
+    };
+    let second = detail.sets.iter().skip(1).rev().find_map(|s| {
+        let rep = first_attempt(s)?;
+        (rep.repetition.technique == first.repetition.technique
+            && rep.repetition.side == first.repetition.side
+            && rep.repetition.stance == first.repetition.stance)
+            .then_some((s, rep))
+    });
+    let measurement = |r: &RepetitionResult, id: &str| {
+        r.measurements
+            .iter()
+            .find(|m| m.metric.split('@').next() == Some(id))
+            .cloned()
+    };
+    let measurements = [
+        "kick.retraction_time",
+        "kick.peak_ankle_height",
+        "kick.support_pivot",
+    ]
+    .into_iter()
+    .filter_map(|metric| {
+        let first = measurement(first, metric);
+        let second = second.and_then(|(_, r)| measurement(r, metric));
+        if first.is_none() && second.is_none() {
+            return None;
+        }
+        let comparable = first.as_ref().zip(second.as_ref()).is_some_and(|(a, b)| {
+            a.metric == b.metric
+                && !a.comparability_class.is_empty()
+                && a.comparability_class == b.comparability_class
+                && a.grade <= Grade::B
+                && b.grade <= Grade::B
+                && match (a.value, b.value) {
+                    (Some(_), Some(_)) => a.unit == b.unit,
+                    (None, None) => a.norm.is_some() && b.norm.is_some(),
+                    _ => false,
+                }
+        });
+        Some(ClinicMeasurement {
+            metric: metric.into(),
+            first,
+            second,
+            comparable,
+        })
+    })
+    .collect();
+    Ok(Some(ClinicReview {
+        technique: first.repetition.technique.clone(),
+        side: first.repetition.side,
+        first: attempt(set, first),
+        second: second.map(|(s, r)| attempt(s, r)),
+        measurements,
+    }))
+}
+
 /// Every stored repetition result, from its `rep_completed` / `rep_rejected` event.
 pub fn reps(c: &Connection, id: &SessionId) -> rusqlite::Result<Vec<RepetitionResult>> {
+    Ok(reps_with_sets(c, id)?.into_iter().map(|(_, r)| r).collect())
+}
+
+fn reps_with_sets(
+    c: &Connection,
+    id: &SessionId,
+) -> rusqlite::Result<Vec<(Option<u32>, RepetitionResult)>> {
     let mut q = c.prepare("SELECT type, body_json FROM events WHERE session_id = ?1 AND type IN ('rep_completed','rep_rejected') ORDER BY event_seq")?;
     let rows = q.query_map(params![id.as_str()], |r| {
         Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
@@ -151,7 +243,7 @@ pub fn reps(c: &Connection, id: &SessionId) -> rusqlite::Result<Vec<RepetitionRe
             } else {
                 e.data["result"].clone()
             };
-            serde_json::from_value(body).ok()
+            Some((e.position.set, serde_json::from_value(body).ok()?))
         })
         .collect())
 }

@@ -513,11 +513,18 @@ pub struct TrainingCommandArgs {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub content_refs: Option<Vec<ContentRef>>,
+    /// An optional spatial target in the calibrated engine frame. Used on start.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub target_position_m: Option<Vec3>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct TrainingCommandRequest {
     pub command: TrainingCommand,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_id: Option<SessionId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub args: Option<TrainingCommandArgs>,
@@ -570,16 +577,58 @@ pub struct TechniquePlan {
     pub rest_s: Option<u32>,
 }
 
-/// Plan of a training session. Only `technique` exists in this phase; later kinds are additive.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct WorkoutPlan {
+    pub workout: String,
+}
+
+/// Plan of a training session.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Plan {
     Technique(TechniquePlan),
+    Workout(WorkoutPlan),
+}
+
+/// A follow-along workout consisting of timed, unscored items.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct TimedWorkoutDef {
+    pub schema: String,
+    pub id: String,
+    pub version: u32,
+    pub names: crate::ContentNames,
+    pub blocks: Vec<TimedWorkoutBlock>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct TimedWorkoutBlock {
+    pub id: String,
+    pub title: String,
+    pub items: Vec<TimedWorkoutItem>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct TimedWorkoutItem {
+    pub id: String,
+    pub title: String,
+    pub duration_s: u32,
+    pub instruction: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub easier: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct CreateSessionRequest {
     pub plan: Plan,
+    /// If supplied, create only while this athlete is active.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub athlete_id: Option<AthleteId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub record: Option<RecordingFlags>,
@@ -661,6 +710,30 @@ pub struct SetRecord {
     pub ended_t_us: Option<TimeUs>,
     #[ts(type = "Record<string, unknown> | null")]
     pub summary: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct ClinicAttempt {
+    pub set_index: u32,
+    pub rep_index: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct ClinicMeasurement {
+    pub metric: String,
+    pub first: Option<MetricMeasurement>,
+    pub second: Option<MetricMeasurement>,
+    pub comparable: bool,
+}
+
+/// First completed attempts from the initial and latest matching set.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct ClinicReview {
+    pub technique: ContentRef,
+    pub side: Side,
+    pub first: ClinicAttempt,
+    pub second: Option<ClinicAttempt>,
+    pub measurements: Vec<ClinicMeasurement>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]

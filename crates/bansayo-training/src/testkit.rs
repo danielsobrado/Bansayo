@@ -200,6 +200,7 @@ pub fn body(sk: &SkeletonDefinition, rotations: &[Rot<f64>], root: V3<f64>, t: u
             .collect(),
         root: keypoints[0].clone().expect("root"),
         keypoints,
+        observed_ankles: None,
     }
 }
 

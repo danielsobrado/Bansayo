@@ -250,11 +250,31 @@ pub fn sample(
                 }
             }
         }
+        let observed_ankles = [15, 18].map(|i| {
+            let point = measured[i].as_ref()?;
+            let mut e = evidence(
+                Provenance::Measured,
+                MethodId::Triangulated,
+                Some(point.confidence),
+                t_camera,
+                point.used_views.clone(),
+            );
+            e.sigma = point.sigma_m;
+            e.sigma_basis = e.sigma.map(|_| SigmaBasis::Propagated);
+            Some(KeypointState {
+                position_m: point.m,
+                evidence: e,
+            })
+        });
         BodyState {
             skeleton_rev: pose.skeleton_rev,
             segments,
             keypoints,
             root,
+            observed_ankles: observed_ankles
+                .iter()
+                .any(Option::is_some)
+                .then_some(observed_ankles),
         }
     });
     MotionSample {

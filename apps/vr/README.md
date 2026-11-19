@@ -41,7 +41,9 @@ angle is computed in the client.
 |---|---|---|
 | Start/stop recording | A or X | R |
 | Replay newest session / back to live | B or Y | P |
-| Reset counts and peaks | left thumbstick click | C |
+| Open Taekwondo clinic | left thumbstick click | T |
+| Next / select in clinic | A or X / B or Y | Tab / Enter |
+| Reset counts and peaks | — | C |
 | Align the room | right thumbstick click | — |
 
 **Room alignment.** With calibrated cameras, the engine's world is the calibration board's frame
@@ -49,6 +51,54 @@ angle is computed in the client.
 that corner pointing along +X and click the thumbstick: the figure is then placed where the
 cameras see you, at the headset's floor height. The alignment is saved in
 `user://xr_alignment.cfg`; without it the figure stands at the room origin in front of you.
+
+### Taekwondo clinic
+
+Open the clinic, pick an athlete, kick and side, and use **Sets** and **Rest** to configure the
+rounds. Each set has four repetitions. Review the safety notes and confirm the clear area
+before starting. The headset needs a reported boundary wide enough for the selected kick.
+[Godot XR play-area documentation](https://docs.godotengine.org/en/4.5/classes/class_xrinterface.html#class-xrinterface-method-get-play-area)
+The panel follows the engine's counts, rest clock and coaching. After finishing, choose
+**Review sets & replay ghost** or **Practise again**. The keyboard controls run the same flow
+in desktop preview.
+
+With motion-data consent, the clinic saves motion on the engine PC. **Load previous practice
+ghost** uses a saved attempt for the same kick and side. The ghost plays at half speed on a
+separate display. Its foot path and peak marker require a graded height in metres. Use it
+as a visual guide while practising in place. Desktop and Android show the same stored set
+comparison. Actual headset bounds, input and rendering still need a headset trial.
+
+#### Floating kick targets
+
+Align the headset to the calibration board with the right stick, then turn **Targets** on in
+the clinic menu. Prepare the clinic and hold the right controller at a comfortable target
+point. Select **Place target & start** with the other hand. A clear floor, calibrated tracking
+and space around the target are required. **Start without target** is available in the same menu.
+
+An aqua ring appears at the selected point during active sets. When the cameras observe the
+kicking ankle inside the ring during extension, the ring gives a brief amber spark burst and
+a directional chime. The clinic counts reaches and stores the result with each completed rep.
+The ring clears during rest, pauses and tracking loss.
+
+#### Ghost Walls
+
+Choose **Ghost walls** in the clinic menu while the engine is between sessions. Confirm the
+clear space and keep your feet in place. The drill runs two rounds of five side or overhead
+panels, with 12 seconds of rest between rounds. Read the cue in the opening and lean left,
+lean right, or duck comfortably. The headset position determines the clear, with a chime
+and an in-room tally. If headset tracking or the play-area guard drops, the panels clear
+and the drill pauses.
+
+In desktop preview, use **T**, **Tab**, and **Enter** to open and navigate the clinic.
+The **Left**, **Right**, and **Down** arrow keys simulate the head movements while
+the preview camera stays fixed.
+
+The live clinic smoke runs against a fresh engine started with `config/sim-training.yaml`.
+It creates a test athlete, completes two sets, loads the ghost and starts a repeat session.
+
+```sh
+godot --headless --path apps/vr --max-fps 60 --xr-mode off --script tests/clinic_smoke.gd -- --desktop
+```
 
 To try the camera-only skeleton without hardware, run the engine with
 `config/sim-cameras-skeleton.yaml` (four simulated cameras, no trackers).

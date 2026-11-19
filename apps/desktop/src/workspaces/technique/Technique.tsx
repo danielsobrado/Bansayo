@@ -4,6 +4,7 @@ import type {
   RepTrace,
   RepetitionResult,
   SystemState,
+  TrainingSessionDetail,
   TrainingSessionSummary,
 } from "@contracts";
 import { useSkeleton } from "../../engine/hooks";
@@ -21,6 +22,7 @@ import { Select } from "../../ui/Select";
 import { ClipPlayer } from "../../viewport/ClipPlayer";
 import { ViewportCanvas } from "../../viewport/ViewportCanvas";
 import { formatUtc, nameOf, SESSION_ID, useContentIndex, useTexts } from "../train/common";
+import { SetComparison } from "../train/SetComparison";
 import styles from "../train/train.module.css";
 
 /** `#/technique` and `#/technique/<session_id>/<rep_index>` (10 §3, §6.3). */
@@ -116,7 +118,8 @@ function Attempt({ id, rep }: { id: string; rep: number }) {
   const result = useQuery<RepetitionResult>(paths.rep(id, rep));
   const trace = useQuery<RepTrace>(paths.trace(id, rep));
   const clip = useQuery<MotionClip>(paths.motion(id, rep));
-  const session = useQuery<{ session: TrainingSessionSummary }>(paths.session(id));
+  const session = useQuery<TrainingSessionDetail>(paths.session(id));
+  const sets = session.data?.sets;
   const player = useMemo(() => (clip.data && clip.data.samples.length > 0 ? new ClipPlayer(clip.data) : null), [clip.data]);
   const poseSource = useMemo(() => (player ? (now: number) => player.advance(now) : null), [player]);
   const [cursor, setCursor] = useState<number | null>(null);
@@ -149,6 +152,7 @@ function Attempt({ id, rep }: { id: string; rep: number }) {
       <p className={styles.muted}>
         {rp.outcome.replace("_", " ")} · recognition confidence {rp.recognition_confidence.toFixed(2)} · tracking {rp.capability_profile}
       </p>
+      {sets && sets.length >= 2 && <SetComparison sessionId={id} />}
       <div className={styles.grid}>
         <div className={styles.stack}>
           <div className={styles.viewport} aria-label="Attempt clip">

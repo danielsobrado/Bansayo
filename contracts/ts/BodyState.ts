@@ -2,4 +2,8 @@
 import type { KeypointState } from "./KeypointState";
 import type { SegmentState } from "./SegmentState";
 
-export type BodyState = { skeleton_rev: number, segments: Array<SegmentState>, keypoints: Array<KeypointState | null>, root: KeypointState, };
+export type BodyState = { skeleton_rev: number, segments: Array<SegmentState>, keypoints: Array<KeypointState | null>, root: KeypointState,
+/**
+ * Camera observations for spatial target checks, ordered left then right.
+ */
+observed_ankles?: [KeypointState | null, KeypointState | null], };
