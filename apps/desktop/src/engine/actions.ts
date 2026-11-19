@@ -20,6 +20,7 @@ import type {
   RecordingStartRequest,
   RecordingState,
   ReferencePoseRequest,
+  RigRequest,
   SimulationState,
   SimulationUpdateRequest,
   SkeletonDefinition,
@@ -56,6 +57,8 @@ export const actions = {
     request("PUT", "/playback", body),
   stopPlayback: (): R<PlaybackStopResponse> =>
     request("POST", "/playback/stop", {}),
+  /** Selects the room whose camera extrinsics are used. */
+  selectRoom: (body: RigRequest): R<unknown> => request("PUT", "/rig", body),
   /** The connected hardware is this camera: its calibration is used again. */
   confirmCameraIdentity: (id: DeviceId): R<boolean> =>
     request("POST", `/cameras/${seg(id)}/identity/confirm`, {}),

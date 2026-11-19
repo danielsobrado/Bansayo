@@ -316,6 +316,17 @@ pub(super) fn validate(config: Config) -> Result<Validated, Vec<Problem>> {
     check_quality(&mut c, &config.quality);
     check_triangulation(&mut c, &config.triangulation);
     check_fiducials(&mut c, &config.fiducials, &config.sources);
+    if config
+        .rig
+        .active_room
+        .as_deref()
+        .is_some_and(|r| !bansayo_contracts::valid_room(r))
+    {
+        c.err(
+            "rig.active_room",
+            "lowercase letters, digits, _ and -, at most 32",
+        );
+    }
     let (ta, fu) = (&config.time_alignment, &config.fusion);
     c.range(
         "time_alignment.max_imu_gap_ms",

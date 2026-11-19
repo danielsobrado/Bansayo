@@ -57,6 +57,9 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
         crate::registry::persistence::load_runtime(&dir, &initial_assignments, &sk_clone)
     })
     .await??;
+    if store.active_room.is_none() {
+        store.active_room.clone_from(&config.config.rig.active_room);
+    }
     let clock = SessionClock::start();
     let cancel = CancellationToken::new();
     let (events_tx, events_rx) = mpsc::channel(2048);

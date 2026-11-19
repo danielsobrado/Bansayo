@@ -61,6 +61,7 @@ pub fn router(api: Api) -> Router {
         .route("/api/v1/lan/pairing", get(lan_pairing))
         .route("/api/v1/ingest/camera/{id}", get(ingest_camera))
         .route("/api/v1/devices/{id}/assignment", put(control::assignment))
+        .route("/api/v1/rig", put(control::rig))
         .route(
             "/api/v1/simulation/devices/{id}/fault",
             post(control::fault),

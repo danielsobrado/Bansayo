@@ -16,6 +16,8 @@ time_alignment:
 fusion:
   optical_heading_correction: true
   max_heading_correction_deg_s: 15
+rig:
+  active_room: null          # e.g. dojo; rooms keep their own camera poses, the lenses are shared
 camera_management:
   fallback_fps: [60, 30]
   warn_fps_ratio: 0.85

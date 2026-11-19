@@ -145,4 +145,20 @@ pub struct CameraExtrinsicsData {
     pub q_world_from_camera: Quat,
     /// Camera optical centre in world, metres.
     pub t_world_from_camera_m: Vec3,
+    /// The room (rig placement) this pose belongs to; `null` is the default room. A camera keeps
+    /// one intrinsics profile and one extrinsics profile per room. Additive.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub room: Option<String>,
+}
+
+/// A room name: lowercase letters, digits, `_` and `-`, starting with a letter or digit, at most
+/// 32 bytes, so it can form part of a profile id.
+pub fn valid_room(s: &str) -> bool {
+    let b = s.as_bytes();
+    !b.is_empty()
+        && b.len() <= 32
+        && (b[0].is_ascii_lowercase() || b[0].is_ascii_digit())
+        && b.iter()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, b'_' | b'-'))
 }

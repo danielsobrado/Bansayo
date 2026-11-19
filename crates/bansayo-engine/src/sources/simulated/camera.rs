@@ -85,6 +85,7 @@ pub fn profiles(c: &CameraSpec, created_utc: &str) -> Vec<CalibrationProfile> {
         distortion: [0.0; 5],
     });
     let extrinsics = serde_json::to_value(CameraExtrinsicsData {
+        room: None,
         q_world_from_camera: rot_to_wire(&q),
         t_world_from_camera_m: v3_to_wire(&position),
     });

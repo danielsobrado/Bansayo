@@ -446,6 +446,7 @@ pub fn system_state() -> SystemState {
         content_rev: None,
         storage: None,
         capability_report: Some(super::examples::capability_report()),
+        active_room: Some("dojo".into()),
         rev: 412,
         engine: EngineInfo {
             version: ENGINE_VERSION.into(),

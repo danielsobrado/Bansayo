@@ -28,6 +28,10 @@ pub struct SystemState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub capability_report: Option<crate::CapabilityReport>,
+    /// The room whose camera extrinsics are in use; `null` is the default room. Additive.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub active_room: Option<String>,
     /// Active athlete (martial-arts 14 §4). Additive.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]

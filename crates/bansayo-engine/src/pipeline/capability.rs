@@ -268,7 +268,7 @@ pub fn identity_bodies(
         .collect::<Vec<_>>()
         .join(".");
     let tracking = json!({"devices":device_config,"detectors":detectors,"camera_processing":camera_processing,"assignments":reg.assignments,"triangulation":config.triangulation,"gates":null,"fusion":{"method":crate::pipeline::fusion::METHOD_VERSION,"mode":config.tracking.mode,"time_alignment":config.time_alignment,"settings":config.fusion},"analysis":config.analysis(),"recognition":config.recognition(),"observable_catalogue":"bansayo.observables.v1","engine_version":version});
-    let profiles:Vec<_>=store.profiles.values().filter(|p|valid_profile(p)&&!store.stale.contains(&p.id)&&p.subject.device_id.as_ref().is_some_and(|id|reg.entries.contains_key(id)&& (p.kind!=CalibrationKind::Mounting||p.subject.segment_id.as_ref()==reg.assignments.get(id)))).map(|p|json!({"id":p.id,"hash":sha256(serde_json::to_value(p).expect("profile JSON").to_string().as_bytes())})).collect();
+    let profiles:Vec<_>=store.profiles.values().filter(|p|valid_profile(p)&&!store.stale.contains(&p.id)&&store.in_room(p)&&p.subject.device_id.as_ref().is_some_and(|id|reg.entries.contains_key(id)&& (p.kind!=CalibrationKind::Mounting||p.subject.segment_id.as_ref()==reg.assignments.get(id)))).map(|p|json!({"id":p.id,"hash":sha256(serde_json::to_value(p).expect("profile JSON").to_string().as_bytes())})).collect();
     (tracking, json!(profiles))
 }
 

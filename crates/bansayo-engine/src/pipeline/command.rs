@@ -29,6 +29,8 @@ pub enum ControlRequest {
     PlaybackStart(PlaybackStartRequest),
     PlaybackUpdate(PlaybackUpdateRequest),
     PlaybackStop,
+    /// Selects the room whose camera extrinsics are used; `None` is the default room.
+    Room(Option<String>),
 }
 pub enum Completion {
     Assignment(
@@ -37,6 +39,7 @@ pub enum Completion {
         DeviceId,
     ),
     Deleted(ProfileId),
+    Room(Option<String>),
     RecordingStarted(crate::recording::Recorder),
     RecordingStopped(RecordingSession),
     Sessions(Vec<RecordingSession>, Vec<String>),

@@ -62,9 +62,31 @@ export function verticalFov(i: CameraIntrinsicsData): number {
 
 const UNUSABLE: ReadonlySet<string> = new Set(["missing", "invalid"]);
 
-/** Cameras with both usable intrinsics and extrinsics, in profile order. */
+/** The room an extrinsics profile belongs to; `null` is the default room. */
+export function roomOf(c: CalibrationProfileSummary): string | null {
+  const room = isObj(c.data) ? c.data.room : null;
+  return typeof room === "string" ? room : null;
+}
+
+/** Rooms that have camera extrinsics, plus the active one; `null` (default room) first. */
+export function roomsOf(
+  calibration: readonly CalibrationProfileSummary[],
+  active: string | null,
+): (string | null)[] {
+  const named = new Set<string>();
+  for (const c of calibration)
+    if (c.kind === "camera_extrinsics") {
+      const room = roomOf(c);
+      if (room) named.add(room);
+    }
+  if (active) named.add(active);
+  return [null, ...[...named].sort()];
+}
+
+/** Cameras with both usable intrinsics and extrinsics of the active room, in profile order. */
 export function calibratedCameras(
   calibration: readonly CalibrationProfileSummary[],
+  room: string | null = null,
 ): CameraPose[] {
   const found = new Map<
     DeviceId,
@@ -74,7 +96,8 @@ export function calibratedCameras(
     if (typeof c.device_id !== "string" || UNUSABLE.has(c.state)) continue;
     const entry = found.get(c.device_id) ?? {};
     if (c.kind === "camera_intrinsics") entry.i ??= intrinsics(c.data);
-    else if (c.kind === "camera_extrinsics") entry.e ??= extrinsics(c.data);
+    else if (c.kind === "camera_extrinsics" && roomOf(c) === room)
+      entry.e ??= extrinsics(c.data);
     else continue;
     found.set(c.device_id, entry);
   }

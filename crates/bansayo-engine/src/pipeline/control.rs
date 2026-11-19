@@ -194,6 +194,36 @@ impl Runtime {
                     Ok(Completion::Deleted(id))
                 });
             }
+            ControlRequest::Room(room) => {
+                if room.as_deref().is_some_and(|r| !valid_room(r)) {
+                    return Err((
+                        error(
+                            ApiErrorCode::InvalidRequest,
+                            "A room name is lowercase letters, digits, _ and -, at most 32.",
+                        ),
+                        reply,
+                    ));
+                }
+                if self.recorder.is_some() {
+                    return Err((
+                        error(
+                            ApiErrorCode::Conflict,
+                            "Stop recording before switching rooms: a recording keeps one camera rig.",
+                        ),
+                        reply,
+                    ));
+                }
+                let mut snapshot = engine.snapshot_with(
+                    &engine.registry.assignments,
+                    &engine.store.stale,
+                    &engine.store.profiles,
+                );
+                snapshot.active_room.clone_from(&room);
+                self.background(reply, move || {
+                    save_runtime_snapshot(&dir, &snapshot).map_err(unavailable)?;
+                    Ok(Completion::Room(room))
+                });
+            }
             ControlRequest::Sessions => self.background(reply, move || {
                 let (sessions, damaged) = reader::sessions(&dir).map_err(unavailable)?;
                 Ok(Completion::Sessions(sessions, damaged))
@@ -407,6 +437,11 @@ impl Runtime {
                     }
                     self.record_context(engine);
                     device(engine, &id)
+                }
+                Completion::Room(room) => {
+                    tracing::info!(room = ?room, "Active room selected");
+                    engine.store.active_room.clone_from(&room);
+                    json!({"active_room": room})
                 }
                 Completion::Deleted(id) => {
                     engine.store.profiles.remove(&id);

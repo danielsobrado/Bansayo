@@ -357,6 +357,8 @@ impl Runtime {
                     match result {
                         Ok(()) => {
                             let summaries = profiles.iter().map(calibration::summary).collect();
+                            let invalidated = engine.store.invalidated_by(&profiles);
+                            engine.store.stale.extend(invalidated);
                             engine.store.insert(profiles);
                             self.record_context(&engine);
                             self.publish_state(&engine);
@@ -640,6 +642,7 @@ impl Runtime {
         self.busy = true;
         let dir = engine.config.config.engine.data_dir.clone();
         let mut stale = engine.store.stale.clone();
+        stale.extend(engine.store.invalidated_by(&profiles));
         let mut next_profiles = engine.store.profiles.clone();
         for p in &profiles {
             stale.remove(&p.id);
@@ -689,9 +692,20 @@ fn check_import(engine: &Runner, profiles: &[CalibrationProfile]) -> Result<(), 
         if !camera {
             return bad(format!("{device} is not a configured camera."));
         }
-        if calibration::camera_profile_id(p.kind, device).as_ref() != Some(&p.id) {
+        let room = calibration::room_of(p);
+        if room.is_some_and(|r| !valid_room(r))
+            || p.data
+                .get("room")
+                .is_some_and(|r| !r.is_string() && !r.is_null())
+        {
             return bad(format!(
-                "{} must be camera_intrinsics or camera_extrinsics with id camera-<intrinsics|extrinsics>-{device}.",
+                "{}: room must be lowercase letters, digits, _ and -, at most 32.",
+                p.id
+            ));
+        }
+        if calibration::camera_profile_id(p.kind, device, room).as_ref() != Some(&p.id) {
+            return bad(format!(
+                "{} must be camera_intrinsics (id camera-intrinsics-{device}, no room) or camera_extrinsics (id camera-extrinsics-{device}, or camera-extrinsics-{device}.<room> for a room).",
                 p.id
             ));
         }

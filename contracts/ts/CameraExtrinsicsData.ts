@@ -10,4 +10,9 @@ export type CameraExtrinsicsData = { q_world_from_camera: [number, number, numbe
 /**
  * Camera optical centre in world, metres.
  */
-t_world_from_camera_m: [number, number, number], };
+t_world_from_camera_m: [number, number, number],
+/**
+ * The room (rig placement) this pose belongs to; `null` is the default room. A camera keeps
+ * one intrinsics profile and one extrinsics profile per room. Additive.
+ */
+room?: string | null, };

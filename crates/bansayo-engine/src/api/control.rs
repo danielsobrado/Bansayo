@@ -44,6 +44,15 @@ pub async fn delete(State(api): State<Api>, Path(id): Path<String>) -> Response 
     };
     execute(api, ControlRequest::Delete(id)).await
 }
+pub async fn rig(
+    State(api): State<Api>,
+    body: Result<Json<RigRequest>, JsonRejection>,
+) -> Response {
+    let Ok(Json(body)) = body else {
+        return bad();
+    };
+    execute(api, ControlRequest::Room(body.active_room)).await
+}
 pub async fn sessions(State(api): State<Api>) -> Response {
     execute(api, ControlRequest::Sessions).await
 }

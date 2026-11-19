@@ -155,6 +155,7 @@ export type { RepTrace } from "./RepTrace";
 export type { Repetition } from "./Repetition";
 export type { RepetitionResult } from "./RepetitionResult";
 export type { RetentionDays } from "./RetentionDays";
+export type { RigRequest } from "./RigRequest";
 export type { RpeRequest } from "./RpeRequest";
 export type { ScoreResult } from "./ScoreResult";
 export type { ScoreTarget } from "./ScoreTarget";

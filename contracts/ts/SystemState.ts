@@ -24,6 +24,10 @@ rev: number,
  */
 capability_report?: CapabilityReport | null,
 /**
+ * The room whose camera extrinsics are in use; `null` is the default room. Additive.
+ */
+active_room?: string | null,
+/**
  * Active athlete (martial-arts 14 §4). Additive.
  */
 athlete?: AthleteRef | null,

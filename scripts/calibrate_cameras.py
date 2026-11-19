@@ -120,10 +120,12 @@ def rot_to_quat(r):
     return (q / np.linalg.norm(q)).tolist()
 
 
-def profile(kind, device, method, data, quality, depends_on=()):
+def profile(kind, device, method, data, quality, depends_on=(), room=None):
+    if room is not None:
+        data = dict(data, room=room)
     return {
         "schema_version": 1,
-        "id": f"camera-{kind}-{device}",
+        "id": f"camera-{kind}-{device}" + (f".{room}" if room else ""),
         "kind": f"camera_{kind}",
         "method": method,
         "origin": "live",
@@ -135,8 +137,13 @@ def profile(kind, device, method, data, quality, depends_on=()):
     }
 
 
-def solve(directory, cols, rows, square_m, marker_ratio, origin_set=None, origin_height_m=0.0, log=print):
-    """Returns (profiles, report). Raises ValueError with an actionable message."""
+def solve(directory, cols, rows, square_m, marker_ratio, origin_set=None, origin_height_m=0.0, log=print,
+          room=None, lenses=None):
+    """Returns (profiles, report). Raises ValueError with an actionable message.
+
+    With `lenses` ({device: (K, dist, (w, h))}), intrinsics are reused instead of solved: only the
+    room's extrinsics are returned, so another room needs one shared floor view, not a lens session.
+    """
     board = make_board(cols, rows, square_m, square_m * marker_ratio)
     cameras = sorted(p for p in Path(directory).iterdir() if p.is_dir())
     if not cameras:
@@ -152,6 +159,15 @@ def solve(directory, cols, rows, square_m, marker_ratio, origin_set=None, origin
                 detections[cam.name][f.stem] = found
     profiles, report, intrinsics = [], {}, {}
     for name, views in detections.items():
+        if lenses is not None:
+            if name not in lenses:
+                raise ValueError(f"{name}: the engine has no valid intrinsics; calibrate the lens first (without --room)")
+            k, dist, size = lenses[name]
+            if tuple(size) != tuple(sizes[name]):
+                raise ValueError(f"{name}: images are {sizes[name]}, intrinsics are for {tuple(size)}")
+            intrinsics[name] = (k, dist)
+            report[name] = {}
+            continue
         if len(views) < MIN_VIEWS:
             raise ValueError(f"{name}: board found in {len(views)} images; capture at least {MIN_VIEWS} "
                              f"with the board tilted across the whole view")
@@ -205,14 +221,31 @@ def solve(directory, cols, rows, square_m, marker_ratio, origin_set=None, origin
         profiles.append(profile("extrinsics", name, "charuco_opencv_floor_board", {
             "q_world_from_camera": rot_to_quat(r_wc), "t_world_from_camera_m": t_wc.tolist(),
         }, {"rms_px": pnp_rms, "corners": len(obj), "origin_set": origin_set},
-            depends_on=[{"kind": "camera_intrinsics", "device_id": name}]))
+            depends_on=[{"kind": "camera_intrinsics", "device_id": name}], room=room))
         report[name].update({"extrinsic_rms_px": pnp_rms, "position_m": t_wc.tolist(), "r_wc": r_wc})
     return profiles, report
 
 
+def engine_lenses(engine):
+    """Valid camera intrinsics the engine holds: {device: (K, dist, (w, h))}."""
+    with urllib.request.urlopen(engine.rstrip("/") + "/api/v1/state", timeout=10) as response:
+        state = json.load(response)["data"]
+    out = {}
+    for p in state["calibration"]:
+        d = p.get("data") or {}
+        if p["kind"] == "camera_intrinsics" and p["state"] == "valid" and d:
+            k = np.array([[d["fx_px"], 0, d["cx_px"]], [0, d["fy_px"], d["cy_px"]], [0, 0, 1]])
+            out[p["device_id"]] = (k, np.array(d["distortion"]), d["image_size_px"])
+    return out
+
+
 def cmd_solve(a):
+    if a.room and not a.engine:
+        sys.exit("--room reuses the engine's intrinsics: give --engine too")
     try:
-        profiles, _ = solve(a.dir, a.cols, a.rows, a.square_m, a.marker_ratio, a.origin_set, a.origin_height_m)
+        lenses = engine_lenses(a.engine) if a.room else None
+        profiles, _ = solve(a.dir, a.cols, a.rows, a.square_m, a.marker_ratio, a.origin_set, a.origin_height_m,
+                            room=a.room, lenses=lenses)
     except ValueError as e:
         sys.exit(f"calibration failed: {e}")
     if a.out:
@@ -277,7 +310,17 @@ def cmd_selftest(a):
                 t = np.array([rng.uniform(-0.9, 0.1), rng.uniform(-0.6, 0.0), rng.uniform(2.4, 4.0)])
                 cv2.imwrite(str(Path(d, name, f"{i:04d}.png")), render(r, t))
         profiles, report = solve(d, cols, rows, square, 0.75, origin_set="0000", log=lambda m: None)
+        # A second room reuses the lens models: only extrinsics, ids and data naming the room.
+        lenses = {n: (k, np.zeros(5), (w, h)) for n in truth}
+        room_profiles, room_report = solve(d, cols, rows, square, 0.75, origin_set="0000",
+                                           log=lambda m: None, room="garage", lenses=lenses)
     failures = []
+    if sorted(p["id"] for p in room_profiles) != [f"camera-extrinsics-{n}.garage" for n in sorted(truth)] \
+            or any(p["data"]["room"] != "garage" for p in room_profiles):
+        failures.append("room profiles")
+    for name, position in truth.items():
+        if np.linalg.norm(np.array(room_report[name]["position_m"]) - position) > 0.01 * np.linalg.norm(position - centre):
+            failures.append(f"{name} (room)")
     for name, position in truth.items():
         got = np.array(report[name]["position_m"])
         err = np.linalg.norm(got - position)
@@ -322,6 +365,8 @@ def main():
     s.add_argument("--origin-height-m", type=float, default=0.0, help="board height above the floor")
     s.add_argument("--engine", help="engine URL to import into, e.g. http://127.0.0.1:7700")
     s.add_argument("--out", help="also write the profiles to this JSON file")
+    s.add_argument("--room", help="calibrate only this room's camera poses, reusing the engine's intrinsics "
+                                  "(lowercase letters, digits, _ and -)")
     s.set_defaults(func=cmd_solve)
     s = sub.add_parser("selftest")
     s.set_defaults(func=cmd_selftest)

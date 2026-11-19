@@ -73,6 +73,7 @@ fn all_calibration_kinds_survive_manifest_load_and_save_as_invalid_when_uninterp
         assignments: BTreeMap::new(),
         stale_calibrations: BTreeSet::new(),
         calibration_profiles: expected.clone(),
+        active_room: None,
     };
     save_runtime_snapshot(dir.path(), &snapshot).unwrap();
     let (store, assignments) = load_runtime(dir.path(), &BTreeMap::new(), &sk).unwrap();
@@ -84,6 +85,7 @@ fn all_calibration_kinds_survive_manifest_load_and_save_as_invalid_when_uninterp
             std::iter::empty(),
             &store.stale,
             &store.profiles,
+            store.active_room.clone(),
         ),
     )
     .unwrap();

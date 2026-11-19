@@ -13,6 +13,15 @@ pub struct Store {
     /// Cameras whose connected hardware differs from their profile's: their camera profiles
     /// count as stale until the user confirms the identity. Live only; never persisted.
     pub identity_unconfirmed: std::collections::BTreeSet<DeviceId>,
+    /// Room whose camera extrinsics are used; `None` is the default room.
+    pub active_room: Option<String>,
+}
+
+/// The room a profile belongs to: only camera extrinsics have one.
+pub fn room_of(p: &CalibrationProfile) -> Option<&str> {
+    (p.kind == CalibrationKind::CameraExtrinsics)
+        .then(|| p.data.get("room").and_then(|r| r.as_str()))
+        .flatten()
 }
 impl Store {
     pub fn mounting(&self, device: &DeviceId, segment: &SegmentId) -> Option<Rot> {
@@ -39,6 +48,7 @@ impl Store {
         }
         let p = self.profiles.values().find(|p| {
             p.kind == kind
+                && self.in_room(p)
                 && valid_profile(p)
                 && !self.stale.contains(&p.id)
                 && p.subject.device_id.as_ref() == Some(device)
@@ -49,10 +59,9 @@ impl Store {
         ))
     }
     pub fn camera_ref(&self, kind: CalibrationKind, device: &DeviceId) -> CalibrationRef {
-        let profile = self
-            .profiles
-            .values()
-            .find(|p| p.kind == kind && p.subject.device_id.as_ref() == Some(device));
+        let profile = self.profiles.values().find(|p| {
+            p.kind == kind && self.in_room(p) && p.subject.device_id.as_ref() == Some(device)
+        });
         CalibrationRef {
             kind,
             state: match profile {
@@ -98,6 +107,31 @@ impl Store {
                 .map(|p| p.id.clone())
                 .or_else(|| invalid.map(|p| p.id.clone())),
         }
+    }
+    /// Extrinsics belong to the active room only; every other kind is shared by all rooms.
+    pub fn in_room(&self, p: &CalibrationProfile) -> bool {
+        p.kind != CalibrationKind::CameraExtrinsics || room_of(p) == self.active_room.as_deref()
+    }
+    /// Extrinsics of every room, for the devices whose intrinsics `imported` replaces without
+    /// replacing those extrinsics: they were solved with the old lens model.
+    pub fn invalidated_by(&self, imported: &[CalibrationProfile]) -> Vec<ProfileId> {
+        let new_lens: Vec<&DeviceId> = imported
+            .iter()
+            .filter(|p| p.kind == CalibrationKind::CameraIntrinsics)
+            .filter_map(|p| p.subject.device_id.as_ref())
+            .collect();
+        self.profiles
+            .values()
+            .filter(|p| {
+                p.kind == CalibrationKind::CameraExtrinsics
+                    && p.subject
+                        .device_id
+                        .as_ref()
+                        .is_some_and(|d| new_lens.contains(&d))
+                    && !imported.iter().any(|q| q.id == p.id)
+            })
+            .map(|p| p.id.clone())
+            .collect()
     }
     pub fn summaries(&self) -> Vec<CalibrationProfileSummary> {
         self.profiles
@@ -154,13 +188,20 @@ pub fn valid_profile(p: &CalibrationProfile) -> bool {
 }
 
 /// Canonical id of a camera profile; one profile per kind and camera, so a new one replaces it.
-pub fn camera_profile_id(kind: CalibrationKind, device: &DeviceId) -> Option<ProfileId> {
-    let name = match kind {
-        CalibrationKind::CameraIntrinsics => "intrinsics",
-        CalibrationKind::CameraExtrinsics => "extrinsics",
+/// `camera-intrinsics-<device>`, `camera-extrinsics-<device>`, or for a room
+/// `camera-extrinsics-<device>.<room>`. Intrinsics have no room.
+pub fn camera_profile_id(
+    kind: CalibrationKind,
+    device: &DeviceId,
+    room: Option<&str>,
+) -> Option<ProfileId> {
+    let name = match (kind, room) {
+        (CalibrationKind::CameraIntrinsics, None) => "intrinsics",
+        (CalibrationKind::CameraExtrinsics, _) => "extrinsics",
         _ => return None,
     };
-    ProfileId::new(format!("camera-{name}-{device}")).ok()
+    let suffix = room.map_or_else(String::new, |r| format!(".{r}"));
+    ProfileId::new(format!("camera-{name}-{device}{suffix}")).ok()
 }
 pub(crate) struct LegacyProfiles {
     pub valid: Vec<(PathBuf, CalibrationProfile)>,

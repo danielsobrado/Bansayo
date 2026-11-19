@@ -286,6 +286,7 @@ async fn failed_persistence_does_not_modify_live_or_restarted_state() {
             assignments: BTreeMap::new(),
             stale_calibrations: Default::default(),
             calibration_profiles: vec![],
+            active_room: None,
         },
     )
     .unwrap_err();
@@ -659,4 +660,123 @@ async fn recording_context_only_captures_committed_state_and_replays_it() {
             .stale
             .contains(&ProfileId::new("mounting-T2-left_thigh").unwrap())
     );
+}
+
+fn extrinsics(id: &str, room: Option<&str>, x: f64) -> Value {
+    json!({
+        "schema_version": 1,
+        "id": id,
+        "kind": "camera_extrinsics",
+        "method": "charuco_opencv_floor_board",
+        "origin": "live",
+        "created_utc": "2026-11-19T00:00:00Z",
+        "subject": { "device_id": "CAM1", "segment_id": null },
+        "depends_on": [{ "kind": "camera_intrinsics", "device_id": "CAM1" }],
+        "data": { "q_world_from_camera": [0.0, 0.0, 0.0, 1.0], "t_world_from_camera_m": [x, 1.2, 3.2], "room": room },
+        "quality": {}
+    })
+}
+
+fn camera_ref(state: &Value, kind: &str) -> Value {
+    state["data"]["devices"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|d| d["descriptor"]["id"] == "CAM1")
+        .unwrap()["calibration"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["kind"] == kind)
+        .unwrap()
+        .clone()
+}
+
+/// One camera, two rooms: each room keeps its own extrinsics, the shared intrinsics stay, the
+/// selection survives a restart, and a new lens model makes every room's extrinsics stale.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rooms_select_extrinsics_and_survive_restart() {
+    let dir = tempfile::tempdir().unwrap();
+    let yaml = tracker_yaml(dir.path(), true);
+    let engine = start(config::parse(&yaml).unwrap()).await.unwrap();
+    let addr = engine.bound_addr();
+    let body = json!([extrinsics(
+        "camera-extrinsics-CAM1.garage",
+        Some("garage"),
+        2.0
+    )])
+    .to_string();
+    let (status, reply) = request(addr, "POST", "calibration/profiles", &body).await;
+    assert_eq!(status, 200, "{reply}");
+    // A room profile whose id does not name its room is refused.
+    let wrong = json!([extrinsics("camera-extrinsics-CAM1", Some("garage"), 2.0)]).to_string();
+    assert_eq!(
+        request(addr, "POST", "calibration/profiles", &wrong)
+            .await
+            .0,
+        400
+    );
+
+    let (_, state) = request(addr, "GET", "state", "").await;
+    assert!(state["data"]["active_room"].is_null());
+    assert_eq!(
+        camera_ref(&state, "camera_extrinsics")["profile_id"],
+        "camera-extrinsics-CAM1"
+    );
+
+    let (status, reply) = request(addr, "PUT", "rig", r#"{"active_room":"garage"}"#).await;
+    assert_eq!(status, 200, "{reply}");
+    assert_eq!(
+        request(addr, "PUT", "rig", r#"{"active_room":"Bad Room"}"#)
+            .await
+            .0,
+        400
+    );
+    let (_, state) = request(addr, "GET", "state", "").await;
+    assert_eq!(state["data"]["active_room"], "garage");
+    let ext = camera_ref(&state, "camera_extrinsics");
+    assert_eq!(ext["profile_id"], "camera-extrinsics-CAM1.garage");
+    assert_eq!(ext["state"], "valid");
+    assert_eq!(
+        camera_ref(&state, "camera_intrinsics")["state"],
+        "valid",
+        "lens shared by rooms"
+    );
+    engine.shutdown().await.unwrap();
+
+    // Restart: the room selected in the UI wins over the configuration's (none).
+    let engine = start(config::parse(&yaml).unwrap()).await.unwrap();
+    let addr = engine.bound_addr();
+    let (_, state) = request(addr, "GET", "state", "").await;
+    assert_eq!(state["data"]["active_room"], "garage");
+    assert_eq!(
+        camera_ref(&state, "camera_extrinsics")["profile_id"],
+        "camera-extrinsics-CAM1.garage"
+    );
+    engine.shutdown().await.unwrap();
+}
+
+#[test]
+fn new_intrinsics_make_every_rooms_extrinsics_stale() {
+    let profile = |v: Value| serde_json::from_value::<CalibrationProfile>(v).unwrap();
+    let mut store = bansayo_engine::calibration::Store::default();
+    store.insert(vec![
+        profile(extrinsics("camera-extrinsics-CAM1", None, 0.0)),
+        profile(extrinsics(
+            "camera-extrinsics-CAM1.garage",
+            Some("garage"),
+            2.0,
+        )),
+    ]);
+    let mut lens = profile(extrinsics("camera-intrinsics-CAM1", None, 0.0));
+    lens.kind = CalibrationKind::CameraIntrinsics;
+    let stale = store.invalidated_by(&[lens.clone()]);
+    assert_eq!(stale.len(), 2);
+    // Replacing a room's extrinsics with the lens keeps that one.
+    let garage = profile(extrinsics(
+        "camera-extrinsics-CAM1.garage",
+        Some("garage"),
+        2.5,
+    ));
+    assert_eq!(store.invalidated_by(&[lens, garage]).len(), 1);
 }

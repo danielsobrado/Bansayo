@@ -40,7 +40,8 @@ export function Studio({ skeleton, sampled, state, onCalibrate, connected }: Pro
   const [floorVisible, setFloorVisible] = useState(true);
   const [camerasVisible, setCamerasVisible] = useState(false);
   const calibration = state?.calibration;
-  const poses = useMemo(() => calibratedCameras(calibration ?? []), [calibration]);
+  const room = state?.active_room ?? null;
+  const poses = useMemo(() => calibratedCameras(calibration ?? [], room), [calibration, room]);
   const devices = state?.devices ?? [];
   const cameras = devices.filter((d) => d.descriptor.kind === "camera");
   const sensors = devices.filter((d) => d.descriptor.kind !== "camera");

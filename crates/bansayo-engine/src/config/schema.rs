@@ -44,6 +44,9 @@ pub struct Config {
     pub fusion: FusionConfig,
     #[serde(default)]
     pub fiducials: FiducialsConfig,
+    /// Camera placement: which room's extrinsics are used at start.
+    #[serde(default)]
+    pub rig: RigConfig,
     /// Capture-mode fallback and rate warnings for physical cameras.
     #[serde(default)]
     pub camera_management: CameraManagementConfig,
@@ -93,6 +96,14 @@ impl Default for FiducialsConfig {
             allowed_ids: vec![],
         }
     }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct RigConfig {
+    /// Room whose camera extrinsics are used; unset is the default room. A room selected later
+    /// in the desktop (`PUT /rig`) is remembered and takes precedence.
+    pub active_room: Option<String>,
 }
 
 /// Shared camera policy. Discovery, reconnection and strict identity matching are always on.

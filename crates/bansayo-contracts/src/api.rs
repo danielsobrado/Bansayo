@@ -164,6 +164,12 @@ pub struct ReferencePoseRequest {
     pub device_ids: Option<Vec<DeviceId>>,
 }
 
+/// `PUT /rig`: selects the room whose camera extrinsics are used; `null` for the default room.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, TS)]
+pub struct RigRequest {
+    pub active_room: Option<String>,
+}
+
 /// `PUT /cameras/{id}/settings` body (martial-arts 14 §5.5). Absent fields are left unchanged.
 /// `resolution_px` and `rate_hz` are accepted in the schema but refused by this engine: camera
 /// calibration depends on them (09 §9), so they change in the configuration with a restart.

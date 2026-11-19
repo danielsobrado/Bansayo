@@ -28,6 +28,9 @@ pub struct Context {
     pub config: Config,
     pub engine_version: String,
     pub protocol_version: u32,
+    /// Room whose camera extrinsics were in use; absent in older recordings (default room).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_room: Option<String>,
 }
 impl Context {
     pub fn snapshot(
@@ -67,6 +70,7 @@ impl Context {
                 .collect(),
             engine_version: env!("CARGO_PKG_VERSION").into(),
             protocol_version: PROTOCOL_VERSION,
+            active_room: store.active_room.clone(),
         }
     }
     pub fn restore(&self) -> Result<(Registry, Store, Skeleton), String> {
@@ -160,9 +164,13 @@ impl Context {
             entry.connected = *self.links.get(id).unwrap_or(&true);
             entry.reported_quality = *self.qualities.get(id).unwrap_or(&1.0);
         }
+        if self.active_room.as_deref().is_some_and(|r| !valid_room(r)) {
+            return Err("Recording names an invalid room.".into());
+        }
         let mut store = Store::default();
         store.insert(self.profiles.clone());
         store.stale = self.stale.clone();
+        store.active_room.clone_from(&self.active_room);
         Ok((registry, store, skeleton))
     }
     pub fn quality(&self) -> &QualityConfig {

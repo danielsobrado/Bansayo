@@ -552,10 +552,11 @@ Built and tested on synthetic and fixture data; **no physical validation yet**
 | ESP32 UDP `bansayo.imu.v1` with device-time mapping, wraparound, reboot reset | Built; no firmware in this repository | `sources/esp32.rs` |
 | Offset uncertainty, drift and resets | Built; `DeviceStatus.time_sync` | `clock.rs` |
 | Rung-1 fusion: SLERP to `t_ref`, per-segment arbitration, optical heading (conjugation), anchored FK with age-grown sigma, plausibility, modes | Built | `pipeline/solve.rs`, `align.rs`, `fusion.rs`, ADR-025 note |
+| Room profiles: one extrinsics profile per camera per room (`camera-extrinsics-<cam>.<room>`, `data.room`), intrinsics shared; `rig.active_room`, `PUT /rig` (persisted, recorded in the recording context), room selector in Cameras; `calibrate_cameras.py solve --room` reuses the engine's intrinsics; new intrinsics make every room's extrinsics stale | Built; simulated and API tests | `calibration/store.rs`, `pipeline/control.rs` |
+| Per-segment evidence view (`SegmentPose.method`, `t_obs_us`) | Built; verified on the simulated rig | `apps/desktop/src/workspaces/devices/SegmentEvidence.tsx` |
 | Synthetic camera-only vs IMU-only vs hybrid comparison | Recorded | [validation/2026-11-19-hybrid-synthetic.md](validation/2026-11-19-hybrid-synthetic.md) |
 
-Not built: room (rig) profiles and switching between rooms, camera-referenced mounting capture
+Not built: camera-referenced mounting capture
 (reference pose must face the rig's +Z), automatic extrinsics invalidation after a camera move,
-sync validation from motion signatures (V-07), a per-segment hybrid diagnostics panel and shared
-time-axis view in the desktop, recording of `time_sync` status in session metadata (the inputs and
+sync validation from motion signatures (V-07), recording of `time_sync` status in session metadata (the inputs and
 fusion configuration are recorded, so replay reproduces results).

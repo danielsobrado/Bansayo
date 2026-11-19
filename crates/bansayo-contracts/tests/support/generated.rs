@@ -74,6 +74,7 @@ pub fn typescript() -> BTreeMap<String, String> {
     c.visit::<ReferencePoseRequest>();
     c.visit::<SimulationUpdateRequest>();
     c.visit::<CameraSettingsRequest>();
+    c.visit::<RigRequest>();
     c.visit::<FaultRequest>();
     c.visit::<RecordingStartRequest>();
     c.visit::<PlaybackStartRequest>();

@@ -13,9 +13,11 @@ import { SceneExplorer, type SceneGroup } from "../../shell/SceneExplorer";
 import { Icon } from "../../ui/Icon";
 import {
   calibratedCameras,
+  roomsOf,
   type CameraPose,
 } from "../../engine/cameraCalibration";
-import { useSampled } from "../../engine/hooks";
+import { actions } from "../../engine/actions";
+import { useAction, useSampled } from "../../engine/hooks";
 import {
   HIGH_REPROJECTION_PX,
   reconstructionReadout,
@@ -66,10 +68,13 @@ export function Cameras({ state }: { state: SystemState | null }) {
   const visibleFeeds = viewMode === "grid" ? cameras : camera && viewMode !== "reconstruction" ? [camera] : [];
   const canShowAprilTags = visibleFeeds.some(({ descriptor }) => descriptor.origin !== "simulated");
   const calibration = state?.calibration;
+  const room = state?.active_room ?? null;
   const poses = useMemo(
-    () => calibratedCameras(calibration ?? []),
-    [calibration],
+    () => calibratedCameras(calibration ?? [], room),
+    [calibration, room],
   );
+  const rooms = roomsOf(calibration ?? [], room);
+  const [switchRoom, roomStatus] = useAction(actions.selectRoom);
   const rawSchema =
     camera?.descriptor.camera?.landmark_schema ??
     cameras.find((c) => c.descriptor.camera?.landmark_schema)?.descriptor
@@ -133,6 +138,11 @@ export function Cameras({ state }: { state: SystemState | null }) {
             <select aria-label="Active camera" value={camera.descriptor.id}
               onChange={(event) => select({ kind: "camera", id: event.target.value })}>
               {cameras.map(({ descriptor }) => <option key={descriptor.id}>{descriptor.id}</option>)}
+            </select>
+            <select aria-label="Room" title={roomStatus.error ?? "Room: which camera placement is in use"}
+              value={room ?? ""} disabled={roomStatus.pending || state?.engine.mode === "replay"}
+              onChange={(event) => void switchRoom({ active_room: event.target.value || null })}>
+              {rooms.map((r) => <option key={r ?? ""} value={r ?? ""}>{r ? `Room: ${r}` : "Room: default"}</option>)}
             </select>
           </>}
           tools={<div className="dock-tool-section">

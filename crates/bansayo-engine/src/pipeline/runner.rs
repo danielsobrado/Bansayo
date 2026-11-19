@@ -163,6 +163,7 @@ impl Runner {
                 &self.config.config,
                 now,
             )),
+            active_room: self.store.active_room.clone(),
             rev,
             engine: EngineInfo {
                 version: env!("CARGO_PKG_VERSION").into(),
@@ -207,6 +208,7 @@ impl Runner {
             known,
             stale,
             profiles,
+            self.store.active_room.clone(),
         )
     }
     pub(super) fn update_simulation(

@@ -4,6 +4,7 @@ import { rotateVec3, type Vec3 } from "../lib/quat";
 import {
   calibratedCameras,
   frustumCorners,
+  roomsOf,
   verticalFov,
 } from "./cameraCalibration";
 
@@ -39,6 +40,22 @@ function profiles(
     { ...base, id: "m", kind: "mounting", device_id: "SIM-T01" },
   ];
 }
+
+describe("rooms", () => {
+  it("uses only the active room's extrinsics and lists the rooms", () => {
+    const garage = {
+      ...profiles()[1]!,
+      id: "e.garage",
+      data: { ...extrinsics, t_world_from_camera_m: [2, 1, 0], room: "garage" } as never,
+    };
+    const all = [...profiles(), garage];
+    expect(calibratedCameras(all)[0]!.t).toEqual([0, 1.2, 3.2]);
+    expect(calibratedCameras(all, "garage")[0]!.t).toEqual([2, 1, 0]);
+    expect(calibratedCameras(all, "dojo")).toEqual([]);
+    expect(roomsOf(all, null)).toEqual([null, "garage"]);
+    expect(roomsOf(all, "dojo")).toEqual([null, "dojo", "garage"]);
+  });
+});
 
 describe("camera calibration to pose and frustum", () => {
   it("points the optical axis at the look-at target and image-down to −Y world", () => {

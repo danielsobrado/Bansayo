@@ -83,6 +83,9 @@ pub struct RuntimeSnapshot {
     pub stale_calibrations: BTreeSet<ProfileId>,
     #[serde(default)]
     pub calibration_profiles: Vec<CalibrationProfile>,
+    /// Room selected through the API; overrides `rig.active_room` from the configuration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_room: Option<String>,
 }
 
 impl RuntimeSnapshot {
@@ -91,6 +94,7 @@ impl RuntimeSnapshot {
         known: impl Iterator<Item = DeviceId>,
         stale: &BTreeSet<ProfileId>,
         profiles: &BTreeMap<ProfileId, CalibrationProfile>,
+        active_room: Option<String>,
     ) -> Self {
         let overrides: BTreeMap<DeviceId, Option<SegmentId>> = known
             .map(|id| {
@@ -113,6 +117,7 @@ impl RuntimeSnapshot {
             assignments: overrides,
             stale_calibrations: stale.clone(),
             calibration_profiles,
+            active_room,
         }
     }
 }
@@ -177,6 +182,9 @@ fn load_authoritative_runtime(
         }
     }
     store.stale = snapshot.stale_calibrations;
+    store.active_room = snapshot
+        .active_room
+        .filter(|r| bansayo_contracts::valid_room(r));
     // Surface any unmigrated corrupted legacy profile files without letting valid legacy files
     // conflict with the authoritative runtime snapshot.
     let legacy = crate::calibration::scan_legacy_profiles(dir)?;
@@ -251,6 +259,7 @@ fn migrate_legacy_state(
         assignments: overrides,
         stale_calibrations: store.stale.clone(),
         calibration_profiles: store.profiles.values().cloned().collect(),
+        active_room: None,
     };
     // Commit runtime.yaml atomically before touching any legacy file.
     save_runtime_snapshot(dir, &snapshot)?;
