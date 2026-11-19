@@ -9,6 +9,7 @@ import android.hardware.camera2.CaptureRequest
 import android.os.Bundle
 import android.util.Range
 import android.util.Size
+import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -45,10 +46,12 @@ import java.util.concurrent.atomic.AtomicReference
 class CameraActivity : ComponentActivity() {
     private lateinit var conn: Connection
     private val preview by lazy { PreviewView(this) }
-    private val status by lazy { label() }
+    private val status by lazy { label().apply { typeface = Fonts.mono; textSize = 12f } }
+    private val live by lazy { pill("Idle", Palette.MUTED) }
+    private val notice by lazy { Notice(this) }
     private val slot by lazy { spinner(emptyList()) }
-    private val exposure by lazy { spinner(listOf("Automatic exposure", "1/250 s", "1/500 s", "1/1000 s")) }
-    private val iso by lazy { field("ISO for manual exposure", "800", number = true) }
+    private val exposure by lazy { spinner(listOf("Automatic", "1/250 s", "1/500 s", "1/1000 s")) }
+    private val iso by lazy { field("800", "800", number = true) }
     private val socket = AtomicReference<WebSocket?>(null)
     private val worker = Executors.newSingleThreadExecutor()
     private var camera: Camera? = null
@@ -62,31 +65,41 @@ class CameraActivity : ComponentActivity() {
 
     private val permission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) startCamera() else status.text = "Camera permission is needed to send frames."
+            if (granted) startCamera() else notice.show("Camera permission is needed to send frames.", settings = false, tone = Palette.GOLD)
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        conn = Connection.load(this) ?: return finish()
+        conn = requireConnection() ?: return
         val controls = column(
-            heading("Phone camera"),
-            label("Engine camera slot"),
-            slot,
-            exposure,
-            iso,
-            row(
-                button("Start sending") { connect() },
-                button("Stop") { disconnect() },
-            ),
+            LinearLayout(this).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                addView(title("Phone camera", 18f), LinearLayout.LayoutParams(0, -2, 1f))
+                addView(live)
+            },
+            notice,
+            labelled("Engine camera slot", slot),
+            row(primaryButton("Start sending") { connect() }, dangerButton("Stop") { disconnect() }),
+            heading("Exposure"),
+            row(labelled("Shutter", exposure), labelled("ISO", iso)),
             button("Apply exposure") { applyExposure() },
             status,
+            padding = 16,
         )
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            addView(FrameLayout(context).apply { addView(preview) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 3f))
-            addView(scroll(controls), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 2f))
+        val stage = FrameLayout(this).apply {
+            background = rounded(Palette.SURFACE, 20, Palette.STROKE)
+            addView(preview)
+            post { roundCorners(dp(20).toFloat()) }
         }
-        setContentView(root)
+        screen(
+            LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(dp(12), dp(4), dp(4), dp(12))
+                addView(stage, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 3f))
+                addView(scroll(controls), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 2f))
+            },
+            title = "Camera",
+        )
         loadSlots()
         tick()
     }
@@ -109,10 +122,13 @@ class CameraActivity : ComponentActivity() {
             } else {
                 permission.launch(Manifest.permission.CAMERA)
             }
-            if (error != null) status.text = error
-            else if (slots.isEmpty()) status.text =
+            if (error != null) notice.show(error)
+            else if (slots.isEmpty()) notice.show(
                 "The engine has no phone camera slot. Add to its configuration, under a camera source:\n" +
-                    "  - { id: PHONE1, network: true, resolution_px: [1280, 720], rate_hz: 30 }\nthen restart it."
+                    "  - { id: PHONE1, network: true, resolution_px: [1280, 720], rate_hz: 30 }\nthen restart it.",
+                settings = true,
+                tone = Palette.GOLD,
+            )
         }
     }
 
@@ -156,17 +172,17 @@ class CameraActivity : ComponentActivity() {
 
     private fun connect() {
         val id = slot.selected() ?: run {
-            status.text = "No phone camera slot on the engine."
+            notice.show("No phone camera slot on the engine.", settings = true, tone = Palette.GOLD)
             return
         }
         disconnect()
+        notice.show(null)
         socket.set(
             Engine.socket(conn, "ingest/camera/$id", object : WebSocketListener() {
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                     socket.compareAndSet(webSocket, null)
                     runOnUiThread {
-                        status.text = if (response?.code == 401) "The engine refused the pairing token: pair again."
-                        else "Connection lost: ${t.message ?: response?.code}"
+                        notice.show(if (response?.code == 401) Engine.REFUSED else "${Engine.UNREACHABLE}: connection lost (${t.message ?: response?.code})")
                     }
                 }
 
@@ -202,7 +218,7 @@ class CameraActivity : ComponentActivity() {
             options.setCaptureRequestOption(CaptureRequest.SENSOR_FRAME_DURATION, 33_333_333L)
         }
         Camera2CameraControl.from(cam.cameraControl).setCaptureRequestOptions(options.build())
-        status.text = "Exposure: ${exposure.selected()}"
+        notice.show("Exposure: ${exposure.selected()}", settings = false, tone = Palette.OK)
     }
 
     private fun tick() {
@@ -212,8 +228,8 @@ class CameraActivity : ComponentActivity() {
             val warn = if (frameSize.isNotEmpty() && frameSize != "${wanted.width}x${wanted.height}")
                 "\nThis camera gives $frameSize; set resolution_px: [${frameSize.replace("x", ", ")}] for the slot on the engine."
             else ""
-            status.text = (if (ws == null) "Not sending." else "Sending to ${slot.selected()}.") +
-                " Frames sent $sent, skipped $skipped, size $frameSize.$warn"
+            if (ws == null) live.setPill("Idle", Palette.MUTED) else live.setPill("Live · ${slot.selected()}", Palette.STRIKE)
+            status.text = "sent $sent · skipped $skipped · $frameSize$warn"
             tick()
         }, 1000)
     }

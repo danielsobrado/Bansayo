@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.widget.ScrollView
+import android.widget.TextView
 import androidx.activity.ComponentActivity
 import org.json.JSONObject
 import java.util.Locale
@@ -11,23 +12,27 @@ import java.util.Locale
 class TrainingHistoryActivity : ComponentActivity() {
     private lateinit var conn: Connection
     private lateinit var screen: ScrollView
-    private val list by lazy { column() }
-    private val details by lazy { label() }
-    private val status by lazy { label() }
+    private val list by lazy { column(padding = 0, gap = 10) }
+    private val details by lazy { label().apply { setTextColor(Palette.TEXT); typeface = Fonts.mono; textSize = 13f } }
+    private val detailsCard by lazy { card(eyebrow("Session review", Palette.STRIKE), details).apply { visibility = android.view.View.GONE } }
+    private val athlete by lazy { title("", 22f) }
+    private val live by lazy { pill("No live session", Palette.MUTED) }
+    private val notice by lazy { Notice(this) }
     private var detailRequest = 0
     private var refreshRequest = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        conn = Connection.load(this) ?: return finish()
+        conn = requireConnection() ?: return
         screen = scroll(column(
-            heading("Train"), status,
-            row(button("Refresh") { refresh() }, button("Open live viewer") {
+            card(eyebrow("Athlete"), athlete, live),
+            notice,
+            row(button("Refresh") { refresh() }, primaryButton("Live view") {
                 startActivity(Intent(this, ViewerActivity::class.java))
             }),
-            details, heading("Saved sessions"), list,
+            detailsCard, heading("Saved sessions"), list,
         ))
-        setContentView(screen)
+        screen(screen, title = "Train")
     }
 
     override fun onResume() {
@@ -38,33 +43,31 @@ class TrainingHistoryActivity : ComponentActivity() {
     private fun refresh() {
         val request = ++refreshRequest
         detailRequest++
-        details.text = ""
+        detailsCard.visibility = android.view.View.GONE
         list.removeAllViews()
-        status.text = "Loading training…"
+        notice.show(null)
+        athlete.text = "Loading…"
         Engine.call(this, conn, "GET", "state") { data, error ->
             if (request != refreshRequest || isFinishing || isDestroyed) return@call
             if (error != null) {
-                status.text = error
+                athlete.text = "—"
+                notice.show(error)
                 return@call
             }
             val state = data as? JSONObject
             val athlete = state?.optJSONObject("athlete")
             val current = state?.optJSONObject("training")
-            status.text = listOf(
-                athlete?.optString("display_name") ?: "Select an athlete in Admin.",
-                current?.let { "${it.optString("title")} · ${it.optString("phase")}" } ?: "No live session",
-            ).joinToString("\n")
+            this.athlete.text = athlete?.optString("display_name") ?: "Select an athlete in Coach"
+            if (current != null) live.setPill("${current.optString("title")} · ${current.optString("phase")}", Palette.OK)
+            else live.setPill("No live session", Palette.MUTED)
             val id = athlete?.optString("id").orEmpty()
             if (id.isEmpty()) return@call
             Engine.call(this, conn, "GET", "training/sessions?athlete_id=${Uri.encode(id)}&limit=50") { sessions, problem ->
                 if (request != refreshRequest || isFinishing || isDestroyed) return@call
                 list.removeAllViews()
                 val entries = Engine.list(sessions)
-                if (entries.isEmpty()) list.addView(label(problem ?: "No saved sessions."))
-                for (entry in entries) {
-                    val title = "${entry.optString("title")} · ${entry.optString("started_utc")}"
-                    list.addView(button(title) { openSession(entry) })
-                }
+                if (entries.isEmpty()) list.add(label(problem ?: "No saved sessions yet."), 0)
+                entries.forEachIndexed { i, entry -> list.add(sessionCard(entry), if (i == 0) 0 else 10) }
             }
         }
     }
@@ -73,6 +76,7 @@ class TrainingHistoryActivity : ComponentActivity() {
         val id = Uri.encode(entry.optString("id"))
         val request = ++detailRequest
         details.text = "Loading session…"
+        detailsCard.visibility = android.view.View.VISIBLE
         screen.smoothScrollTo(0, 0)
         Engine.call(this, conn, "GET", "training/sessions/$id") { value, error ->
             if (request != detailRequest || isFinishing || isDestroyed) return@call
@@ -118,6 +122,25 @@ class TrainingHistoryActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun sessionCard(entry: JSONObject) = card(
+        title(entry.optString("title"), 17f),
+        TextView(this).apply {
+            text = entry.optString("started_utc").replace('T', ' ').substringBefore('.').removeSuffix("Z")
+            typeface = Fonts.mono
+            textSize = 12f
+            setTextColor(Palette.MUTED)
+        },
+        padding = 16, gap = 4,
+    ).apply {
+        background = android.graphics.drawable.RippleDrawable(
+            android.content.res.ColorStateList.valueOf(Palette.alpha(Palette.ACCENT, 60)),
+            rounded(Palette.SURFACE, 20, Palette.STROKE),
+            null,
+        )
+        isClickable = true
+        setOnClickListener { openSession(entry) }
     }
 
     private fun metricName(id: String): String = when (id) {

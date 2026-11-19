@@ -1,7 +1,7 @@
 # Bansayo for Android
 
-The phone as a **camera** for the engine, a **live viewer** (pose, counts, phases, cues) and an
-**admin** console (devices, athletes, sessions, USB camera exposure). Decision record:
+The phone as a **camera** for the engine, a **live viewer** (pose, counts, phases, cues), a **coach**
+console (athletes, sessions) and **settings** (pairing, engine devices, USB camera exposure). Decision record:
 [ADR-042](../../docs/architecture/martial-arts/adr/ADR-042-android-client.md). Pose estimation runs
 on the PC; the phone sends JPEG frames. Phone and PC must be on the **same Wi-Fi**; the connection
 is not encrypted, so use a trusted home network.
@@ -52,15 +52,17 @@ Start the engine. Windows asks whether `bansayo-engine.exe` may use the network:
 ## Pair and use
 
 1. Desktop → **Devices** → *Phone pairing* → **Show pairing code**.
-2. Scan the QR code with the phone's camera app; it opens Bansayo already paired. Or type the
-   address, port and token shown there.
+2. Scan the QR code with the phone's camera app; it opens Bansayo's Settings already paired. Or
+   open Settings (gear icon) and type the address, port and token shown there. Every screen links
+   to Settings when the engine is not paired or not reachable.
 3. **Camera**: hold the phone in landscape on a tripod, choose the slot (PHONE1) and *Start
    sending*. *Apply exposure* sets 1/250–1/1000 s with the chosen ISO (for kicks); the engine shows
    PHONE1 as `tracking` at about the slot's `rate_hz`.
-4. **Viewer**: pick a camera to see its preview with the engine's landmarks, and the session's
+4. **Live view**: pick a camera to see its preview with the engine's landmarks, and the session's
    state, counts and cues.
-5. **Admin**: create athletes (tick consent to save sessions), make one active, create a session,
-   acknowledge the safety notes, then Start / Pause / Resume / End; set USB camera exposure.
+5. **Coach**: create athletes (tick consent to save sessions), make one active, create a session,
+   acknowledge the safety notes, then Start / Pause / Resume / End. USB camera exposure and the
+   engine's device list are in **Settings**.
 6. **Train**: see the active athlete and session, open the live viewer, and browse saved
    desktop and VR sessions. A saved clinic shows the same graded set comparison as desktop Train.
 

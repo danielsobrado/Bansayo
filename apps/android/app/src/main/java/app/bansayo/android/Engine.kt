@@ -57,6 +57,11 @@ object Engine {
         .build()
 
     private val JSON = "application/json".toMediaType()
+    const val UNREACHABLE = "Cannot reach the engine"
+    const val REFUSED = "The engine refused the pairing token: pair again"
+
+    /** Whether [error] is about the connection itself, so the fix is in Settings. */
+    fun isConnectivity(error: String?) = error != null && (error.startsWith(UNREACHABLE) || error.startsWith(REFUSED))
 
     fun request(c: Connection, method: String, path: String, body: JSONObject? = null): Request {
         val b = Request.Builder().url(c.base + path).header("Authorization", "Bearer ${c.token}")
@@ -80,13 +85,14 @@ object Engine {
     ) {
         client.newCall(request(c, method, path, body)).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                a.runOnUiThread { done(null, "Cannot reach the engine at ${c.host}:${c.port}: ${e.message}") }
+                a.runOnUiThread { done(null, "$UNREACHABLE at ${c.host}:${c.port}: ${e.message}") }
             }
 
             override fun onResponse(call: Call, response: Response) {
                 val text = response.body?.string().orEmpty()
                 val parsed = runCatching { JSONTokener(text).nextValue() }.getOrNull()
                 val (data, error) = when {
+                    response.code == 401 -> null to REFUSED
                     parsed is JSONObject && parsed.has("error") && !parsed.isNull("error") ->
                         null to (parsed.getJSONObject("error").optString("message", "Error ${response.code}"))
                     parsed is JSONObject -> parsed.opt("data") to null

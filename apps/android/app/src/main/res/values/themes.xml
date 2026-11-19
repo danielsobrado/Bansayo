@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark "dojo at night" look: deep indigo, cyan pose-tracking neon, crimson for strikes. Colors mirror Ui.kt. -->
+    <style name="Theme.Bansayo" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:colorBackground">@color/bg</item>
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:colorPrimary">@color/surface</item>
+        <item name="android:colorControlActivated">@color/accent</item>
+        <item name="android:textColorPrimary">@color/text</item>
+        <item name="android:textColorSecondary">@color/muted</item>
+        <item name="android:textColorHint">@color/hint</item>
+        <item name="android:statusBarColor">@color/bg</item>
+        <item name="android:navigationBarColor">@color/bg</item>
+    </style>
+    <color name="bg">#FF07080F</color>
+    <color name="surface">#FF11131F</color>
+    <color name="accent">#FF22E6FF</color>
+    <color name="text">#FFEEF1FF</color>
+    <color name="muted">#FF8C93B5</color>
+    <color name="hint">#FF565D80</color>
+</resources>

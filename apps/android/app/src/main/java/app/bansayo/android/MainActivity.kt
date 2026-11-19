@@ -1,100 +1,170 @@
 package app.bansayo.android
 
 import android.content.Intent
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.view.Gravity
+import android.view.View
+import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.activity.ComponentActivity
 import org.json.JSONObject
 
 /**
- * Pairing and connection (ADR-042). Opened from the desktop's pairing QR code
- * (`bansayo://pair?host=&port=&token=`) or filled in by hand; then the three screens.
+ * Home (ADR-042): a hero pose, the engine's connection state, and the four ways to use the phone.
+ * Connectivity is configured only in [SettingsActivity]; this screen links there when it is
+ * missing or failing.
  */
 class MainActivity : ComponentActivity() {
-    private val host by lazy { field("PC address, e.g. 192.168.1.20") }
-    private val port by lazy { field("Port", "7700", number = true) }
-    private val token by lazy { field("Pairing token") }
-    private val status by lazy { label() }
+    private val state by lazy { pill("Checking", Palette.GOLD) }
+    private val summary by lazy { label().apply { setTextIsSelectable(false) } }
+    private val notice by lazy { Notice(this) }
+    private var check = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Connection.load(this)?.let { show(it) }
-        setContentView(
+        // Pairing links used to open this screen; Settings owns them now.
+        if (intent?.data != null) startActivity(Intent(this, SettingsActivity::class.java).setData(intent.data))
+        screen(
             scroll(
                 column(
-                    heading("Bansayo"),
-                    label(
-                        "Pair with the engine on your PC: open Devices → Phone pairing on the desktop and " +
-                            "scan its QR code with the phone's camera, or type the three values. " +
-                            "Phone and PC must be on the same Wi-Fi. The link has no encryption: " +
-                            "use a trusted home network only.",
+                    header(),
+                    hero(),
+                    notice,
+                    heading("Choose a mode"),
+                    row(
+                        tile(R.drawable.ic_camera, "Camera", "Stream this camera to the pose engine", Palette.ACCENT, CameraActivity::class.java),
+                        tile(R.drawable.ic_viewer, "Live view", "Skeleton, reps, phases and cues", Palette.STRIKE, ViewerActivity::class.java),
                     ),
-                    host, port, token,
-                    button("Connect") { connect() },
-                    status,
-                    heading("Use the phone as"),
-                    button("Camera — send this camera to the engine") { open(CameraActivity::class.java) },
-                    button("Viewer — live pose, counts and cues") { open(ViewerActivity::class.java) },
-                    button("Train — dashboard and history") { open(TrainingHistoryActivity::class.java) },
-                    button("Admin — athletes, sessions, cameras") { open(AdminActivity::class.java) },
+                    row(
+                        tile(R.drawable.ic_train, "Train", "Sessions, history and review", Palette.GOLD, TrainingHistoryActivity::class.java),
+                        tile(R.drawable.ic_admin, "Coach", "Athletes, plans and session control", Palette.ACCENT_DEEP, AdminActivity::class.java),
+                    ),
                 ),
             ),
         )
-        handle(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        handle(intent)
+        if (intent.data != null) startActivity(Intent(this, SettingsActivity::class.java).setData(intent.data))
     }
 
-    private fun handle(intent: Intent?) {
-        val c = intent?.data?.let { Connection.fromPairingUri(it) } ?: return
-        show(c)
-        connect()
+    override fun onResume() {
+        super.onResume()
+        refresh()
     }
 
-    private fun show(c: Connection) {
-        host.setText(c.host)
-        port.setText(c.port.toString())
-        token.setText(c.token)
+    private fun header() = LinearLayout(this).apply {
+        gravity = Gravity.CENTER_VERTICAL
+        addView(
+            column(
+                eyebrow("Martial arts · motion AI"),
+                TextView(context).apply {
+                    text = "BANSAYO"
+                    textSize = 32f
+                    letterSpacing = 0.16f
+                    typeface = Fonts.display
+                    setTextColor(Palette.TEXT)
+                },
+                padding = 0, gap = 2,
+            ),
+            LinearLayout.LayoutParams(0, -2, 1f),
+        )
+        addView(iconButton(R.drawable.ic_settings, "Connection settings") { openSettings() })
     }
 
-    private fun current(): Connection? {
-        val h = host.text.toString().trim()
-        val p = port.text.toString().trim().toIntOrNull()
-        if (h.isEmpty() || p == null) {
-            status.text = "Enter the PC address and port."
-            return null
+    private fun hero(): View {
+        val pose = SkeletonView(this).apply {
+            setLandmarks(SkeletonView.SIDE_KICK, 560 to 460, "coco17.body")
+            strikeBones = SkeletonView.KICK_BONES
         }
-        return Connection(h, p, token.text.toString().trim())
+        val shade = View(this).apply {
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(0, 0, Palette.alpha(Palette.BG, 235)),
+            )
+        }
+        val text = column(
+            TextView(this).apply {
+                text = "Every strike, tracked."
+                textSize = 24f
+                typeface = Fonts.display
+                setTextColor(Palette.TEXT)
+            },
+            LinearLayout(this).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                addView(state)
+                addView(summary.apply { setPadding(dp(10), 0, 0, 0); textSize = 13f })
+            },
+            padding = 18, gap = 8,
+        )
+        return FrameLayout(this).apply {
+            background = rounded(Palette.SURFACE, 24, Palette.STROKE)
+            addView(pose, FrameLayout.LayoutParams(-1, dp(200)))
+            addView(shade, FrameLayout.LayoutParams(-1, -1))
+            addView(text, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
+            layoutParams = LinearLayout.LayoutParams(-1, dp(280))
+            post { roundCorners(dp(24).toFloat()) }
+        }
     }
 
-    private fun connect() {
-        val c = current() ?: return
-        Connection.save(this, c)
-        status.text = "Connecting…"
+    private fun tile(icon: Int, name: String, about: String, color: Int, target: Class<*>) =
+        column(
+            FrameLayout(this).apply {
+                background = rounded(Palette.alpha(color, 36), 14)
+                addView(iconView(icon, color), FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
+                layoutParams = LinearLayout.LayoutParams(dp(44), dp(44))
+            },
+            title(name, 18f),
+            TextView(this).apply {
+                text = about
+                textSize = 13f
+                setTextColor(Palette.MUTED)
+                minLines = 2
+            },
+            padding = 16, gap = 10,
+        ).apply {
+            background = android.graphics.drawable.RippleDrawable(
+                android.content.res.ColorStateList.valueOf(Palette.alpha(color, 70)),
+                rounded(Palette.SURFACE, 20, Palette.STROKE),
+                null,
+            )
+            isClickable = true
+            contentDescription = "$name: $about"
+            setOnClickListener {
+                if (Connection.load(context) == null) {
+                    notice.show("Connect to your engine first to use $name.", settings = true, tone = Palette.GOLD)
+                } else {
+                    startActivity(Intent(context, target))
+                }
+            }
+        }
+
+    private fun refresh() {
+        val c = Connection.load(this)
+        if (c == null) {
+            state.setPill("Not paired", Palette.GOLD)
+            summary.text = ""
+            notice.show("Pair the phone with the Bansayo engine on your PC to start.", settings = true, tone = Palette.GOLD)
+            return
+        }
+        val request = ++check
+        state.setPill("Checking", Palette.GOLD)
         Engine.call(this, c, "GET", "state") { data, error ->
+            if (request != check || isFinishing) return@call
             if (error != null) {
-                status.text = error
+                state.setPill("Offline", Palette.STRIKE)
+                summary.text = "${c.host}:${c.port}"
+                notice.show(error, settings = true)
                 return@call
             }
-            val state = data as? JSONObject
-            val engine = state?.optJSONObject("engine")
-            val cams = Engine.cameras(state).joinToString { Engine.id(it) + " (" + it.optString("state") + ")" }
-            val phones = Engine.networkCameras(state).joinToString { Engine.id(it) }
-            status.text = buildString {
-                append("Connected. Engine ").append(engine?.optString("state") ?: "?").append(".\n")
-                append("Cameras: ").append(cams.ifEmpty { "none" }).append(".\n")
-                append(
-                    if (phones.isEmpty()) "No phone camera is configured on the engine (network: true)."
-                    else "Phone camera slots: $phones.",
-                )
-            }
+            val s = data as? JSONObject
+            val cams = Engine.cameras(s).size
+            state.setPill("Engine online", Palette.OK)
+            summary.text = "$cams camera${if (cams == 1) "" else "s"} · ${s?.optJSONObject("athlete")?.optString("display_name") ?: "no athlete"}"
+            notice.show(null)
         }
-    }
-
-    private fun open(cls: Class<*>) {
-        if (current()?.also { Connection.save(this, it) } == null) return
-        startActivity(Intent(this, cls))
     }
 }
