@@ -14,6 +14,7 @@ var _confidence := ""
 var _live_torso := 0.0
 var _last_sample_ms := 0
 var _card_style := StyleBoxFlat.new()
+var _stage_style := StyleBoxFlat.new()
 
 func _ready() -> void:
 	custom_minimum_size.y = 420
@@ -24,6 +25,9 @@ func _ready() -> void:
 	_card_style.set_border_width_all(2)
 	_card_style.set_corner_radius_all(22)
 	_card_style.anti_aliasing = true
+	_stage_style.bg_color = Color("#b5c2cf")
+	_stage_style.set_corner_radius_all(13)
+	_stage_style.anti_aliasing = true
 
 func reset_framing() -> void:
 	_live_torso = 0.0
@@ -62,14 +66,15 @@ func _draw_card(card: Rect2, title: String, caption: String, note: String, joint
 	draw_line(left + Vector2(0, footer), left + Vector2(text_width, footer), Color("#394456"), 1.0, true)
 	draw_string(font, left + Vector2(0, footer + 41), caption, HORIZONTAL_ALIGNMENT_LEFT, text_width * 0.50, 23, ink)
 	draw_string(font, left + Vector2(text_width * 0.48, footer + 41), note, HORIZONTAL_ALIGNMENT_RIGHT, text_width * 0.52, 21, MUTED)
+	var stage := Rect2(card.position + Vector2(16, 61), card.size - Vector2(32, 142))
+	draw_style_box(_stage_style, stage)
 	if joints.is_empty():
-		draw_string(font, left + Vector2(0, card.size.y * 0.51), "Pose unavailable", HORIZONTAL_ALIGNMENT_CENTER, text_width, 28, MUTED)
+		draw_string(font, left + Vector2(0, card.size.y * 0.51), "Pose unavailable", HORIZONTAL_ALIGNMENT_CENTER, text_width, 28, Color("#283746"))
 		return
-	var stage := Rect2(card.position + Vector2(35, 63), card.size - Vector2(70, 143))
-	var floor_y := stage.end.y - 2.0
-	draw_line(Vector2(stage.position.x + 38, floor_y), Vector2(stage.end.x - 38, floor_y), Color("#303a4b"), 1.0, true)
-	var result := _project(stage.grow(-12.0), joints, torso)
-	Anatomy.draw(self, result.points, result.unit, ink)
+	var floor_y := stage.end.y - 12.0
+	draw_line(Vector2(stage.position.x + 30, floor_y), Vector2(stage.end.x - 30, floor_y), Color("#8596a7"), 1.0, true)
+	var result := _project(stage.grow(-23.0), joints, torso)
+	Anatomy.draw(self, result.points, result.unit)
 
 func _project(area: Rect2, joints: Dictionary, torso: float) -> Dictionary:
 	var bounds := Rect2(joints.values()[0], Vector2.ZERO)

@@ -10,6 +10,24 @@ const CALF := [0.106, 0.142, 0.091, 0.062]
 const PALM := [0.061, 0.080, 0.074, 0.042]
 const NECK := [0.110, 0.092, 0.078, 0.083]
 
+const BONES := [
+	["left_shoulder", "right_shoulder", Color("#c29aff")],
+	["left_shoulder", "left_hip", Color("#66dbe7")], ["right_shoulder", "right_hip", Color("#ffda6b")],
+	["left_hip", "right_hip", Color("#d78aff")],
+	["left_shoulder", "left_elbow", Color("#ff655e")], ["left_elbow", "left_wrist", Color("#8fda50")],
+	["right_shoulder", "right_elbow", Color("#ffda6b")], ["right_elbow", "right_wrist", Color("#64dce9")],
+	["left_hip", "left_knee", Color("#ff655e")], ["left_knee", "left_ankle", Color("#64afff")],
+	["right_hip", "right_knee", Color("#64dce9")], ["right_knee", "right_ankle", Color("#93de59")],
+]
+const JOINT_INK := Color("#f9faff")
+
+static func skeleton_edges(points: Dictionary) -> Array:
+	var observed: Array = []
+	for bone in BONES:
+		if points.has_all([bone[0], bone[1]]):
+			observed.append(bone)
+	return observed
+
 static func torso_length(joints: Dictionary) -> float:
 	if not joints.has_all(TORSO):
 		return 0.0
@@ -17,10 +35,10 @@ static func torso_length(joints: Dictionary) -> float:
 	var hips: Vector2 = (joints[HIPS[0]] + joints[HIPS[1]]) * 0.5
 	return shoulders.distance_to(hips)
 
-static func draw(canvas: Control, points: Dictionary, unit: float, tint: Color) -> void:
-	var base := Color("#202937").lerp(tint, 0.76)
-	var light := base.lightened(0.16)
-	var shade := base.darkened(0.23)
+static func draw(canvas: Control, points: Dictionary, unit: float) -> void:
+	var base := Color("#10161e")
+	var light := Color("#17212b")
+	var shade := Color("#090e15")
 	for side in ["right_", "left_"]:
 		_limb(canvas, points, side + "hip", side + "knee", THIGH, unit, light, shade)
 		_limb(canvas, points, side + "knee", side + "ankle", CALF, unit, light, shade)
@@ -48,6 +66,24 @@ static func draw(canvas: Control, points: Dictionary, unit: float, tint: Color) 
 			_surface(canvas, hand, hand + direction * unit * 0.13, PALM, unit, Color(light, 0.72), Color(shade, 0.72))
 	if points.has("head"):
 		_ellipse(canvas, head, Vector2(0.173, 0.220) * unit, base, light)
+
+	_draw_skeleton(canvas, points, unit)
+
+static func _draw_skeleton(canvas: Control, points: Dictionary, unit: float) -> void:
+	var bone_width := clampf(unit * 0.044, 2.5, 7.0)
+	var joint_radius := clampf(unit * 0.041, 3.0, 6.0)
+	for edge in skeleton_edges(points):
+		_draw_bone(canvas, points[edge[0]], points[edge[1]], edge[2], bone_width)
+	if points.has("head") and points.has_all(SHOULDERS):
+		var shoulder_center: Vector2 = (points[SHOULDERS[0]] + points[SHOULDERS[1]]) * 0.5
+		_draw_bone(canvas, points["head"], shoulder_center, Color("#93de59"), bone_width)
+	for position: Vector2 in points.values():
+		canvas.draw_circle(position, joint_radius + 1.5, Color("#0b1016"), true, -1, true)
+		canvas.draw_circle(position, joint_radius, JOINT_INK, true, -1, true)
+
+static func _draw_bone(canvas: Control, from: Vector2, to: Vector2, color: Color, width: float) -> void:
+	canvas.draw_line(from, to, Color("#0b1016"), width + 2.5, true)
+	canvas.draw_line(from, to, color, width, true)
 
 static func _draw_torso(canvas: Control, points: Dictionary, unit: float, light: Color, shade: Color) -> void:
 	var left_shoulder: Vector2 = points[SHOULDERS[0]]

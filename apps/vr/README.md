@@ -69,8 +69,8 @@ cameras see you, at the headset's floor height. The alignment is saved in
 ### Pose mirror
 
 Open **Pose mirror** from setup or the Taekwondo clinic. In desktop preview, press **M**.
-The cyan figure reflects the selected camera's 2D landmarks horizontally. The purple figure
-shows an illustrated reference. Use **Switch camera** to pick the view that best matches the
+The reflection card mirrors the selected camera's 2D landmarks horizontally. The reference
+card shows an illustrated pose. Use **Switch camera** to pick the view that best matches the
 guide. Low-confidence points are omitted and the reflection clears when camera frames stop.
 
 **Follow session** shows the current item in Full Body in 20 or the current phase and side
@@ -82,9 +82,9 @@ On physical cameras configured for body detection, the engine uses YOLOX to loca
 and RTMPose to estimate the landmarks. The mirror works with one camera and draws an
 approximate silhouette around its detected joints. The guide is an unscored 2D example.
 Camera viewpoint and occlusion affect what the reflection can show.
-The cyan and violet avatars share the same planar anatomy renderer. Framing uses a slowly
-updated torso scale and preserves partially observed poses. The confidence label summarizes
-the available keypoints. [Redesign screenshot and matching camera settings](../../docs/validation/2026-11-19-vr-coaching-visuals.md)
+Both avatars use dark silhouettes with colored bones and white keypoint markers. Missing
+landmarks leave gaps in the skeleton. Framing uses a slowly updated torso scale, and the
+confidence label summarizes the available keypoints. [Redesign screenshot and matching camera settings](../../docs/validation/2026-11-19-vr-coaching-visuals.md)
 
 ### Taekwondo clinic
 

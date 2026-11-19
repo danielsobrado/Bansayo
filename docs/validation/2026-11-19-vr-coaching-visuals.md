@@ -2,7 +2,7 @@
 
 ![Bansayo's Overhead reach pose mirror. The SIM-CAM1 reflection and the illustrated reference appear side by side.](screenshots/vr-overhead-reach.png)
 
-This 1280 × 800 PNG comes directly from the root viewport of the running Godot 4.5.1 desktop preview on macOS. The room received standing landmarks from the Rust simulator in `config/sim-training.yaml`. The mirror was set to **Flexibility → Overhead reach**, with `SIM-CAM1` selected. The image uses the project's Compatibility renderer.
+This 1280 × 800 PNG comes directly from the root viewport of the running Godot 4.5.1 desktop preview on macOS. The room received standing landmarks from the Rust simulator in `config/sim-training.yaml`. The mirror was set to **Flexibility → Overhead reach**, with `SIM-CAM1` selected. Both figures use the silhouette and skeleton overlay. The image uses the project's Compatibility renderer.
 
 ## Camera match
 
