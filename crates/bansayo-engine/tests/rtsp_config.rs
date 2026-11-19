@@ -32,6 +32,9 @@ fn rtsp_cameras_are_validated_and_described_without_credentials() {
         settings: Default::default(),
         timing: bansayo_engine::diagnostics::Timing::new(false, 16_667),
         feeds: Default::default(),
+        data_dir: dir.path().into(),
+        runtime: Default::default(),
+        management: Default::default(),
     };
     let d = &source.descriptors()[0];
     assert_eq!(d.model.as_deref(), Some("RTSP camera 192.168.1.40:554"));

@@ -412,6 +412,7 @@ impl Runtime {
                         }
                     } else {
                         engine.timing.tick(now);
+                        engine.store.identity_unconfirmed = engine.registry.unconfirmed_cameras();
                         let started = engine.timing.on().then(std::time::Instant::now);
                         let solved = solve(
                             &engine.skeleton,

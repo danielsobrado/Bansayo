@@ -27,6 +27,7 @@ pub struct Api {
     pub previews: crate::sources::camera::Previews,
     pub fiducials: crate::sources::camera::FiducialPreviews,
     pub camera_settings: crate::sources::camera::CameraSettings,
+    pub runtime: crate::sources::RuntimeMap,
     /// Frames of network cameras (phones), by camera id (ADR-042).
     pub feeds: crate::sources::camera::capture::NetworkFeeds,
     /// LAN mode token; `None` when LAN mode is off (loopback only).
@@ -53,6 +54,10 @@ pub fn router(api: Api) -> Router {
         .route("/api/v1/cameras/{id}/preview.jpg", get(preview))
         .route("/api/v1/cameras/{id}/fiducials", get(fiducials))
         .route("/api/v1/cameras/{id}/settings", put(camera_settings))
+        .route(
+            "/api/v1/cameras/{id}/identity/confirm",
+            post(confirm_camera_identity),
+        )
         .route("/api/v1/lan/pairing", get(lan_pairing))
         .route("/api/v1/ingest/camera/{id}", get(ingest_camera))
         .route("/api/v1/devices/{id}/assignment", put(control::assignment))
@@ -219,6 +224,26 @@ async fn fiducials(
             ApiErrorCode::NotFound,
             "No fresh AprilTag observations for this camera.",
         ),
+    }
+}
+/// `POST /cameras/{id}/identity/confirm`: the user states that the connected hardware is this
+/// camera, so its calibration is used again. Only after a deliberate act, never automatically.
+async fn confirm_camera_identity(
+    State(api): State<Api>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Response {
+    let Ok(id) = DeviceId::new(id.as_str()) else {
+        return failure(ApiErrorCode::NotFound, "No camera with this id.");
+    };
+    let (dir, runtime) = (api.data_dir.clone(), api.runtime.clone());
+    let done = tokio::task::spawn_blocking(move || {
+        crate::sources::camera::lifecycle::Lifecycle::confirm(&dir, &runtime, &id)
+    })
+    .await;
+    match done {
+        Ok(Ok(())) => StatusCode::NO_CONTENT.into_response(),
+        Ok(Err(e)) => failure(ApiErrorCode::Unavailable, &e),
+        Err(_) => failure(ApiErrorCode::Internal, "Identity could not be saved."),
     }
 }
 /// `PUT /cameras/{id}/settings` (14 §5.5): manual exposure and gain, applied by the capture thread

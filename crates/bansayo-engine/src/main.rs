@@ -96,11 +96,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         match bansayo_engine::sources::camera::capture::list_devices() {
             Ok(cameras) if cameras.is_empty() => println!("No cameras found"),
             Ok(cameras) => {
-                for (index, name) in cameras {
-                    println!("{index}	{name}");
-                    match bansayo_engine::sources::camera::capture::device_formats(index) {
-                        Ok(formats) => formats.iter().for_each(|f| println!("	{f}")),
-                        Err(e) => println!("	formats unavailable: {e}"),
+                for c in cameras {
+                    let id = &c.identity;
+                    println!("{}\t{}", c.index, id.name);
+                    println!("\tfingerprint   {}", id.fingerprint);
+                    if let (Some(v), Some(p)) = (&id.vendor_id, &id.product_id) {
+                        println!("\thardware_id   vid_{v}&pid_{p}");
+                    }
+                    println!(
+                        "\tserial        {}",
+                        id.serial.as_deref().unwrap_or("(none exposed)")
+                    );
+                    if let Some(i) = &id.interface_id {
+                        println!("\tinterface_id  {i}");
+                    }
+                    match bansayo_engine::sources::camera::capture::device_modes(c.index) {
+                        Ok(modes) => {
+                            for m in modes {
+                                println!(
+                                    "\t{} {}x{} @ {} fps",
+                                    m.pixel_format,
+                                    m.resolution_px[0],
+                                    m.resolution_px[1],
+                                    m.fps.unwrap_or(0.0)
+                                );
+                            }
+                        }
+                        Err(e) => println!("\tmodes unavailable: {e}"),
                     }
                 }
             }

@@ -208,7 +208,11 @@ mod tests {
         let index: u32 = std::env::var("BANSAYO_CAMERA").unwrap().parse().unwrap();
         let exposure: f64 =
             std::env::var("BANSAYO_EXPOSURE_S").map_or(0.004, |s| s.parse().unwrap());
-        let mut c = open(&Backend::Device(index), [1280, 720], 30.0).unwrap();
+        let selector = crate::sources::camera::identity::Selector {
+            index: Some(index),
+            ..Default::default()
+        };
+        let mut c = open(&Backend::Device(selector), [1280, 720], 30.0).unwrap();
         c.next().unwrap();
         let applied = apply(index, Some(exposure), None).unwrap();
         eprintln!("requested {exposure} s, in effect {applied:?}");

@@ -84,6 +84,19 @@ pub struct CameraSourceSpec {
     pub cameras: Vec<LiveCameraSpec>,
 }
 
+/// An enabled SlimeVR source with validated identities.
+#[derive(Debug, Clone)]
+pub struct SlimevrSpec {
+    pub id: SourceId,
+    pub endpoint: String,
+    pub rotation: crate::sources::slimevr::solarxr::RotationField,
+    pub feed_interval_ms: u16,
+    pub latency_us: u64,
+    /// Device id and SolarXR tracker key.
+    pub trackers: Vec<(DeviceId, String)>,
+    pub announce_unlisted: bool,
+}
+
 /// Most cameras one source accepts; inference is shared across them.
 pub const MAX_CAMERAS: usize = 8;
 
@@ -95,6 +108,7 @@ pub struct Validated {
     pub assignments: BTreeMap<DeviceId, SegmentId>,
     pub simulated: Vec<SimulatedSpec>,
     pub cameras: Vec<CameraSourceSpec>,
+    pub slimevr: Vec<SlimevrSpec>,
     /// Non-fatal findings, logged at startup.
     pub warnings: Vec<Problem>,
 }
@@ -291,6 +305,20 @@ pub(super) fn validate(config: Config) -> Result<Validated, Vec<Problem>> {
     check_quality(&mut c, &config.quality);
     check_triangulation(&mut c, &config.triangulation);
     check_fiducials(&mut c, &config.fiducials, &config.sources);
+    c.range(
+        "camera_management.warn_fps_ratio",
+        config.camera_management.warn_fps_ratio,
+        0.0,
+        1.0,
+    );
+    for (i, f) in config.camera_management.fallback_fps.iter().enumerate() {
+        c.range(
+            &format!("camera_management.fallback_fps[{i}]"),
+            *f,
+            1.0,
+            240.0,
+        );
+    }
     let bind = check_api(&mut c, &config.api);
     let skeleton = Skeleton::builtin(
         &config.skeleton.model,
@@ -303,7 +331,7 @@ pub(super) fn validate(config: Config) -> Result<Validated, Vec<Problem>> {
     if config.processing_profiles.is_some() {
         c.err("processing_profiles", "not implemented in this build");
     }
-    let (simulated, mut cameras, devices) = check_sources(&mut c, &config.sources);
+    let (simulated, mut cameras, slimevr, devices) = check_sources(&mut c, &config.sources);
     for source in &mut cameras {
         source.fiducials = config.fiducials.clone();
     }
@@ -320,6 +348,7 @@ pub(super) fn validate(config: Config) -> Result<Validated, Vec<Problem>> {
             assignments,
             simulated,
             cameras,
+            slimevr,
             warnings: c.warnings,
         })
     } else {
@@ -484,18 +513,21 @@ fn check_sources(
 ) -> (
     Vec<SimulatedSpec>,
     Vec<CameraSourceSpec>,
+    Vec<SlimevrSpec>,
     HashMap<String, bool>,
 ) {
     let mut source_ids: HashMap<String, usize> = HashMap::new();
     let mut devices: HashMap<String, (String, bool)> = HashMap::new();
     let mut out = vec![];
     let mut cameras = vec![];
+    let mut slimevr = vec![];
     for (i, source) in sources.iter().enumerate() {
         let path = format!("sources[{i}]");
         let id = match source {
             SourceConfig::Simulated(s) => &s.id,
             SourceConfig::Camera(k) => &k.id,
-            SourceConfig::SlimevrSolarxr(d) | SourceConfig::Esp32Udp(d) => &d.id,
+            SourceConfig::SlimevrSolarxr(s) => &s.id,
+            SourceConfig::Esp32Udp(d) => &d.id,
         };
         if SourceId::new(id.as_str()).is_err() {
             c.err(
@@ -520,12 +552,18 @@ fn check_sources(
                     cameras.extend(k.enabled.then_some(spec));
                 }
             }
+            SourceConfig::SlimevrSolarxr(s) => {
+                if let Some(spec) = check_slimevr(c, &path, s, &mut devices) {
+                    slimevr.extend(s.enabled.then_some(spec));
+                }
+            }
             _ => c.err(format!("{path}.kind"), "not implemented in this build"),
         }
     }
     (
         out,
         cameras,
+        slimevr,
         devices
             .into_iter()
             .map(|(k, (_, tracker))| (k, tracker))
@@ -668,6 +706,54 @@ fn check_simulated(
     })
 }
 
+fn check_slimevr(
+    c: &mut Check,
+    path: &str,
+    s: &SlimevrSourceConfig,
+    devices: &mut HashMap<String, (String, bool)>,
+) -> Option<SlimevrSpec> {
+    if !(s.endpoint.starts_with("ws://") || s.endpoint.starts_with("wss://")) {
+        c.err(
+            format!("{path}.endpoint"),
+            "must start with ws:// or wss://",
+        );
+    }
+    c.range(
+        &format!("{path}.feed_interval_ms"),
+        s.feed_interval_ms.into(),
+        1.0,
+        1000.0,
+    );
+    c.range(&format!("{path}.latency_ms"), s.latency_ms, 0.0, 1000.0);
+    let mut keys: HashMap<&str, usize> = HashMap::new();
+    let mut trackers = vec![];
+    for (j, t) in s.trackers.iter().enumerate() {
+        let p = format!("{path}.trackers[{j}]");
+        if t.tracker.trim().is_empty() {
+            c.err(format!("{p}.tracker"), "must name a SolarXR tracker");
+        }
+        // One stream per tracker: two device ids for one tracker would be competing inputs.
+        if let Some(prev) = keys.insert(t.tracker.as_str(), j) {
+            c.err(
+                format!("{p}.tracker"),
+                format!("{:?} is already listed at trackers[{prev}]", t.tracker),
+            );
+        }
+        if let Some(id) = claim_device(c, &format!("{p}.id"), &t.id, "tracker", true, devices) {
+            trackers.push((id, t.tracker.clone()));
+        }
+    }
+    Some(SlimevrSpec {
+        id: SourceId::new(s.id.as_str()).ok()?,
+        endpoint: s.endpoint.clone(),
+        rotation: s.rotation,
+        feed_interval_ms: s.feed_interval_ms,
+        latency_us: (s.latency_ms * 1000.0) as u64,
+        trackers,
+        announce_unlisted: s.announce_unlisted,
+    })
+}
+
 fn check_camera_source(
     c: &mut Check,
     path: &str,
@@ -711,18 +797,44 @@ fn check_camera_source(
         );
     }
     let mut indices: HashMap<u32, usize> = HashMap::new();
+    let mut hardware: HashMap<String, usize> = HashMap::new();
     let mut cameras = vec![];
     for (j, cam) in k.cameras.iter().enumerate() {
         let p = format!("{path}.cameras[{j}]");
-        c.range(&format!("{p}.rate_hz"), cam.rate_hz, 1.0, 240.0);
+        let (preset_size, preset_rate) = cam
+            .preset
+            .map_or((CAMERA_RESOLUTION_DEFAULT, CAMERA_RATE_DEFAULT), |p| {
+                p.request()
+            });
+        let rate_hz = cam.rate_hz.unwrap_or(preset_rate);
+        c.range(&format!("{p}.rate_hz"), rate_hz, 1.0, 240.0);
         c.range(&format!("{p}.latency_ms"), cam.latency_ms, 0.0, 1000.0);
-        for (axis, v) in ["width", "height"].iter().zip(cam.resolution_px) {
+        let mut resolution = cam.resolution_px.unwrap_or(preset_size);
+        for (axis, v) in ["width", "height"].iter().zip(resolution) {
             c.range(&format!("{p}.resolution_px.{axis}"), v.into(), 16.0, 8192.0);
         }
         if let Some(e) = cam.exposure_s {
             c.range(&format!("{p}.exposure_s"), e, 1e-5, 1.0);
         }
-        let mut resolution = cam.resolution_px;
+        let selector = crate::sources::camera::identity::Selector {
+            index: cam.device,
+            hardware_id: cam.hardware_id.clone(),
+            serial: cam.serial.clone(),
+            interface_id: cam.interface_id.clone(),
+        };
+        let physical = selector != Default::default();
+        // Two cameras named only by model would match the same hardware: refuse instead of
+        // letting enumeration order decide which calibration belongs to which camera.
+        if let Some(h) = &cam.hardware_id
+            && cam.serial.is_none()
+            && cam.interface_id.is_none()
+            && let Some(prev) = hardware.insert(h.to_ascii_lowercase(), j)
+        {
+            c.err(
+                format!("{p}.hardware_id"),
+                format!("{h:?} also names cameras[{prev}]; add serial or interface_id to tell identical cameras apart"),
+            );
+        }
         if let Some(url) = &cam.rtsp {
             if !url.starts_with("rtsp://") {
                 c.err(format!("{p}.rtsp"), "must start with rtsp://");
@@ -740,7 +852,8 @@ fn check_camera_source(
                 "exposure_s and gain of a network camera are set on the phone, not here",
             );
         }
-        let backend = match (&cam.device, &cam.frames_dir) {
+        let device = physical.then_some(&selector);
+        let backend = match (device, &cam.frames_dir) {
             (None, None) if cam.network && cam.rtsp.is_some() => {
                 c.err(
                     &p,
@@ -758,14 +871,26 @@ fn check_camera_source(
                 c.err(&p, "a network camera has no device or frames_dir");
                 None
             }
-            (Some(index), None) => {
-                if let Some(prev) = indices.insert(*index, j) {
+            (Some(selector), None) => {
+                if let Some(index) = selector.index
+                    && let Some(prev) = indices.insert(index, j)
+                {
                     c.err(
                         format!("{p}.device"),
                         format!("{index} is already used by cameras[{prev}]"),
                     );
                 }
-                Some(capture::Backend::Device(*index))
+                if selector.index.is_some()
+                    && selector.hardware_id.is_none()
+                    && selector.serial.is_none()
+                    && selector.interface_id.is_none()
+                {
+                    c.warn(
+                        format!("{p}.device"),
+                        "a camera index changes with plug order; set hardware_id, serial or interface_id (--list-cameras prints them)",
+                    );
+                }
+                Some(capture::Backend::Device(selector.clone()))
             }
             (None, Some(dir)) => match capture::frame_files(dir) {
                 // An image folder's resolution is its first image's; every image must match.
@@ -800,7 +925,7 @@ fn check_camera_source(
             cameras.push(LiveCameraSpec {
                 id,
                 backend,
-                rate_hz: cam.rate_hz,
+                rate_hz,
                 resolution_px: resolution,
                 latency_us: (cam.latency_ms * 1000.0) as u64,
                 exposure_s: cam.exposure_s,
@@ -899,7 +1024,8 @@ sources:
       - {{ id: SIM-T03, rate_hz: 0 }}
     cameras:
       - {{ id: SIM-T01, rate_hz: 30, resolution_px: [1280, 720], fov_y_deg: 50, position_m: [0, 1, 3], look_at_m: [0, 1, 0] }}
-  - {{ id: slime, kind: slimevr_solarxr, url: "ws://127.0.0.1:21110" }}
+  - {{ id: slime, kind: slimevr_solarxr, endpoint: "http://127.0.0.1:21110" }}
+  - {{ id: esp, kind: esp32_udp, port: 9000 }}
 "#,
             dir = dir.path().display().to_string()
         );
@@ -937,8 +1063,9 @@ sources:
             has("sources[0].cameras[0].id", "already used by a tracker"),
             "{p:#?}"
         );
+        assert!(has("sources[1].endpoint", "ws://"), "{p:#?}");
         assert!(
-            has("sources[1].kind", "not implemented in this build"),
+            has("sources[2].kind", "not implemented in this build"),
             "{p:#?}"
         );
         assert!(p.len() >= 9);

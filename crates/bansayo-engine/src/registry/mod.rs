@@ -52,6 +52,8 @@ pub struct Registry {
     pub entries: BTreeMap<DeviceId, Entry>,
     pub assignments: BTreeMap<DeviceId, SegmentId>,
     pub drops: DropCounters,
+    /// Live source state outside observations; empty in replay.
+    pub runtime: crate::sources::RuntimeMap,
 }
 impl Registry {
     pub fn new(
@@ -82,7 +84,20 @@ impl Registry {
                 .collect(),
             assignments,
             drops,
+            runtime: Default::default(),
         }
+    }
+    /// Cameras whose connected hardware is not the hardware their calibration was made with.
+    pub fn unconfirmed_cameras(&self) -> std::collections::BTreeSet<DeviceId> {
+        self.runtime.read().map_or_else(
+            |_| Default::default(),
+            |r| {
+                r.iter()
+                    .filter(|(_, d)| d.camera.as_ref().is_some_and(|c| !c.identity_confirmed))
+                    .map(|(id, _)| id.clone())
+                    .collect()
+            },
+        )
     }
     /// Returns whether the event changed pipeline state. Only accepted events may be recorded:
     /// replay re-applies them and rejects a recording holding anything the live registry refused.
@@ -179,6 +194,7 @@ impl Registry {
         true
     }
     pub fn status(&self, now: u64, quality: &QualityConfig, store: &Store) -> Vec<DeviceStatus> {
+        let runtime = self.runtime.read().map(|r| r.clone()).unwrap_or_default();
         self.entries
             .values()
             .map(|e| {
@@ -201,6 +217,24 @@ impl Registry {
                             _ => None,
                         });
                 let unapplied = settings.as_ref().is_some_and(|s| !s.problems.is_empty());
+                let live = runtime.get(&e.descriptor.id);
+                let diagnostics = e
+                    .latest
+                    .get(&ObservationKind::Diagnostics)
+                    .and_then(|o| match o.data {
+                        ObservationData::Diagnostics {
+                            battery_level,
+                            charging,
+                            rssi_dbm,
+                            ..
+                        } => Some((battery_level, charging, rssi_dbm)),
+                        _ => None,
+                    });
+                let camera_runtime = live.and_then(|r| r.camera.clone());
+                let camera_problems: Vec<Reason> = camera_runtime
+                    .as_ref()
+                    .map(|c| c.reasons.clone())
+                    .unwrap_or_default();
                 let state = if e.failure.is_some() {
                     TrackingState::Unavailable
                 } else if !e.connected
@@ -210,6 +244,9 @@ impl Registry {
                 } else if last.is_none() {
                     TrackingState::Acquiring
                 } else if unapplied
+                    || camera_runtime
+                        .as_ref()
+                        .is_some_and(|c| c.lifecycle == CameraLifecycle::Degraded)
                     || e.reported_quality < quality.degraded_quality as f32
                     || e.received > 2
                         && e.descriptor
@@ -228,7 +265,7 @@ impl Registry {
                         "Device is disconnected. Waiting for fresh data.",
                     )),
                     // Settings problems name their property (08 §3.2) and stand in for the generic reason.
-                    TrackingState::Degraded if unapplied => {
+                    TrackingState::Degraded if unapplied || !camera_problems.is_empty() => {
                         reasons.extend(settings.iter().flat_map(|s| s.problems.iter().cloned()))
                     }
                     TrackingState::Degraded => reasons.push(reason(
@@ -249,6 +286,12 @@ impl Registry {
                     _ => {}
                 }
 
+                // Identity and mode findings hold in every state, so they are always listed.
+                for p in camera_problems {
+                    if !reasons.contains(&p) {
+                        reasons.push(p);
+                    }
+                }
                 let mut calibration = vec![];
                 if e.descriptor.kind == DeviceKind::ImuTracker {
                     calibration.push(store.reference(&e.descriptor.id, assignment.as_ref()));
@@ -288,11 +331,15 @@ impl Registry {
                         ),
                         time_quality: last.map_or(TimeQuality::ReceiveTime, |o| o.time_quality),
                     },
-                    battery: None,
-                    signal: None,
+                    battery: diagnostics
+                        .and_then(|(b, c, _)| b.map(|level| BatteryStatus { level, charging: c })),
+                    signal: diagnostics
+                        .and_then(|(_, _, r)| r.map(|rssi_dbm| SignalStatus { rssi_dbm })),
                     quality: last.map(|_| e.reported_quality),
                     calibration,
                     camera_settings: settings,
+                    camera_runtime,
+                    time_sync: live.and_then(|r| r.time_sync.clone()),
                 }
             })
             .collect()

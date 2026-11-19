@@ -133,6 +133,15 @@ fn tracker(index: usize, state: TrackingState, mounting: CalibrationState) -> De
         signal: connected.then_some(SignalStatus { rssi_dbm: -54 }),
         quality: connected.then_some(if degraded { 0.3 } else { 0.97 }),
         camera_settings: None,
+        camera_runtime: None,
+        time_sync: connected.then_some(TimeSyncStatus {
+            time_quality: TimeQuality::Estimated,
+            offset_us: Some(-1_204_330),
+            uncertainty_us: Some(900),
+            drift_ppm: Some(12.5),
+            settled: true,
+            resets: 0,
+        }),
         calibration: vec![
             cal(CalibrationKind::Mounting, mounting, profile_ref),
             cal(
@@ -161,6 +170,44 @@ pub fn camera_status() -> DeviceStatus {
         signal: None,
         quality: None,
         camera_settings: None,
+        camera_runtime: Some(CameraRuntimeStatus {
+            lifecycle: CameraLifecycle::Active,
+            identity: Some(CameraIdentity {
+                name: "USB Camera".into(),
+                vendor_id: Some("0c45".into()),
+                product_id: Some("6369".into()),
+                serial: None,
+                interface_id: Some("usb#vid_0c45&pid_6369&mi_00#6&2a4f1d4b&0&0000".into()),
+                fingerprint: "usb:0c45:6369:usb#vid_0c45&pid_6369&mi_00#6&2a4f1d4b&0&0000".into(),
+            }),
+            identity_confirmed: true,
+            requested: Some(CaptureMode {
+                resolution_px: [1280, 720],
+                pixel_format: "MJPEG".into(),
+                fps: Some(30.0),
+                verified: true,
+            }),
+            negotiated: Some(CaptureMode {
+                resolution_px: [1280, 720],
+                pixel_format: "MJPEG".into(),
+                fps: Some(30.0),
+                verified: true,
+            }),
+            timing: Some(FrameTiming {
+                window_frames: 300,
+                measured_fps: 29.9,
+                mean_interval_ms: 33.4,
+                p95_interval_ms: 36.1,
+                p99_interval_ms: 41.0,
+                jitter_ms: 1.4,
+            }),
+            replaced_frames: 3,
+            inference_hz: Some(29.8),
+            decode_ms: Some(4.2),
+            reconnects: 0,
+            reasons: vec![],
+        }),
+        time_sync: None,
         calibration: vec![
             cal(
                 CalibrationKind::CameraIntrinsics,

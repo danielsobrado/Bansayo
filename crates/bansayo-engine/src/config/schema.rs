@@ -38,6 +38,9 @@ pub struct Config {
     pub tracking: TrackingConfig,
     #[serde(default)]
     pub fiducials: FiducialsConfig,
+    /// Capture-mode fallback and rate warnings for physical cameras.
+    #[serde(default)]
+    pub camera_management: CameraManagementConfig,
     /// Reserved for camera processing; rejected until the camera milestone.
     #[serde(default)]
     pub processing_profiles: Option<Value>,
@@ -82,6 +85,24 @@ impl Default for FiducialsConfig {
             max_hamming: 1,
             min_decision_margin: 30.0,
             allowed_ids: vec![],
+        }
+    }
+}
+
+/// Shared camera policy. Discovery, reconnection and strict identity matching are always on.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct CameraManagementConfig {
+    /// Rates tried, in order, when the requested rate is not offered at the requested size.
+    pub fallback_fps: Vec<f64>,
+    /// A camera measured below this fraction of its requested rate is reported degraded.
+    pub warn_fps_ratio: f64,
+}
+impl Default for CameraManagementConfig {
+    fn default() -> Self {
+        Self {
+            fallback_fps: vec![60.0, 30.0],
+            warn_fps_ratio: 0.85,
         }
     }
 }
@@ -280,9 +301,54 @@ impl Default for TriangulationConfig {
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum SourceConfig {
     Simulated(SimulatedSourceConfig),
-    SlimevrSolarxr(DesignedSourceConfig),
+    SlimevrSolarxr(SlimevrSourceConfig),
     Esp32Udp(DesignedSourceConfig),
     Camera(CameraSourceConfig),
+}
+
+/// SlimeVR Server's SolarXR WebSocket (`slimevr_solarxr`).
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct SlimevrSourceConfig {
+    pub id: String,
+    #[serde(default = "enabled_default")]
+    pub enabled: bool,
+    /// SlimeVR Server's WebSocket API (`WebsocketAPI.java`: port 21110).
+    #[serde(default = "slimevr_endpoint_default")]
+    pub endpoint: String,
+    /// `raw` (default): the sensor's fused rotation, calibrated by Bansayo. `reference_adjusted`:
+    /// SlimeVR's own mounting and reset applied.
+    #[serde(default)]
+    pub rotation: crate::sources::slimevr::solarxr::RotationField,
+    /// Least time between feed snapshots the server sends, milliseconds.
+    #[serde(default = "slimevr_interval_default")]
+    pub feed_interval_ms: u16,
+    /// Sensor-to-arrival delay subtracted from arrival time, milliseconds. SolarXR carries no
+    /// sample timestamps.
+    #[serde(default)]
+    pub latency_ms: f64,
+    /// Trackers with Bansayo device ids, matched by `<hardware identifier>/<tracker number>` as
+    /// the engine log prints it (`SlimeVR tracker announced`).
+    #[serde(default)]
+    pub trackers: Vec<SlimevrTrackerConfig>,
+    /// Trackers not listed are announced as `SVR-<identifier>-<n>` for assignment in the UI.
+    #[serde(default = "enabled_default")]
+    pub announce_unlisted: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct SlimevrTrackerConfig {
+    pub id: String,
+    pub tracker: String,
+}
+
+fn slimevr_endpoint_default() -> String {
+    "ws://127.0.0.1:21110".into()
+}
+
+fn slimevr_interval_default() -> u16 {
+    5
 }
 
 /// Fields of a source kind that is designed but not implemented.
@@ -404,9 +470,25 @@ fn min_keypoint_score_default() -> f32 {
 #[serde(deny_unknown_fields)]
 pub struct LiveCameraConfig {
     pub id: String,
-    /// System camera index; `bansayo-engine --list-cameras` prints them.
+    /// System camera index; `bansayo-engine --list-cameras` prints them. Legacy: an index changes
+    /// with hotplug order. Prefer `hardware_id`, `serial` or `interface_id`.
     #[serde(default)]
     pub device: Option<u32>,
+    /// Substring of the device interface path, e.g. `vid_0c45&pid_6369`.
+    #[serde(default)]
+    pub hardware_id: Option<String>,
+    /// USB serial number, when the camera has one (`--list-cameras` shows it).
+    #[serde(default)]
+    pub serial: Option<String>,
+    /// Full device interface path: tells identical cameras without serials apart (per USB port).
+    #[serde(default)]
+    pub interface_id: Option<String>,
+    /// Capture preference; sets `resolution_px` and `rate_hz` when they are not given.
+    #[serde(default)]
+    pub preset: Option<crate::sources::camera::modes::Preset>,
+    /// `front`, `left`, `right`, `rear` or a custom label.
+    #[serde(default)]
+    pub role: Option<String>,
     /// A folder of images played as this camera, for testing and offline footage.
     #[serde(default)]
     pub frames_dir: Option<PathBuf>,
@@ -419,11 +501,11 @@ pub struct LiveCameraConfig {
     /// local configuration: it holds the camera's password.
     #[serde(default)]
     pub rtsp: Option<String>,
-    #[serde(default = "camera_rate_default")]
-    pub rate_hz: f64,
+    #[serde(default)]
+    pub rate_hz: Option<f64>,
     /// Requested capture size; the camera may negotiate another.
-    #[serde(default = "camera_resolution_default")]
-    pub resolution_px: [u32; 2],
+    #[serde(default)]
+    pub resolution_px: Option<[u32; 2]>,
     /// Capture-to-arrival latency subtracted from arrival time, milliseconds.
     #[serde(default)]
     pub latency_ms: f64,
@@ -438,13 +520,9 @@ pub struct LiveCameraConfig {
     pub fiducials: bool,
 }
 
-fn camera_rate_default() -> f64 {
-    30.0
-}
-
-fn camera_resolution_default() -> [u32; 2] {
-    [1280, 720]
-}
+/// Without a preset or explicit values: 1280x720 at 30 fps.
+pub const CAMERA_RATE_DEFAULT: f64 = 30.0;
+pub const CAMERA_RESOLUTION_DEFAULT: [u32; 2] = [1280, 720];
 
 /// Propagated uncertainty defaults; no validated accuracy tables ship.
 #[derive(Debug, Clone, Deserialize, Serialize)]

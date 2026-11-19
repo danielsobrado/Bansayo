@@ -31,6 +31,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 http-body-util = "0.1"
 tempfile = "3"
 tokio-tungstenite = "0.29"
+# FlatBuffers runtime for the SolarXR protocol (SlimeVR, ADR-022); official, no transitive deps of note.
+flatbuffers = "25.12.19"
 bytes = "1"
 mcap = { version = "0.26", default-features = false, features = ["zstd"] }
 tower = { version = "0.5", features = ["util"] }

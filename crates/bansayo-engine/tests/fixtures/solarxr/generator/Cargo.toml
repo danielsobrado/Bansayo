@@ -1,0 +1,11 @@
+# Standalone fixture generator; not a workspace member. See ../README.md.
+[package]
+name = "solarxr-fixtures"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+solarxr_protocol = { git = "https://github.com/SlimeVR/SolarXR-Protocol", rev = "00c38a6dc28070b30850a89c26b17928e56245d4" }

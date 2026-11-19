@@ -32,6 +32,9 @@ ort.workspace = true
 image.workspace = true
 libloading = "0.9.1"
 rusqlite.workspace = true
+# SlimeVR Server client (SolarXR over WebSocket); already used by axum's ws feature.
+tokio-tungstenite.workspace = true
+flatbuffers.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 nokhwa.workspace = true
@@ -42,5 +45,4 @@ ort = { workspace = true, features = ["directml"] }
 [dev-dependencies]
 http-body-util.workspace = true
 tempfile.workspace = true
-tokio-tungstenite.workspace = true
 tower.workspace = true

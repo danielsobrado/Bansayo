@@ -135,4 +135,106 @@ pub struct DeviceStatus {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub camera_settings: Option<crate::CameraSettingsStatus>,
+    /// Physical cameras: identity, lifecycle, capture mode and measured frame timing. Additive.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub camera_runtime: Option<CameraRuntimeStatus>,
+    /// Devices with their own clock: how their timestamps map onto the session clock. Additive.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub time_sync: Option<TimeSyncStatus>,
+}
+
+/// Where a physical camera is in its lifecycle (08 §3, ADR-020).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum CameraLifecycle {
+    /// Configured; the hardware has not been seen yet.
+    Discovered,
+    /// The configured identity matched exactly one present camera.
+    Identified,
+    /// Opening the stream and applying the capture mode.
+    Configuring,
+    Active,
+    /// Streaming, but slower than requested or with settings not applied.
+    Degraded,
+    Disconnected,
+    /// Lost after being active; reopening with the same mode and calibration.
+    Reconnecting,
+}
+
+/// Physical identity of a camera, as far as the operating system exposes it. The index in the
+/// system list is never part of it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct CameraIdentity {
+    pub name: String,
+    /// USB vendor and product id, lower-case hex, when the device is USB.
+    pub vendor_id: Option<String>,
+    pub product_id: Option<String>,
+    /// A serial number, only when the operating system exposes one.
+    pub serial: Option<String>,
+    /// Stable operating-system endpoint (on Windows the device interface path); changes with the
+    /// USB port for cameras without a serial number.
+    pub interface_id: Option<String>,
+    /// `usb:<vid>:<pid>:<serial or interface>`, or the endpoint for other buses.
+    pub fingerprint: String,
+}
+
+/// One capture mode: size, pixel format and nominal rate.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct CaptureMode {
+    pub resolution_px: [u32; 2],
+    pub pixel_format: String,
+    /// Nominal frames per second; `null` when the backend does not report it reliably.
+    pub fps: Option<f32>,
+    /// The device advertised this mode, or the open succeeded with exactly this mode.
+    pub verified: bool,
+}
+
+/// Measured frame arrival intervals over a recent window, monotonic session clock.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct FrameTiming {
+    pub window_frames: u32,
+    pub measured_fps: f32,
+    pub mean_interval_ms: f32,
+    pub p95_interval_ms: f32,
+    pub p99_interval_ms: f32,
+    /// Standard deviation of the interval.
+    pub jitter_ms: f32,
+}
+
+/// Live capture state of one physical camera.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct CameraRuntimeStatus {
+    pub lifecycle: CameraLifecycle,
+    pub identity: Option<CameraIdentity>,
+    /// `false` when the matched hardware differs from the hardware this camera's calibration was
+    /// made with; its calibration is then not used until the user confirms the identity.
+    pub identity_confirmed: bool,
+    pub requested: Option<CaptureMode>,
+    pub negotiated: Option<CaptureMode>,
+    pub timing: Option<FrameTiming>,
+    /// Frames replaced in the newest-frame buffer before inference took them (not transport loss).
+    pub replaced_frames: u64,
+    /// Pose inference rate for this camera, Hz.
+    pub inference_hz: Option<f32>,
+    /// Decode time of the last frame, milliseconds.
+    pub decode_ms: Option<f32>,
+    pub reconnects: u32,
+    pub reasons: Vec<Reason>,
+}
+
+/// How a device's own clock is mapped onto the session clock (docs/03 §2).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct TimeSyncStatus {
+    pub time_quality: TimeQuality,
+    /// Session minus device time, microseconds, when estimated.
+    pub offset_us: Option<i64>,
+    /// Bound on the residual transport delay the offset cannot remove, microseconds.
+    pub uncertainty_us: Option<u32>,
+    /// Device clock rate error, parts per million, once enough time has passed to estimate it.
+    pub drift_ppm: Option<f32>,
+    pub settled: bool,
+    /// Device clock resets (reboot, wraparound, jump) seen since start.
+    pub resets: u32,
 }

@@ -102,6 +102,7 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
     let previews = Previews::default();
     let fiducials = crate::sources::camera::FiducialPreviews::default();
     let camera_settings = crate::sources::camera::CameraSettings::default();
+    let runtime = crate::sources::RuntimeMap::default();
     let feeds: crate::sources::camera::capture::NetworkFeeds = std::sync::Arc::new(
         config
             .cameras
@@ -123,6 +124,9 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
             settings: camera_settings.clone(),
             timing: timing.clone(),
             feeds: feeds.clone(),
+            data_dir: config.config.engine.data_dir.clone(),
+            runtime: runtime.clone(),
+            management: config.config.camera_management.clone(),
         };
         for d in source.descriptors() {
             drops.insert(d.id.clone(), Arc::new(AtomicU64::new(0)));
@@ -130,7 +134,19 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
         }
         sources.push(ConfiguredSource::Camera(Box::new(source)));
     }
-    let registry = Registry::new(descriptors, assignments, drops.clone());
+    for spec in &config.slimevr {
+        let source = crate::sources::slimevr::SlimevrSource {
+            spec: spec.clone(),
+            runtime: runtime.clone(),
+        };
+        for d in source.descriptors() {
+            drops.insert(d.id.clone(), Arc::new(AtomicU64::new(0)));
+            descriptors.push(d);
+        }
+        sources.push(ConfiguredSource::Slimevr(Box::new(source)));
+    }
+    let mut registry = Registry::new(descriptors, assignments, drops.clone());
+    registry.runtime = runtime.clone();
     let data_dir = config.config.engine.data_dir.clone();
     let content_dirs = config.config.content().dirs;
     let user_dir = data_dir.join("content/user");
@@ -231,6 +247,7 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
         previews,
         fiducials,
         camera_settings,
+        runtime: runtime.clone(),
         diagnostics,
         lan_token,
         bind: address,
@@ -348,6 +365,7 @@ pub async fn run(
 enum ConfiguredSource {
     Simulated(Box<SimulatedSource>, watch::Receiver<Control>),
     Camera(Box<CameraSource>),
+    Slimevr(Box<crate::sources::slimevr::SlimevrSource>),
 }
 impl ConfiguredSource {
     fn spawn(
@@ -376,6 +394,10 @@ impl ConfiguredSource {
                     .await;
                 }
                 Self::Camera(source) => {
+                    let devices = source.descriptors().into_iter().map(|d| d.id).collect();
+                    crate::sources::supervision::supervise(*source, devices, common).await;
+                }
+                Self::Slimevr(source) => {
                     let devices = source.descriptors().into_iter().map(|d| d.id).collect();
                     crate::sources::supervision::supervise(*source, devices, common).await;
                 }

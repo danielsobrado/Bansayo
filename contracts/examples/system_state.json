@@ -99,7 +99,15 @@
           "state": "assumed",
           "profile_id": null
         }
-      ]
+      ],
+      "time_sync": {
+        "time_quality": "estimated",
+        "offset_us": -1204330,
+        "uncertainty_us": 900,
+        "drift_ppm": 12.5,
+        "settled": true,
+        "resets": 0
+      }
     },
     {
       "descriptor": {
@@ -154,7 +162,15 @@
           "state": "assumed",
           "profile_id": null
         }
-      ]
+      ],
+      "time_sync": {
+        "time_quality": "estimated",
+        "offset_us": -1204330,
+        "uncertainty_us": 900,
+        "drift_ppm": 12.5,
+        "settled": true,
+        "resets": 0
+      }
     },
     {
       "descriptor": {
@@ -219,7 +235,15 @@
           "state": "assumed",
           "profile_id": null
         }
-      ]
+      ],
+      "time_sync": {
+        "time_quality": "estimated",
+        "offset_us": -1204330,
+        "uncertainty_us": 900,
+        "drift_ppm": 12.5,
+        "settled": true,
+        "resets": 0
+      }
     },
     {
       "descriptor": {
@@ -419,7 +443,50 @@
           "state": "valid",
           "profile_id": "camera-extrinsics-SIM-CAM1"
         }
-      ]
+      ],
+      "camera_runtime": {
+        "lifecycle": "active",
+        "identity": {
+          "name": "USB Camera",
+          "vendor_id": "0c45",
+          "product_id": "6369",
+          "serial": null,
+          "interface_id": "usb#vid_0c45&pid_6369&mi_00#6&2a4f1d4b&0&0000",
+          "fingerprint": "usb:0c45:6369:usb#vid_0c45&pid_6369&mi_00#6&2a4f1d4b&0&0000"
+        },
+        "identity_confirmed": true,
+        "requested": {
+          "resolution_px": [
+            1280,
+            720
+          ],
+          "pixel_format": "MJPEG",
+          "fps": 30.0,
+          "verified": true
+        },
+        "negotiated": {
+          "resolution_px": [
+            1280,
+            720
+          ],
+          "pixel_format": "MJPEG",
+          "fps": 30.0,
+          "verified": true
+        },
+        "timing": {
+          "window_frames": 300,
+          "measured_fps": 29.9,
+          "mean_interval_ms": 33.4,
+          "p95_interval_ms": 36.1,
+          "p99_interval_ms": 41.0,
+          "jitter_ms": 1.4
+        },
+        "replaced_frames": 3,
+        "inference_hz": 29.8,
+        "decode_ms": 4.2,
+        "reconnects": 0,
+        "reasons": []
+      }
     }
   ],
   "calibration": [

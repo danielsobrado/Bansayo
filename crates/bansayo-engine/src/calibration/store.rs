@@ -10,6 +10,9 @@ pub struct Store {
     pub stale: std::collections::BTreeSet<ProfileId>,
     pub warnings: Vec<Reason>,
     pub invalid: Vec<CalibrationProfileSummary>,
+    /// Cameras whose connected hardware differs from their profile's: their camera profiles
+    /// count as stale until the user confirms the identity. Live only; never persisted.
+    pub identity_unconfirmed: std::collections::BTreeSet<DeviceId>,
 }
 impl Store {
     pub fn mounting(&self, device: &DeviceId, segment: &SegmentId) -> Option<Rot> {
@@ -31,6 +34,9 @@ impl Store {
         kind: CalibrationKind,
         device: &DeviceId,
     ) -> Option<(ProfileId, T)> {
+        if self.identity_unconfirmed.contains(device) {
+            return None;
+        }
         let p = self.profiles.values().find(|p| {
             p.kind == kind
                 && valid_profile(p)
@@ -51,7 +57,11 @@ impl Store {
             kind,
             state: match profile {
                 Some(p) if !valid_profile(p) => CalibrationState::Invalid,
-                Some(p) if self.stale.contains(&p.id) => CalibrationState::Stale,
+                Some(p)
+                    if self.stale.contains(&p.id) || self.identity_unconfirmed.contains(device) =>
+                {
+                    CalibrationState::Stale
+                }
                 Some(_) => CalibrationState::Valid,
                 None => CalibrationState::Missing,
             },

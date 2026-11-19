@@ -8,8 +8,8 @@ use std::{
 /// Where a camera's frames come from.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Backend {
-    /// System camera index, as listed by `bansayo-engine --list-cameras`.
-    Device(u32),
+    /// A system camera, found by identity at every open (`bansayo-engine --list-cameras`).
+    Device(super::identity::Selector),
     /// Images (`.jpg`, `.jpeg`, `.png`) in name order, played at the camera rate and looped.
     Frames(PathBuf),
     /// JPEG frames sent by a network client to `/api/v1/ingest/camera/{id}` (ADR-042).
@@ -261,6 +261,10 @@ pub trait Capture {
     }
     /// Negotiated format, for the log.
     fn describe(&self) -> String;
+    /// The mode in effect, when the backend reports it reliably.
+    fn negotiated(&self) -> Option<bansayo_contracts::CaptureMode> {
+        None
+    }
 }
 
 pub fn open(
@@ -281,7 +285,10 @@ pub fn open_with(
 ) -> Result<Box<dyn Capture>, String> {
     match backend {
         Backend::Frames(dir) => Ok(Box::new(Frames::open(dir, rate_hz)?)),
-        Backend::Device(index) => device::open(*index, resolution_px, rate_hz),
+        Backend::Device(selector) => {
+            let found = resolve(selector)?;
+            device::open(found.index, resolution_px, rate_hz)
+        }
         Backend::Rtsp(url) => Ok(Box::new(Ffmpeg::open(url, resolution_px, rate_hz)?)),
         Backend::Network(id) => {
             let feed = feeds
@@ -433,14 +440,32 @@ impl Capture for Frames {
     }
 }
 
-/// System cameras `(index, name)`.
-pub fn list_devices() -> Result<Vec<(u32, String)>, String> {
+/// System cameras present now, with their identity. Indices are valid until the next call.
+pub fn list_devices() -> Result<Vec<super::identity::Present>, String> {
     device::list()
 }
 
-/// Formats a system camera offers, one line per pixel format and resolution.
-pub fn device_formats(index: u32) -> Result<Vec<String>, String> {
-    device::formats(index)
+/// The present camera a selector names; a missing or ambiguous camera is an error naming why.
+pub fn resolve(selector: &super::identity::Selector) -> Result<super::identity::Present, String> {
+    let present = device::list()?;
+    super::identity::select(selector, &present)
+        .cloned()
+        .map_err(|e| e.to_string())
+}
+
+/// Modes a system camera advertises. Rates the backend cannot express as whole frames per
+/// second (e.g. 29.97) are left out rather than rounded.
+pub fn device_modes(index: u32) -> Result<Vec<bansayo_contracts::CaptureMode>, String> {
+    device::modes(index)
+}
+
+/// Opens a resolved system camera in one mode.
+pub fn open_device(
+    index: u32,
+    resolution_px: [u32; 2],
+    rate_hz: f64,
+) -> Result<Box<dyn Capture>, String> {
+    device::open(index, resolution_px, rate_hz)
 }
 
 #[cfg(windows)]
@@ -456,60 +481,97 @@ mod device {
         },
     };
 
-    pub fn list() -> Result<Vec<(u32, String)>, String> {
+    use bansayo_contracts::CaptureMode;
+
+    /// Media Foundation devices; `misc` is the device interface path (symbolic link).
+    pub fn list() -> Result<Vec<super::super::identity::Present>, String> {
         Ok(nokhwa::query(ApiBackend::MediaFoundation)
             .map_err(|e| e.to_string())?
             .into_iter()
-            .filter_map(|c| Some((c.index().as_index().ok()?, c.human_name())))
-            .collect())
-    }
-
-    /// Formats a device offers, `"MJPEG 1280x720 @ 30, 15 fps"` per format and resolution.
-    pub fn formats(index: u32) -> Result<Vec<String>, String> {
-        let any = RequestedFormat::new::<RgbFormat>(RequestedFormatType::None);
-        let mut camera = Camera::new(CameraIndex::Index(index), any).map_err(|e| e.to_string())?;
-        let mut rates: std::collections::BTreeMap<(String, u32, u32), Vec<u32>> =
-            Default::default();
-        for f in camera
-            .compatible_camera_formats()
-            .map_err(|e| e.to_string())?
-        {
-            let r = f.resolution();
-            rates
-                .entry((f.format().to_string(), r.width(), r.height()))
-                .or_default()
-                .push(f.frame_rate());
-        }
-        Ok(rates
-            .into_iter()
-            .map(|((format, w, h), mut fps)| {
-                fps.sort_unstable_by(|a, b| b.cmp(a));
-                fps.dedup();
-                let fps: Vec<String> = fps.iter().map(u32::to_string).collect();
-                format!("{format} {w}x{h} @ {} fps", fps.join(", "))
+            .filter_map(|c| {
+                Some(super::super::identity::Present {
+                    index: c.index().as_index().ok()?,
+                    identity: super::super::identity::identity_from_endpoint(
+                        &c.human_name(),
+                        &c.misc(),
+                    ),
+                })
             })
             .collect())
     }
 
-    struct Device(Camera, u64);
+    /// nokhwa 0.10 lists a Media Foundation rate whose denominator is not 1 as 0 fps; those are
+    /// dropped here instead of being shown as a rate.
+    pub fn modes(index: u32) -> Result<Vec<CaptureMode>, String> {
+        let any = RequestedFormat::new::<RgbFormat>(RequestedFormatType::None);
+        let mut camera = Camera::new(CameraIndex::Index(index), any).map_err(|e| e.to_string())?;
+        let mut out: Vec<CaptureMode> = camera
+            .compatible_camera_formats()
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .filter(|f| f.frame_rate() > 0)
+            .map(|f| CaptureMode {
+                resolution_px: [f.resolution().width(), f.resolution().height()],
+                pixel_format: f.format().to_string(),
+                fps: Some(f.frame_rate() as f32),
+                verified: true,
+            })
+            .collect();
+        out.sort_by(|a, b| {
+            let key = |m: &CaptureMode| {
+                (
+                    m.pixel_format.clone(),
+                    m.resolution_px,
+                    m.fps.unwrap_or(0.0) as u32,
+                )
+            };
+            key(b).cmp(&key(a))
+        });
+        out.dedup();
+        Ok(out)
+    }
+
+    struct Device(Camera, u64, Option<CaptureMode>);
 
     pub fn open(index: u32, [w, h]: [u32; 2], rate_hz: f64) -> Result<Box<dyn Capture>, String> {
         // MJPEG keeps 720p/1080p at full rate over USB 2; decoded here, not by nokhwa.
         let wanted = CameraFormat::new(Resolution::new(w, h), FrameFormat::MJPEG, rate_hz as u32);
         // `Closest` alone picked 1 fps on a UGREEN camera offering 1280x720 at 30 (18 Nov 2026).
-        let mut camera = Camera::new(
+        let exact = Camera::new(
             CameraIndex::Index(index),
             RequestedFormat::new::<RgbFormat>(RequestedFormatType::Exact(wanted)),
-        )
-        .or_else(|_| {
-            Camera::new(
-                CameraIndex::Index(index),
-                RequestedFormat::new::<RgbFormat>(RequestedFormatType::Closest(wanted)),
-            )
-        })
-        .map_err(|e| e.to_string())?;
+        );
+        // Only an exact open says what is in effect: nokhwa reports a Media Foundation rate by
+        // its denominator ("@1FPS"), so after a closest-match open the rate is left unknown and
+        // the measured rate is the authority.
+        let (mut camera, negotiated) = match exact {
+            Ok(c) => (
+                c,
+                CaptureMode {
+                    resolution_px: [w, h],
+                    pixel_format: "MJPEG".into(),
+                    fps: Some(rate_hz as f32),
+                    verified: true,
+                },
+            ),
+            Err(_) => {
+                let c = Camera::new(
+                    CameraIndex::Index(index),
+                    RequestedFormat::new::<RgbFormat>(RequestedFormatType::Closest(wanted)),
+                )
+                .map_err(|e| e.to_string())?;
+                let f = c.camera_format();
+                let mode = CaptureMode {
+                    resolution_px: [f.resolution().width(), f.resolution().height()],
+                    pixel_format: f.format().to_string(),
+                    fps: None,
+                    verified: false,
+                };
+                (c, mode)
+            }
+        };
         camera.open_stream().map_err(|e| e.to_string())?;
-        Ok(Box::new(Device(camera, 0)))
+        Ok(Box::new(Device(camera, 0, Some(negotiated))))
     }
 
     impl Capture for Device {
@@ -530,6 +592,9 @@ mod device {
         }
         fn decode_us(&self) -> u64 {
             self.1
+        }
+        fn negotiated(&self) -> Option<CaptureMode> {
+            self.2.clone()
         }
         fn describe(&self) -> String {
             // nokhwa 0.10 reports the rate's denominator ("@1FPS") for Media Foundation formats.
@@ -554,13 +619,13 @@ mod device {
     use super::Capture;
     const UNSUPPORTED: &str =
         "camera devices are supported on Windows only in this build; use frames_dir";
-    pub fn list() -> Result<Vec<(u32, String)>, String> {
+    pub fn list() -> Result<Vec<super::super::identity::Present>, String> {
         Err(UNSUPPORTED.into())
     }
     pub fn open(_: u32, _: [u32; 2], _: f64) -> Result<Box<dyn Capture>, String> {
         Err(UNSUPPORTED.into())
     }
-    pub fn formats(_: u32) -> Result<Vec<String>, String> {
+    pub fn modes(_: u32) -> Result<Vec<bansayo_contracts::CaptureMode>, String> {
         Err(UNSUPPORTED.into())
     }
 }
@@ -577,7 +642,11 @@ mod tests {
             .expect("BANSAYO_CAMERA")
             .parse()
             .unwrap();
-        let mut c = open(&Backend::Device(index), [1280, 720], 30.0).unwrap();
+        let selector = super::super::identity::Selector {
+            index: Some(index),
+            ..Default::default()
+        };
+        let mut c = open(&Backend::Device(selector), [1280, 720], 30.0).unwrap();
         eprintln!("format {}", c.describe());
         c.next().unwrap();
         let t = Instant::now();
