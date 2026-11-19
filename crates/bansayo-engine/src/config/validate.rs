@@ -305,6 +305,60 @@ pub(super) fn validate(config: Config) -> Result<Validated, Vec<Problem>> {
     check_quality(&mut c, &config.quality);
     check_triangulation(&mut c, &config.triangulation);
     check_fiducials(&mut c, &config.fiducials, &config.sources);
+    let (ta, fu) = (&config.time_alignment, &config.fusion);
+    c.range(
+        "time_alignment.max_imu_gap_ms",
+        ta.max_imu_gap_ms as f64,
+        1.0,
+        1000.0,
+    );
+    c.range(
+        "time_alignment.max_optical_anchor_age_ms",
+        ta.max_optical_anchor_age_ms as f64,
+        0.0,
+        2000.0,
+    );
+    c.range(
+        "fusion.max_heading_correction_deg_s",
+        fu.max_heading_correction_deg_s,
+        0.0,
+        180.0,
+    );
+    c.positive(
+        "fusion.heading_time_constant_s",
+        fu.heading_time_constant_s,
+        600.0,
+    );
+    c.range(
+        "fusion.heading_outlier_deg",
+        fu.heading_outlier_deg,
+        1.0,
+        180.0,
+    );
+    c.range(
+        "fusion.heading_min_tilt_deg",
+        fu.heading_min_tilt_deg,
+        5.0,
+        85.0,
+    );
+    c.range(
+        "fusion.min_optical_confidence",
+        fu.min_optical_confidence.into(),
+        0.0,
+        1.0,
+    );
+    c.range(
+        "fusion.anchor_speed_bound_m_s",
+        fu.anchor_speed_bound_m_s,
+        0.0,
+        50.0,
+    );
+    c.range(
+        "fusion.imu_camera_disagree_deg",
+        fu.imu_camera_disagree_deg,
+        1.0,
+        180.0,
+    );
     c.range(
         "camera_management.warn_fps_ratio",
         config.camera_management.warn_fps_ratio,

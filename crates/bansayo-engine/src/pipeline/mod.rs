@@ -1,8 +1,10 @@
+pub mod align;
 mod capture;
 pub mod command;
 mod control;
 pub mod encoded;
 pub mod features;
+pub mod fusion;
 pub mod joints;
 mod runner;
 mod runtime;

@@ -36,6 +36,12 @@ pub struct Config {
     pub evidence: EvidenceConfig,
     #[serde(default)]
     pub tracking: TrackingConfig,
+    /// Reconstruction-time alignment of asynchronous observations.
+    #[serde(default)]
+    pub time_alignment: TimeAlignmentConfig,
+    /// Rung-1 fusion of camera and IMU evidence (ADR-025).
+    #[serde(default)]
+    pub fusion: FusionConfig,
     #[serde(default)]
     pub fiducials: FiducialsConfig,
     /// Capture-mode fallback and rate warnings for physical cameras.
@@ -542,6 +548,71 @@ impl Default for EvidenceConfig {
 #[serde(deny_unknown_fields, default)]
 pub struct TrackingConfig {
     pub profile_override: Option<bansayo_contracts::CapabilityProfileId>,
+    /// Which evidence the solver uses; sources keep running either way.
+    pub mode: TrackingMode,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TrackingMode {
+    /// Cameras and IMUs, each segment from the best fresh evidence.
+    #[default]
+    HybridAuto,
+    CameraOnly,
+    ImuOnly,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct TimeAlignmentConfig {
+    /// Orientation samples further apart than this are not interpolated between.
+    pub max_imu_gap_ms: u64,
+    /// A camera root (anchor) older than this, relative to the reconstruction instant, places
+    /// nothing; until then its uncertainty grows with its age.
+    pub max_optical_anchor_age_ms: u64,
+}
+impl Default for TimeAlignmentConfig {
+    fn default() -> Self {
+        Self {
+            max_imu_gap_ms: 50,
+            max_optical_anchor_age_ms: 150,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct FusionConfig {
+    /// Slow per-tracker heading correction from camera-observed segment directions.
+    pub optical_heading_correction: bool,
+    /// Largest heading change the correction applies, degrees per second.
+    pub max_heading_correction_deg_s: f64,
+    /// Time constant of the correction, seconds.
+    pub heading_time_constant_s: f64,
+    /// After convergence, a disagreement larger than this is an outlier, not a correction.
+    pub heading_outlier_deg: f64,
+    /// A segment tilted less than this from vertical carries no heading information.
+    pub heading_min_tilt_deg: f64,
+    /// Camera segments below this fit confidence do not correct heading.
+    pub min_optical_confidence: f32,
+    /// Worst plausible root speed, m/s: a held anchor's uncertainty grows by this times its age.
+    pub anchor_speed_bound_m_s: f64,
+    /// An IMU segment and a confident camera segment differing by more than this are reported.
+    pub imu_camera_disagree_deg: f64,
+}
+impl Default for FusionConfig {
+    fn default() -> Self {
+        Self {
+            optical_heading_correction: true,
+            max_heading_correction_deg_s: 15.0,
+            heading_time_constant_s: 1.0,
+            heading_outlier_deg: 30.0,
+            heading_min_tilt_deg: 20.0,
+            min_optical_confidence: 0.5,
+            anchor_speed_bound_m_s: 3.0,
+            imu_camera_disagree_deg: 45.0,
+        }
+    }
 }
 
 fn simulated_schema_default() -> String {

@@ -37,6 +37,19 @@ those costs are already in the stream itself (the camera sets its own exposure, 
 0.2–0.5 s and gives no capture time), and an H.264/H.265 decoder in-process would be a much larger
 dependency. RTSP cameras stay out of triangulation without a `time_sync` profile, as written.
 
+## Implementation note (19 November 2026): camera identity and lifecycle
+
+Cameras are matched by identity at every open, never by list index (`sources/camera/identity.rs`):
+serial (only when Windows exposes a real one; composite UVC interfaces never do), then the device
+interface path, then `vid/pid` when unique. Two identical cameras named only by model are refused.
+A per-camera profile (`<data_dir>/cameras/<id>.json`) records the hardware the calibration
+belongs to; a different unit under the same id keeps 2D pose but its 3D calibration counts as
+stale until the user confirms (`POST /cameras/{id}/identity/confirm`). Modes are chosen among the
+advertised ones (presets, `camera_management.fallback_fps`); an unsupported rate is never
+requested as if available. nokhwa 0.10 reports Media Foundation rates by their denominator and
+drops non-integer rates, so after a non-exact open the negotiated rate is unknown and the
+measured rate (`camera_runtime.timing`) is the authority. Linux V4L2 identity is not built.
+
 ## Context
 
 When this record was drafted no real camera code existed. ADR-009 deferred the capture crate to a Windows spike. Martial-arts

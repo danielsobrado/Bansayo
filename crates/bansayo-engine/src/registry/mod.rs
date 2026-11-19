@@ -5,6 +5,8 @@ use bansayo_contracts::*;
 use std::collections::BTreeMap;
 /// Camera frames kept per camera: about a quarter second at 30 Hz.
 pub const LANDMARK_HISTORY: usize = 8;
+/// Orientation samples kept per device for time alignment: 0.32 s at 200 Hz.
+pub const ORIENTATION_HISTORY: usize = 64;
 /// Streams have independent sequence numbers and timestamps, even on the same device.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ObservationKind {
@@ -45,6 +47,8 @@ pub struct Entry {
     pub recent: std::collections::VecDeque<u64>,
     /// Newest camera landmark observations, oldest first, for time alignment across cameras.
     pub landmarks: std::collections::VecDeque<SensorObservation>,
+    /// Newest orientation observations, oldest first, for alignment to the reconstruction time.
+    pub orientations: std::collections::VecDeque<SensorObservation>,
     pub failure: Option<String>,
 }
 #[derive(Clone)]
@@ -54,6 +58,9 @@ pub struct Registry {
     pub drops: DropCounters,
     /// Live source state outside observations; empty in replay.
     pub runtime: crate::sources::RuntimeMap,
+    /// Fusion state carried between solver ticks (heading corrections, last anchor). Advanced
+    /// only by live and replay ticks, so replay reproduces it.
+    pub fusion: crate::pipeline::fusion::FusionState,
 }
 impl Registry {
     pub fn new(
@@ -77,6 +84,7 @@ impl Registry {
                             reported_quality: 1.0,
                             recent: Default::default(),
                             landmarks: Default::default(),
+                            orientations: Default::default(),
                             failure: None,
                         },
                     )
@@ -85,6 +93,7 @@ impl Registry {
             assignments,
             drops,
             runtime: Default::default(),
+            fusion: Default::default(),
         }
     }
     /// Cameras whose connected hardware is not the hardware their calibration was made with.
@@ -117,6 +126,8 @@ impl Registry {
                     e.first_us = None;
                     e.recent.clear();
                     e.landmarks.clear();
+                    // A reconnected device may have restarted its clock: never interpolate across.
+                    e.orientations.clear();
                     e.latest.clear();
                 }
                 true
@@ -137,6 +148,7 @@ impl Registry {
                     reported_quality: 1.0,
                     recent: Default::default(),
                     landmarks: Default::default(),
+                    orientations: Default::default(),
                     failure: None,
                 });
                 true
@@ -189,6 +201,12 @@ impl Registry {
                 entry.landmarks.pop_front();
             }
             entry.landmarks.push_back(o.clone());
+        }
+        if matches!(o.data, ObservationData::Orientation { .. }) {
+            if entry.orientations.len() == ORIENTATION_HISTORY {
+                entry.orientations.pop_front();
+            }
+            entry.orientations.push_back(o.clone());
         }
         entry.latest.insert(kind, o);
         true

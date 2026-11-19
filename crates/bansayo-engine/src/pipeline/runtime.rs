@@ -421,6 +421,7 @@ impl Runtime {
                             now,
                             &engine.config.config,
                         );
+                        engine.registry.fusion = solved.fusion_next.clone();
                         let origins = engine
                             .registry
                             .entries

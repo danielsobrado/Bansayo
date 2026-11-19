@@ -7,6 +7,40 @@
 | Extends | ADR-011, ADR-013, ADR-016 in [docs/12](../../../12-decisions.md) |
 | Specified in | [08 §7](../08-tracking-and-sensor-fusion.md) |
 
+## Implementation note (19 November 2026)
+
+Rung 1 is built in `pipeline/solve.rs`, `pipeline/align.rs` and `pipeline/fusion.rs`, method id
+`bansayo.fusion.anchored_fk.v1` (part of `tracking_config_id`):
+
+- **Time alignment:** the solver reconstructs at `t_ref`, the oldest of the fresh trackers' newest
+  sample times; every tracker is SLERPed to it from a bounded history (64 samples), never
+  extrapolated, never across `time_alignment.max_imu_gap_ms` or a reconnect.
+- **Arbitration per segment:** time-aligned mounted IMU, else the camera skeleton fit, else the
+  parent's rotation (`inferred`). One tracker no longer disables the camera fit of the other
+  segments (the previous camera-fit-only-without-trackers split is gone).
+- **Complementary heading:** mounting captured with heading assumed identity makes the true
+  rotation `A·(R·M)·A⁻¹`, a conjugation by the tracker's heading `A`. `A` is visible only in the
+  direction of tilted segments with a vertical rest axis, compared with the camera fit **at the
+  camera's capture time** (the tracker is SLERPed to it). Rate-limited (15 °/s), time constant 1 s,
+  outliers above 30° rejected after convergence, held while upright. A converged tracker's
+  segments carry `imu_optical_fused`.
+- **Anchored FK:** the camera root anchors forward kinematics while its age is within
+  `time_alignment.max_optical_anchor_age_ms` (150 ms); its `sigma` grows by
+  `fusion.anchor_speed_bound_m_s × age`; past the limit the root is floor contact (`inferred`).
+  When the pelvis drops out of a still-current camera set, the last anchor is held within the same
+  limit and reported `root_anchor_held`.
+- **Plausibility:** a converged tracker that disagrees with a confident camera segment by more than
+  `fusion.imu_camera_disagree_deg` at the same instant is reported (`imu_camera_disagree`) and its
+  confidence halved.
+- **Modes:** `tracking.mode: hybrid_auto | camera_only | imu_only` selects evidence without
+  restarting sources.
+
+Synthetic comparison: [docs/validation/2026-11-19-hybrid-synthetic.md](../../../validation/2026-11-19-hybrid-synthetic.md).
+**Validation criterion for real hardware** (owner checklist H-05/H-06): on a recorded front kick
+with a 30 fps camera and 100 Hz trackers, the hybrid knee angle stays within 10° of a 120 fps
+camera reference at publication time, while camera-only 30 fps does not. Rungs 2–4 remain unbuilt;
+their entry conditions are unchanged.
+
 ## Context
 
 Inputs differ in rate, latency, uncertainty and failure mode. ADR-011 keeps the solver an ordered

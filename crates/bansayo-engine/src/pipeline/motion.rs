@@ -2,7 +2,7 @@
 use super::solve::Solved;
 use crate::{
     math::{rot_from_wire, v3_from_wire, v3_to_wire},
-    registry::{ObservationKind, Registry},
+    registry::Registry,
     skeleton::{Skeleton, proportions::LANDMARK_SCHEMA_ID},
 };
 use bansayo_contracts::*;
@@ -78,7 +78,7 @@ pub fn measured_keypoints(
 }
 pub fn sample(
     sk: &Skeleton,
-    registry: &Registry,
+    _registry: &Registry,
     solved: &Solved,
     seq: u64,
     t_us: u64,
@@ -93,43 +93,15 @@ pub fn sample(
         let segments: Vec<_> = pose
             .segments
             .iter()
-            .map(|p| {
-                let imu = p.sources.iter().any(|id| {
-                    registry.entries.get(id).is_some_and(|e| {
-                        e.descriptor
-                            .capabilities
-                            .contains(&SensorCapability::Orientation)
-                    })
-                });
-                let observed = matches!(p.provenance, Provenance::Measured | Provenance::Derived);
-                let time = if imu {
-                    p.sources
-                        .iter()
-                        .filter_map(|id| {
-                            registry
-                                .entries
-                                .get(id)?
-                                .latest
-                                .get(&ObservationKind::Orientation)
-                                .map(|o| o.t_us)
-                        })
-                        .max()
-                } else if observed {
-                    t_camera
-                } else {
-                    None
-                };
+            .enumerate()
+            .map(|(i, p)| {
+                let method = solved.methods.get(i).copied().unwrap_or(MethodId::RestFill);
+                let imu = matches!(method, MethodId::ImuMounted | MethodId::ImuOpticalFused);
                 let axis = evidence(
                     p.provenance,
-                    if !observed {
-                        MethodId::RestFill
-                    } else if imu {
-                        MethodId::ImuMounted
-                    } else {
-                        MethodId::SkeletonFitAxis
-                    },
+                    method,
                     p.confidence,
-                    time,
+                    solved.t_obs.get(i).copied().flatten(),
                     p.sources.clone(),
                 );
                 let twist = if imu {
@@ -152,14 +124,15 @@ pub fn sample(
                 }
             })
             .collect();
-        let mut root_evidence = if pose.root_position_provenance == Provenance::Measured {
-            let point = measured[0].as_ref();
+        let anchored = pose.root_position_provenance == Provenance::Measured || solved.root_held;
+        let mut root_evidence = if anchored {
+            // A camera anchor: measured now, or held from `t_obs` through a short occlusion.
             evidence(
-                Provenance::Measured,
+                pose.root_position_provenance,
                 MethodId::Triangulated,
-                point.map(|p| p.confidence),
-                t_camera,
-                point.map_or_else(Vec::new, |p| p.used_views.clone()),
+                solved.root_confidence,
+                solved.root_t_obs,
+                solved.root_sources.clone(),
             )
         } else {
             evidence(
@@ -175,11 +148,7 @@ pub fn sample(
         };
         root_evidence.sources.sort();
         root_evidence.sources.dedup();
-        root_evidence.sigma = if pose.root_position_provenance == Provenance::Measured {
-            measured[0].as_ref().and_then(|p| p.sigma_m)
-        } else {
-            None
-        };
+        root_evidence.sigma = solved.root_sigma_m.filter(|_| anchored);
         root_evidence.sigma_basis = root_evidence.sigma.map(|_| SigmaBasis::Propagated);
         let root = KeypointState {
             position_m: pose.root_position_m,

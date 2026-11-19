@@ -115,7 +115,14 @@ impl Replay {
         Ok(())
     }
     /// The frame at `time`, preceded by the triangulated landmarks when there are any.
-    fn solve_at(&self, time: u64) -> (Vec<ServerMessage>, MotionSample) {
+    fn solve_at(
+        &self,
+        time: u64,
+    ) -> (
+        Vec<ServerMessage>,
+        MotionSample,
+        crate::pipeline::fusion::FusionState,
+    ) {
         let solved = solve(
             &self.skeleton,
             &self.registry,
@@ -133,6 +140,7 @@ impl Replay {
         );
         let mut joints = measure(&self.skeleton, &solved.rotations, &solved.observed);
         crate::pipeline::joints::confidence(&self.skeleton, &mut joints, solved.pose.as_ref());
+        let fusion = solved.fusion_next;
         let landmarks = solved
             .landmarks_3d
             .map(|landmarks| ServerMessage::Landmarks3d { landmarks });
@@ -147,7 +155,7 @@ impl Replay {
                 quality: solved.quality,
             }])
             .collect();
-        (messages, sample)
+        (messages, sample, fusion)
     }
     /// The state at the current position, with each camera's latest landmarks unless stale there.
     pub fn preview(&self) -> Vec<ServerMessage> {
@@ -187,7 +195,9 @@ impl Replay {
                 return Ok(messages);
             }
             self.apply_until(started + offset, Some(&mut messages))?;
-            let (frames, sample) = self.solve_at(started + offset);
+            let (frames, sample, fusion) = self.solve_at(started + offset);
+            // Heading corrections and the anchor evolve per tick, exactly as they did live.
+            self.registry.fusion = fusion;
             self.latest_motion = Some(self.with_planar(sample, started + offset));
             messages.extend(frames);
             self.position_us = offset;

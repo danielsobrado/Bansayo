@@ -7,6 +7,21 @@
 | Extends | ADR-008 (SlimeVR first) in [docs/12](../../../12-decisions.md) |
 | Specified in | [08 §1–2, §5–6](../08-tracking-and-sensor-fusion.md), [11 §6](../11-vr-architecture.md) |
 
+## Implementation note (19 November 2026)
+
+`slimevr_solarxr` is built (`sources/slimevr/`). Verified against SlimeVR's own sources rather
+than assumed: SlimeVR Server serves SolarXR on `ws://127.0.0.1:21110` (`WebsocketAPI.java`), one
+FlatBuffers `MessageBundle` per binary message; a `StartDataFeed` must set
+`DeviceDataMask.device_data` or no tracker is sent. A data feed is a **snapshot** of the server's
+latest state with **no sample timestamp**, and the server never fills `raw_angular_velocity` or
+`raw_acceleration` (`DataFeedBuilder.kt`), so O-08 is answered: SolarXR gives fused orientation,
+status, tps, battery and RSSI only. Consequences: `time_quality: receive_time` with a configured
+`latency_ms`; repeated snapshots are not republished (100 ms keep-alive); angular velocity stays
+`unavailable` for SlimeVR trackers. Rotations are right-handed +Y up in both systems, so the
+conversion is validation only; the reference frame's heading is calibrated as for any tracker.
+Identity is the server's `hardware_identifier` plus tracker number; trackers without one are
+ignored rather than given an identity that changes on reconnect.
+
 ## Context
 
 The engine has a source task model with bounded ingest, validation, supervision and a session
