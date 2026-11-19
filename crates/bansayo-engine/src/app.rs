@@ -145,6 +145,17 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
         }
         sources.push(ConfiguredSource::Slimevr(Box::new(source)));
     }
+    for spec in &config.esp32 {
+        let source = crate::sources::esp32::Esp32Source {
+            spec: spec.clone(),
+            runtime: runtime.clone(),
+        };
+        for d in source.descriptors() {
+            drops.insert(d.id.clone(), Arc::new(AtomicU64::new(0)));
+            descriptors.push(d);
+        }
+        sources.push(ConfiguredSource::Esp32(Box::new(source)));
+    }
     let mut registry = Registry::new(descriptors, assignments, drops.clone());
     registry.runtime = runtime.clone();
     let data_dir = config.config.engine.data_dir.clone();
@@ -366,6 +377,7 @@ enum ConfiguredSource {
     Simulated(Box<SimulatedSource>, watch::Receiver<Control>),
     Camera(Box<CameraSource>),
     Slimevr(Box<crate::sources::slimevr::SlimevrSource>),
+    Esp32(Box<crate::sources::esp32::Esp32Source>),
 }
 impl ConfiguredSource {
     fn spawn(
@@ -398,6 +410,10 @@ impl ConfiguredSource {
                     crate::sources::supervision::supervise(*source, devices, common).await;
                 }
                 Self::Slimevr(source) => {
+                    let devices = source.descriptors().into_iter().map(|d| d.id).collect();
+                    crate::sources::supervision::supervise(*source, devices, common).await;
+                }
+                Self::Esp32(source) => {
                     let devices = source.descriptors().into_iter().map(|d| d.id).collect();
                     crate::sources::supervision::supervise(*source, devices, common).await;
                 }

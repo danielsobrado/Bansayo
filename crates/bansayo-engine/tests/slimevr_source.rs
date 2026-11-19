@@ -179,3 +179,15 @@ fn configuration_is_validated() {
     assert_eq!(ok.slimevr[0].endpoint, "ws://127.0.0.1:21110");
     assert_eq!(ok.slimevr[0].latency_us, 8_000);
 }
+
+#[test]
+fn the_hybrid_example_configuration_is_valid_apart_from_model_files() {
+    let text = include_str!("../../../config/hybrid-slimevr.yaml");
+    match config::parse(text) {
+        Ok(v) => assert_eq!(v.slimevr[0].trackers.len(), 3),
+        Err(config::ConfigError::Invalid(p)) => {
+            assert!(p.iter().all(|p| p.path.ends_with("models_dir")), "{p:?}")
+        }
+        Err(e) => panic!("{e}"),
+    }
+}

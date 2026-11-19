@@ -537,3 +537,25 @@ of real cameras and time synchronisation between them, camera/IMU fusion beyond 
 (including IMU heading correction from cameras), a FreeMoCap importer or comparison mode (left out
 on licence grounds, ADR-014), calibrated heading/XR alignment, avatars, exports and Analysis remain
 outside this PoC.
+
+## Camera lifecycle, SlimeVR and hybrid fusion (19 November 2026)
+
+Built and tested on synthetic and fixture data; **no physical validation yet**
+([validation/HYBRID-OWNER-CHECKLIST.md](validation/HYBRID-OWNER-CHECKLIST.md)).
+
+| Area | State | Where |
+|---|---|---|
+| Camera identity by hardware id, serial or interface path; ambiguity refused; device profile `data/cameras/<id>.json`; identity confirm endpoint | Built, Windows only (V4L2 identity not built) | `sources/camera/identity.rs`, `lifecycle.rs` |
+| Lifecycle states, requested/negotiated/measured mode, interval p95/p99, jitter, replaced frames, inference rate, reconnects | Built; desktop Cameras → properties | `DeviceStatus.camera_runtime` |
+| Presets and mode selection with fallback rates | Built | `sources/camera/modes.rs` |
+| SlimeVR through SolarXR (fixtures from the official generated code) | Built; receive-time stamps only (SolarXR has no sample times, gyro or accel) | `sources/slimevr/` |
+| ESP32 UDP `bansayo.imu.v1` with device-time mapping, wraparound, reboot reset | Built; no firmware in this repository | `sources/esp32.rs` |
+| Offset uncertainty, drift and resets | Built; `DeviceStatus.time_sync` | `clock.rs` |
+| Rung-1 fusion: SLERP to `t_ref`, per-segment arbitration, optical heading (conjugation), anchored FK with age-grown sigma, plausibility, modes | Built | `pipeline/solve.rs`, `align.rs`, `fusion.rs`, ADR-025 note |
+| Synthetic camera-only vs IMU-only vs hybrid comparison | Recorded | [validation/2026-11-19-hybrid-synthetic.md](validation/2026-11-19-hybrid-synthetic.md) |
+
+Not built: room (rig) profiles and switching between rooms, camera-referenced mounting capture
+(reference pose must face the rig's +Z), automatic extrinsics invalidation after a camera move,
+sync validation from motion signatures (V-07), a per-segment hybrid diagnostics panel and shared
+time-axis view in the desktop, recording of `time_sync` status in session metadata (the inputs and
+fusion configuration are recorded, so replay reproduces results).

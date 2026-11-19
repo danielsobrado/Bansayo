@@ -56,4 +56,7 @@ export const actions = {
     request("PUT", "/playback", body),
   stopPlayback: (): R<PlaybackStopResponse> =>
     request("POST", "/playback/stop", {}),
+  /** The connected hardware is this camera: its calibration is used again. */
+  confirmCameraIdentity: (id: DeviceId): R<boolean> =>
+    request("POST", `/cameras/${seg(id)}/identity/confirm`, {}),
 } as const;

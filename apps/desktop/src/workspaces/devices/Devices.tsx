@@ -211,6 +211,15 @@ function Device({
           <dd className="mono">{formatConfidence(device.quality)}</dd>
         </div>
         <div>
+          <dt>Timing</dt>
+          <dd className="mono">
+            {humanizeId(device.time_sync?.time_quality ?? device.stream.time_quality)}
+            {device.time_sync?.uncertainty_us != null
+              ? ` ±${(device.time_sync.uncertainty_us / 1000).toFixed(1)} ms`
+              : ""}
+          </dd>
+        </div>
+        <div>
           <dt>Firmware</dt>
           <dd className="mono">{device.descriptor.firmware ?? "—"}</dd>
         </div>

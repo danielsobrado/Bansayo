@@ -241,7 +241,7 @@ async fn confirm_camera_identity(
     })
     .await;
     match done {
-        Ok(Ok(())) => StatusCode::NO_CONTENT.into_response(),
+        Ok(Ok(())) => Json(ApiResponse::ok(true)).into_response(),
         Ok(Err(e)) => failure(ApiErrorCode::Unavailable, &e),
         Err(_) => failure(ApiErrorCode::Internal, "Identity could not be saved."),
     }

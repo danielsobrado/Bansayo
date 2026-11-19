@@ -97,6 +97,16 @@ pub struct SlimevrSpec {
     pub announce_unlisted: bool,
 }
 
+/// An enabled ESP32 UDP source.
+#[derive(Debug, Clone)]
+pub struct Esp32Spec {
+    pub id: SourceId,
+    pub bind: String,
+    pub rate_hz: f64,
+    pub latency_us: u64,
+    pub trackers: Vec<(DeviceId, String)>,
+}
+
 /// Most cameras one source accepts; inference is shared across them.
 pub const MAX_CAMERAS: usize = 8;
 
@@ -109,6 +119,7 @@ pub struct Validated {
     pub simulated: Vec<SimulatedSpec>,
     pub cameras: Vec<CameraSourceSpec>,
     pub slimevr: Vec<SlimevrSpec>,
+    pub esp32: Vec<Esp32Spec>,
     /// Non-fatal findings, logged at startup.
     pub warnings: Vec<Problem>,
 }
@@ -385,7 +396,7 @@ pub(super) fn validate(config: Config) -> Result<Validated, Vec<Problem>> {
     if config.processing_profiles.is_some() {
         c.err("processing_profiles", "not implemented in this build");
     }
-    let (simulated, mut cameras, slimevr, devices) = check_sources(&mut c, &config.sources);
+    let (simulated, mut cameras, slimevr, esp32, devices) = check_sources(&mut c, &config.sources);
     for source in &mut cameras {
         source.fiducials = config.fiducials.clone();
     }
@@ -403,6 +414,7 @@ pub(super) fn validate(config: Config) -> Result<Validated, Vec<Problem>> {
             simulated,
             cameras,
             slimevr,
+            esp32,
             warnings: c.warnings,
         })
     } else {
@@ -559,29 +571,31 @@ fn check_api(c: &mut Check, api: &ApiConfig) -> Option<SocketAddr> {
     }
 }
 
-/// Validates every source; returns the enabled simulated and camera sources and every device id
-/// with its kind (`true` for orientation trackers).
-fn check_sources(
-    c: &mut Check,
-    sources: &[SourceConfig],
-) -> (
+/// Validated specs per source kind, and claimed device ids (`true` for trackers).
+type CheckedSources = (
     Vec<SimulatedSpec>,
     Vec<CameraSourceSpec>,
     Vec<SlimevrSpec>,
+    Vec<Esp32Spec>,
     HashMap<String, bool>,
-) {
+);
+
+/// Validates every source; returns the enabled sources by kind and every device id
+/// with its kind (`true` for orientation trackers).
+fn check_sources(c: &mut Check, sources: &[SourceConfig]) -> CheckedSources {
     let mut source_ids: HashMap<String, usize> = HashMap::new();
     let mut devices: HashMap<String, (String, bool)> = HashMap::new();
     let mut out = vec![];
     let mut cameras = vec![];
     let mut slimevr = vec![];
+    let mut esp32 = vec![];
     for (i, source) in sources.iter().enumerate() {
         let path = format!("sources[{i}]");
         let id = match source {
             SourceConfig::Simulated(s) => &s.id,
             SourceConfig::Camera(k) => &k.id,
             SourceConfig::SlimevrSolarxr(s) => &s.id,
-            SourceConfig::Esp32Udp(d) => &d.id,
+            SourceConfig::Esp32Udp(e) => &e.id,
         };
         if SourceId::new(id.as_str()).is_err() {
             c.err(
@@ -611,13 +625,18 @@ fn check_sources(
                     slimevr.extend(s.enabled.then_some(spec));
                 }
             }
-            _ => c.err(format!("{path}.kind"), "not implemented in this build"),
+            SourceConfig::Esp32Udp(e) => {
+                if let Some(spec) = check_esp32(c, &path, e, &mut devices) {
+                    esp32.extend(e.enabled.then_some(spec));
+                }
+            }
         }
     }
     (
         out,
         cameras,
         slimevr,
+        esp32,
         devices
             .into_iter()
             .map(|(k, (_, tracker))| (k, tracker))
@@ -805,6 +824,58 @@ fn check_slimevr(
         latency_us: (s.latency_ms * 1000.0) as u64,
         trackers,
         announce_unlisted: s.announce_unlisted,
+    })
+}
+
+fn check_esp32(
+    c: &mut Check,
+    path: &str,
+    e: &Esp32SourceConfig,
+    devices: &mut HashMap<String, (String, bool)>,
+) -> Option<Esp32Spec> {
+    if e.bind.parse::<SocketAddr>().is_err() {
+        c.err(
+            format!("{path}.bind"),
+            "must be an address such as 0.0.0.0:7710",
+        );
+    }
+    c.range(&format!("{path}.rate_hz"), e.rate_hz, 1.0, 1000.0);
+    c.range(&format!("{path}.latency_ms"), e.latency_ms, 0.0, 1000.0);
+    let mut keys: HashMap<String, usize> = HashMap::new();
+    let mut trackers = vec![];
+    for (j, t) in e.trackers.iter().enumerate() {
+        let p = format!("{path}.trackers[{j}]");
+        let key = t.tracker.to_ascii_uppercase();
+        if key.split('/').count() != 2
+            || key
+                .split('/')
+                .next()
+                .is_none_or(|m| m.split(':').count() != 6)
+        {
+            c.err(
+                format!("{p}.tracker"),
+                "must be <MAC>/<sensor>, e.g. AA:BB:CC:DD:EE:FF/0",
+            );
+        }
+        if let Some(prev) = keys.insert(key.clone(), j) {
+            c.err(
+                format!("{p}.tracker"),
+                format!("already listed at trackers[{prev}]"),
+            );
+        }
+        if let Some(id) = claim_device(c, &format!("{p}.id"), &t.id, "tracker", true, devices) {
+            trackers.push((id, key));
+        }
+    }
+    if e.trackers.is_empty() {
+        c.err(format!("{path}.trackers"), "list at least one tracker");
+    }
+    Some(Esp32Spec {
+        id: SourceId::new(e.id.as_str()).ok()?,
+        bind: e.bind.clone(),
+        rate_hz: e.rate_hz,
+        latency_us: (e.latency_ms * 1000.0) as u64,
+        trackers,
     })
 }
 
@@ -1079,7 +1150,7 @@ sources:
     cameras:
       - {{ id: SIM-T01, rate_hz: 30, resolution_px: [1280, 720], fov_y_deg: 50, position_m: [0, 1, 3], look_at_m: [0, 1, 0] }}
   - {{ id: slime, kind: slimevr_solarxr, endpoint: "http://127.0.0.1:21110" }}
-  - {{ id: esp, kind: esp32_udp, port: 9000 }}
+  - {{ id: esp, kind: esp32_udp, bind: nowhere, trackers: [] }}
 "#,
             dir = dir.path().display().to_string()
         );
@@ -1118,10 +1189,7 @@ sources:
             "{p:#?}"
         );
         assert!(has("sources[1].endpoint", "ws://"), "{p:#?}");
-        assert!(
-            has("sources[2].kind", "not implemented in this build"),
-            "{p:#?}"
-        );
+        assert!(has("sources[2].bind", "must be an address"), "{p:#?}");
         assert!(p.len() >= 9);
     }
 

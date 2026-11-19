@@ -1,0 +1,43 @@
+# Two USB cameras plus SlimeVR trackers through SlimeVR Server (hybrid tracking, ADR-025 rung 1).
+# Copy to config/local-hybrid.yaml (git-ignored) and replace the hardware ids and tracker keys:
+#   bansayo-engine --list-cameras          prints hardware_id, serial and interface_id per camera
+#   the engine log line "SlimeVR tracker announced" prints each tracker's key
+# Run: bansayo-engine --config config/local-hybrid.yaml
+schema_version: 2
+engine:
+  publish_rate_hz: 120        # solver/output rate; independent of camera and tracker rates
+  stale_after_ms: 250
+  data_dir: ./data
+tracking:
+  mode: hybrid_auto           # or camera_only / imu_only; sources keep running either way
+time_alignment:
+  max_imu_gap_ms: 50          # no SLERP across a longer gap between tracker samples
+  max_optical_anchor_age_ms: 150
+fusion:
+  optical_heading_correction: true
+  max_heading_correction_deg_s: 15
+camera_management:
+  fallback_fps: [60, 30]
+  warn_fps_ratio: 0.85
+triangulation:
+  max_skew_ms: 40
+sources:
+  - id: cams
+    kind: camera
+    models_dir: ./models
+    cameras:
+      # Two identical cameras without serial numbers: pin each by interface_id (its USB port).
+      - { id: CAM-FRONT, hardware_id: "vid_0c45&pid_6369", preset: basic, role: front }
+      - { id: CAM-SIDE, interface_id: "usb#vid_046d&pid_085e#4c7a1f2e", preset: balanced, role: left }
+  - id: slimevr
+    kind: slimevr_solarxr
+    endpoint: ws://127.0.0.1:21110
+    latency_ms: 10            # SolarXR has no sample times: arrival minus this
+    trackers:
+      - { id: SVR-PELVIS, tracker: "AA:BB:CC:DD:EE:01/0" }
+      - { id: SVR-THIGH-R, tracker: "AA:BB:CC:DD:EE:02/0" }
+      - { id: SVR-SHIN-R, tracker: "AA:BB:CC:DD:EE:03/0" }
+assignments:
+  SVR-PELVIS: pelvis
+  SVR-THIGH-R: right_thigh
+  SVR-SHIN-R: right_shin

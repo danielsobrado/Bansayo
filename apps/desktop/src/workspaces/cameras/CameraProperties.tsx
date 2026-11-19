@@ -5,6 +5,7 @@ import { humanizeId } from "../../lib/format";
 import { OriginBadge } from "../../ui/OriginBadge";
 import { StatePill } from "../../ui/StatePill";
 import { Reasons } from "../../ui/Reasons";
+import { CameraRuntime } from "./CameraRuntime";
 
 export function CameraProperties({ camera }: { camera: DeviceStatus }) {
   const { descriptor, stream } = camera;
@@ -51,6 +52,9 @@ export function CameraProperties({ camera }: { camera: DeviceStatus }) {
         <dt>3D landmarks rejected</dt>
         <dd className="mono">{contribution?.rejected ?? "—"}</dd>
       </dl>
+      {camera.camera_runtime && (
+        <CameraRuntime id={descriptor.id} runtime={camera.camera_runtime} />
+      )}
       <Reasons reasons={camera.reasons} />
     </div>
   );

@@ -16,8 +16,10 @@ try {
   assert.equal(hello.conventions.quaternion_order, 'xyzw');
   assert.equal(hello.skeleton.model_id, 'bansayo.body.v1');
   const initial = await live.until(list => list.find(m => m.type === 'frame' && m.pose));
-  assert(initial.pose.segments.every(segment => segment.provenance === 'inferred'));
-  passed('fresh full-body stream starts with hello and inferred segments');
+  // Uncalibrated trackers drive nothing; the cameras may already fit segments (hybrid, ADR-025).
+  const trackerSourced = segment => segment.sources.some(id => id.startsWith('SIM-T'));
+  assert(initial.pose.segments.every(segment => segment.provenance === 'inferred' || !trackerSourced(segment)));
+  passed('fresh full-body stream starts with hello and no tracker-driven segments');
 
   const foreign = await full.api('/simulation', 'PUT', { motion: 'squat' }, { Origin: 'https://foreign.example' });
   assert.equal(foreign.status, 403);
@@ -36,8 +38,8 @@ try {
   assert.equal(capture.status, 200, JSON.stringify(capture.body));
   const trackerCount = hello.state.devices.filter(device => device.descriptor.kind === 'imu_tracker' && device.assignment).length;
   assert.equal(capture.body.data.length, trackerCount);
-  const calibrated = await live.until(list => list.find(m => m.type === 'frame' && m.pose && m.pose.segments.filter(s => s.provenance === 'derived').length === trackerCount));
-  assert(calibrated.quality.observed_segments === trackerCount);
+  const calibrated = await live.until(list => list.find(m => m.type === 'frame' && m.pose && m.pose.segments.filter(s => s.provenance === 'derived' && trackerSourced(s)).length === trackerCount));
+  assert(calibrated.quality.observed_segments >= trackerCount);
   passed('reference-pose API capture derives every assigned tracker');
 
   const lastSeq = live.messages.filter(m => m.type === 'frame').at(-1).seq;

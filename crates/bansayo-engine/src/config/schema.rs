@@ -308,7 +308,7 @@ impl Default for TriangulationConfig {
 pub enum SourceConfig {
     Simulated(SimulatedSourceConfig),
     SlimevrSolarxr(SlimevrSourceConfig),
-    Esp32Udp(DesignedSourceConfig),
+    Esp32Udp(Esp32SourceConfig),
     Camera(CameraSourceConfig),
 }
 
@@ -357,12 +357,33 @@ fn slimevr_interval_default() -> u16 {
     5
 }
 
-/// Fields of a source kind that is designed but not implemented.
+/// ESP32 trackers sending `bansayo.imu.v1` datagrams (`sources/esp32.rs`).
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct DesignedSourceConfig {
+#[serde(deny_unknown_fields)]
+pub struct Esp32SourceConfig {
     pub id: String,
-    #[serde(flatten)]
-    pub rest: BTreeMap<String, Value>,
+    #[serde(default = "enabled_default")]
+    pub enabled: bool,
+    /// UDP address to listen on. Trackers on Wi-Fi need a LAN address; only listed boards are
+    /// accepted.
+    #[serde(default = "esp32_bind_default")]
+    pub bind: String,
+    /// Nominal sample rate per tracker, Hz.
+    #[serde(default = "esp32_rate_default")]
+    pub rate_hz: f64,
+    /// Fixed sample-to-arrival delay subtracted after offset estimation, milliseconds.
+    #[serde(default)]
+    pub latency_ms: f64,
+    /// Device id and `<MAC>/<sensor>` as the engine log prints it.
+    pub trackers: Vec<SlimevrTrackerConfig>,
+}
+
+fn esp32_bind_default() -> String {
+    "0.0.0.0:7710".into()
+}
+
+fn esp32_rate_default() -> f64 {
+    100.0
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
