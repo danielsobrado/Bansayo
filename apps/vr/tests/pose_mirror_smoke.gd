@@ -16,6 +16,16 @@ func _run() -> void:
 		return
 	room._open_mirror()
 	var mirror: Node3D = room._mirror
+	await process_frame
+	var panel: Node3D = mirror.panel
+	var display: MeshInstance3D = panel.get_children().filter(func(node): return node is MeshInstance3D)[0]
+	if not _check(display.mesh.size.x > 1.30 and display.mesh.size.y > 0.80, "The view must give the reflection and guide a wider coaching surface."):
+		return
+	var origin: Vector3 = room._dev.camera.global_position
+	var aim := origin.direction_to(panel.button_world_point(3))
+	if not _check(panel.press_at(panel.intersect_ray(origin, aim)) and not mirror.view.guide_pose.is_empty(), "Flexibility should be selectable in the coaching navigation."):
+		return
+	mirror._set_mode("session")
 	var names := ["nose", "left_shoulder", "right_shoulder", "left_hip", "right_hip", "left_knee"]
 	mirror.engine_state({"devices": [{"descriptor": {"id": "camera", "camera": {
 		"landmark_schema": {"id": "test.body", "names": names}}}}]})
