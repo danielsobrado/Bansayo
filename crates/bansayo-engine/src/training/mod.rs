@@ -163,7 +163,7 @@ struct Current {
 
 enum RunningSession {
     Technique(Box<Session>),
-    Workout(TimedWorkout),
+    Workout(Box<TimedWorkout>),
 }
 
 impl RunningSession {
@@ -993,7 +993,7 @@ impl Actor {
             motion: None,
             inputs: false,
             closed: false,
-            session: RunningSession::Workout(workout),
+            session: RunningSession::Workout(Box::new(workout)),
             profile,
             stored: consent,
             log: vec![],

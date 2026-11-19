@@ -19,7 +19,7 @@ pub fn validate(def: &TimedWorkoutDef) -> Vec<ContentProblem> {
     for (b, block) in def.blocks.iter().enumerate() {
         if block.id.is_empty() || block.title.trim().is_empty() || block.items.is_empty() {
             problems.push(problem(
-                &format!("blocks[{b}]"),
+                format!("blocks[{b}]"),
                 "invalid_block",
                 "a block needs an id, title and at least one item",
             ));
@@ -31,7 +31,7 @@ pub fn validate(def: &TimedWorkoutDef) -> Vec<ContentProblem> {
                 || item.duration_s == 0
             {
                 problems.push(problem(
-                    &format!("blocks[{b}].items[{i}]"),
+                    format!("blocks[{b}].items[{i}]"),
                     "invalid_item",
                     "a timed item needs an id, title, prompt and positive duration",
                 ));

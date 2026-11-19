@@ -174,7 +174,9 @@ func _menu() -> Array[String]:
 					return ["Acknowledge safety notes", "End clinic"]
 			return ["End clinic"]
 		"ready":
-			return ["Place target & start", "Start without target", "End clinic"] if _use_targets else ["Confirm clear area & start", "End clinic"]
+			if _use_targets:
+				return ["Place target & start", "Start without target", "End clinic"]
+			return ["Confirm clear area & start", "End clinic"]
 		"countdown": return ["End clinic"]
 		"active": return ["Pause", "End clinic"]
 		"resting": return ["Skip rest", "Pause", "End clinic"]

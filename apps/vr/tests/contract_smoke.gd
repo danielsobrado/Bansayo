@@ -115,9 +115,14 @@ func _check_ghost_walls() -> bool:
 	clinic.select()
 	assert(not walls.opened and clinic._label.visible)
 	clinic._session = "current"
-	clinic.stream_state_changed({"session_id": "current", "phase": "active", "rev": 1})
-	clinic.event_received("current", {"type": "target_reached", "event_seq": 2, "data": {"id": "clinic-target"}})
-	clinic.event_received("current", {"type": "target_reached", "event_seq": 2, "data": {"id": "clinic-target"}})
+	clinic.stream_state_changed({"session_id": "current", "phase": "ready", "rev": 1})
+	assert(clinic._menu().has("Confirm clear area & start"))
+	clinic._use_targets = true
+	assert(clinic._menu().has("Place target & start"))
+	clinic.stream_state_changed({"session_id": "current", "phase": "active", "rev": 2})
+	var event := {"type": "target_reached", "event_seq": 3, "data": {"id": "clinic-target"}}
+	clinic.event_received("current", event)
+	clinic.event_received("current", event)
 	assert(clinic._target_reaches == 1)
 	clinic.connection(false)
 	clinic.connection(true)

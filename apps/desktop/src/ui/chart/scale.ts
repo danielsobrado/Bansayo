@@ -31,8 +31,10 @@ export function ticks([lo, hi]: readonly [number, number], count = 4): number[] 
   const mag = 10 ** Math.floor(Math.log10(raw || 1));
   const step = [1, 2, 5, 10].map((m) => m * mag).find((s) => s >= raw) ?? raw;
   const out: number[] = [];
-  for (let v = Math.ceil(lo / step) * step; v <= hi + step * 1e-9; v += step)
-    out.push(Number(v.toPrecision(12)));
+  for (let v = Math.ceil(lo / step) * step; v <= hi + step * 1e-9; v += step) {
+    out.push(v);
+    if (v + step <= v) break;
+  }
   return out;
 }
 

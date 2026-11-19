@@ -5,6 +5,12 @@ import type { MetricMeasurement, ScoreResult } from "@contracts";
 import { MeasurementValue } from "./MeasurementValue";
 import { ScoreBars } from "./ScoreBars";
 import { ClipPlayer } from "../viewport/ClipPlayer";
+import { ticks } from "./chart/scale";
+
+it("keeps chart ticks distinct around a single session timestamp", () => {
+  const time = 1_795_059_047_000;
+  expect(ticks([time - 1, time + 1], 5)).toEqual([time - 1, time - 0.5, time, time + 0.5, time + 1]);
+});
 
 const m = (over: Partial<MetricMeasurement>): MetricMeasurement => ({
   metric: "kick.peak_ankle_height@1",
