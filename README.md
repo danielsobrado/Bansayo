@@ -133,6 +133,25 @@ Use a release build for live cameras (inference is several times slower in debug
 hardware, `frames_dir:` in place of `device:` plays a folder of images as a camera, and
 `config/sim-cameras-skeleton.yaml` shows the camera-only skeleton from four simulated cameras.
 
+### IP cameras (RTSP)
+
+Wi-Fi or PoE cameras that stream RTSP (Reolink, some Aqara hubs once RTSP is enabled in their app)
+are cameras too. The engine reads them through `ffmpeg`, which must be on `PATH`, and scales
+frames to `resolution_px`. Put the URL, which holds the camera's password, only in a git-ignored
+file such as `config/local-cameras.yaml`:
+
+```yaml
+cameras:
+  # Reolink: enable RTSP in the Reolink app (Network → Advanced → Server settings).
+  # h264Preview_01_sub is the low-resolution stream, h264Preview_01_main the full one.
+  - { id: REOLINK1, rtsp: "rtsp://admin:PASSWORD@192.168.1.40:554/h264Preview_01_main", resolution_px: [1280, 720], rate_hz: 20, latency_ms: 300 }
+```
+
+The camera keeps its own exposure (set it in its app: shortest shutter, no "night" mode); its
+stream is usually 15–25 fps and 0.2–0.5 s late, so set `latency_ms` and expect phase timing to be
+indicative. An offline camera is reported `disconnected` after 5 s and retried; logs and device
+status show the URL without its password. RTSP cameras are not used for triangulation (ADR-020).
+
 ## Desktop and VR clients
 
 ```sh

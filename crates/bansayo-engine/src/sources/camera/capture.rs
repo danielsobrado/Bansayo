@@ -14,6 +14,175 @@ pub enum Backend {
     Frames(PathBuf),
     /// JPEG frames sent by a network client to `/api/v1/ingest/camera/{id}` (ADR-042).
     Network(String),
+    /// An IP camera's RTSP stream, read through `ffmpeg` (ADR-020 item 7).
+    Rtsp(String),
+}
+
+/// The URL without `user:password@`, for logs and device descriptions.
+pub fn redact(url: &str) -> String {
+    match (url.find("://"), url.find('@')) {
+        (Some(s), Some(a)) if a > s => format!("{}***@{}", &url[..s + 3], &url[a + 1..]),
+        _ => url.to_owned(),
+    }
+}
+
+/// The host (and port) of a URL, for a camera's model name.
+pub fn host_of(url: &str) -> String {
+    let rest = redact(url);
+    let rest = rest
+        .split_once("://")
+        .map_or(rest.as_str(), |(_, r)| r)
+        .to_owned();
+    let rest = rest
+        .rsplit_once('@')
+        .map_or(rest.as_str(), |(_, r)| r)
+        .to_owned();
+    rest.split('/').next().unwrap_or_default().to_owned()
+}
+
+/// Takes the first complete JPEG (SOI … EOI) from the front of `buf`, dropping bytes before it.
+pub fn take_jpeg(buf: &mut Vec<u8>) -> Option<Vec<u8>> {
+    let start = buf.windows(2).position(|w| w == [0xFF, 0xD8])?;
+    let end = buf[start + 2..]
+        .windows(2)
+        .position(|w| w == [0xFF, 0xD9])?
+        + start
+        + 4;
+    let jpeg = buf[start..end].to_vec();
+    buf.drain(..end);
+    Some(jpeg)
+}
+
+/// An IP camera through `ffmpeg`: RTSP over TCP, decoded and re-encoded as MJPEG at the declared
+/// size and rate on stdout. The camera keeps its own exposure; timing is arrival time
+/// (`time_quality: receive_time`), so set `latency_ms` to the stream's delay.
+struct Ffmpeg {
+    child: std::process::Child,
+    out: std::process::ChildStdout,
+    buf: Vec<u8>,
+    decode_us: u64,
+    label: String,
+}
+
+impl Ffmpeg {
+    fn open(url: &str, [w, h]: [u32; 2], rate_hz: f64) -> Result<Self, String> {
+        let mut cmd = std::process::Command::new("ffmpeg");
+        cmd.args(["-hide_banner", "-loglevel", "error"]);
+        if url.starts_with("rtsp://") {
+            // 5 s socket timeout: an offline camera ends ffmpeg, so the camera is reported
+            // disconnected and reopened instead of a capture thread waiting forever.
+            cmd.args([
+                "-rtsp_transport",
+                "tcp",
+                "-timeout",
+                "5000000",
+                "-fflags",
+                "nobuffer",
+                "-flags",
+                "low_delay",
+            ]);
+        } else {
+            // Files (tests): play at their own rate, as a camera would.
+            cmd.arg("-re");
+        }
+        cmd.args(["-i", url, "-an", "-vf"])
+            .arg(format!("scale={w}:{h}"))
+            .args([
+                "-r",
+                &format!("{rate_hz}"),
+                "-f",
+                "image2pipe",
+                "-c:v",
+                "mjpeg",
+                "-q:v",
+                "5",
+                "-",
+            ])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW: no console window per camera
+        }
+        let mut child = cmd.spawn().map_err(|e| {
+            format!("ffmpeg could not be started ({e}); install ffmpeg and put it on PATH")
+        })?;
+        let out = child.stdout.take().ok_or("ffmpeg has no output")?;
+        Ok(Self {
+            child,
+            out,
+            buf: Vec::with_capacity(1 << 20),
+            decode_us: 0,
+            label: redact(url),
+        })
+    }
+
+    /// Stops ffmpeg and anything it started: package managers install `ffmpeg` as a shim that
+    /// runs the real binary as a child, which a plain kill would leave running.
+    fn stop(&mut self) {
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            let _ = std::process::Command::new("taskkill")
+                .args(["/PID", &self.child.id().to_string(), "/T", "/F"])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .creation_flags(0x0800_0000)
+                .status();
+        }
+        let _ = self.child.kill();
+    }
+
+    /// Why ffmpeg stopped: its last error line, without credentials.
+    fn failure(&mut self) -> String {
+        self.stop();
+        let mut err = String::new();
+        if let Some(mut e) = self.child.stderr.take() {
+            let _ = std::io::Read::read_to_string(&mut e, &mut err);
+        }
+        let last = err
+            .lines()
+            .rev()
+            .find(|l| !l.trim().is_empty())
+            .unwrap_or("stream ended");
+        format!("{}: {}", self.label, redact(last))
+    }
+}
+
+impl Capture for Ffmpeg {
+    fn next(&mut self) -> Result<RgbImage, String> {
+        let jpeg = loop {
+            if let Some(j) = take_jpeg(&mut self.buf) {
+                break j;
+            }
+            let mut chunk = [0u8; 65536];
+            match std::io::Read::read(&mut self.out, &mut chunk) {
+                Ok(0) | Err(_) => return Err(self.failure()),
+                Ok(n) => self.buf.extend_from_slice(&chunk[..n]),
+            }
+        };
+        let started = Instant::now();
+        let image = image::load_from_memory_with_format(&jpeg, image::ImageFormat::Jpeg)
+            .map_err(|e| format!("{}: frame: {e}", self.label))?
+            .to_rgb8();
+        self.decode_us = started.elapsed().as_micros() as u64;
+        Ok(image)
+    }
+    fn decode_us(&self) -> u64 {
+        self.decode_us
+    }
+    fn describe(&self) -> String {
+        format!("RTSP {} through ffmpeg", self.label)
+    }
+}
+
+impl Drop for Ffmpeg {
+    fn drop(&mut self) {
+        self.stop();
+        let _ = self.child.wait();
+    }
 }
 
 /// The newest JPEG frame a network client sent for one camera: a one-slot buffer, so a frame not
@@ -113,6 +282,7 @@ pub fn open_with(
     match backend {
         Backend::Frames(dir) => Ok(Box::new(Frames::open(dir, rate_hz)?)),
         Backend::Device(index) => device::open(*index, resolution_px, rate_hz),
+        Backend::Rtsp(url) => Ok(Box::new(Ffmpeg::open(url, resolution_px, rate_hz)?)),
         Backend::Network(id) => {
             let feed = feeds
                 .get(id)
@@ -441,6 +611,72 @@ mod tests {
         assert_eq!(feed.dropped.load(std::sync::atomic::Ordering::Relaxed), 1);
         assert!(c.next().is_err(), "no frame for 2 s");
         assert!(open_with(&Backend::Network("OTHER".into()), [8, 4], 30.0, &feeds).is_err());
+    }
+
+    #[test]
+    fn jpeg_frames_are_split_and_credentials_redacted() {
+        let mut buf = vec![0x00, 0xFF, 0xD8, 1, 2, 0xFF, 0xD9, 0xFF, 0xD8, 3];
+        assert_eq!(take_jpeg(&mut buf).unwrap(), [0xFF, 0xD8, 1, 2, 0xFF, 0xD9]);
+        assert_eq!(buf, [0xFF, 0xD8, 3], "the next, incomplete frame stays");
+        assert!(take_jpeg(&mut buf).is_none());
+        let url = "rtsp://admin:s3cret@192.168.1.40:554/h264Preview_01_main";
+        assert_eq!(
+            redact(url),
+            "rtsp://***@192.168.1.40:554/h264Preview_01_main"
+        );
+        assert_eq!(host_of(url), "192.168.1.40:554");
+        assert_eq!(host_of("rtsp://10.0.0.5/live"), "10.0.0.5");
+        assert_eq!(redact("rtsp://10.0.0.5/live"), "rtsp://10.0.0.5/live");
+    }
+
+    /// The ffmpeg path on a generated clip (skipped without ffmpeg on PATH): frames arrive at the
+    /// declared size; a stream that cannot be opened fails without showing the password.
+    #[test]
+    fn rtsp_backend_reads_frames_through_ffmpeg() {
+        let ok = std::process::Command::new("ffmpeg")
+            .arg("-version")
+            .output();
+        if !ok.is_ok_and(|o| o.status.success()) {
+            eprintln!("ffmpeg not on PATH; skipped");
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let clip = dir.path().join("clip.mp4");
+        let made = std::process::Command::new("ffmpeg")
+            .args([
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc=size=320x240:rate=25:duration=1",
+                "-pix_fmt",
+                "yuv420p",
+            ])
+            .arg(&clip)
+            .status()
+            .unwrap();
+        assert!(made.success());
+        let backend = Backend::Rtsp(clip.display().to_string());
+        let mut c = open(&backend, [160, 120], 25.0).unwrap();
+        let mut n = 0;
+        while let Ok(img) = c.next() {
+            assert_eq!(img.dimensions(), (160, 120));
+            n += 1;
+        }
+        assert!(
+            (20..=30).contains(&n),
+            "{n} frames from a 1 s clip at 25 fps"
+        );
+        let mut bad = open(
+            &Backend::Rtsp("rtsp://admin:s3cret@127.0.0.1:9/none".into()),
+            [160, 120],
+            25.0,
+        )
+        .unwrap();
+        let err = bad.next().unwrap_err();
+        assert!(!err.contains("s3cret") && err.contains("***@"), "{err}");
     }
 
     #[test]

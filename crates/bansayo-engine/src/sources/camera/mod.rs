@@ -55,7 +55,7 @@ pub fn apply_settings(backend: &Backend, r: &RequestedSettings) -> CameraSetting
     };
     match backend {
         // Set on the phone; validation refuses exposure_s and gain for network cameras.
-        Backend::Network(_) => CameraSettingsStatus::default(),
+        Backend::Network(_) | Backend::Rtsp(_) => CameraSettingsStatus::default(),
         Backend::Frames(_) => CameraSettingsStatus {
             exposure_s: None,
             gain: None,
@@ -120,7 +120,7 @@ impl CameraSource {
             .cameras
             .iter()
             .map(|c| {
-                let device = matches!(c.backend, Backend::Device(_) | Backend::Network(_));
+                let device = !matches!(c.backend, Backend::Frames(_));
                 DeviceDescriptor {
                     id: c.id.clone(),
                     source_id: self.spec.id.clone(),
@@ -134,12 +134,14 @@ impl CameraSource {
                         Backend::Device(i) => format!("System camera {i}"),
                         Backend::Frames(dir) => format!("Image folder {}", dir.display()),
                         Backend::Network(_) => "Network camera (phone)".into(),
+                        Backend::Rtsp(url) => format!("RTSP camera {}", capture::host_of(url)),
                     }),
                     firmware: None,
                     transport: match c.backend {
                         Backend::Device(_) => Transport::Usb,
                         Backend::Frames(_) => Transport::File,
                         Backend::Network(_) => Transport::Websocket,
+                        Backend::Rtsp(_) => Transport::Rtsp,
                     },
                     capabilities: vec![SensorCapability::Landmarks2d],
                     nominal_rate_hz: Some(c.rate_hz as f32),
@@ -532,7 +534,7 @@ pub fn landmarks_observation(
 ) -> SensorObservation {
     let points = detection.map_or_else(|| vec![None; 17], |d| d.points.clone());
     let seen: Vec<f32> = points.iter().flatten().map(|p| p.confidence).collect();
-    let origin = if matches!(camera.backend, Backend::Device(_) | Backend::Network(_)) {
+    let origin = if !matches!(camera.backend, Backend::Frames(_)) {
         Origin::Live
     } else {
         Origin::Fixture

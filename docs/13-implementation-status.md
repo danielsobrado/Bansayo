@@ -4,6 +4,20 @@ This record includes Phase 2 (18 November 2026; machine part delivered, owner pa
 Phase 1 and Phase 0 (both 17 November 2026), followed by the historical Stage 1–3 and camera/VR
 record. Phase 0 began at `b61c6b7`. All phases are on `main`.
 
+## RTSP IP cameras (19 November 2026)
+
+For the owner's Reolink and Aqara Wi-Fi cameras (ADR-020 item 7, decision note there): a camera
+entry may give `rtsp: "rtsp://…"`; the engine runs `ffmpeg` (on `PATH`) per camera with TCP
+transport and a 5 s socket timeout, reads MJPEG frames scaled to `resolution_px` from its stdout and
+feeds them to the normal decode and pose chain. Exposure and gain are refused for these cameras
+(set in the camera's app); the descriptor is `RTSP camera <host:port>`, `transport: rtsp`
+(additive), origin `live`; the URL's `user:password@` is redacted in logs, errors and device
+status. On Windows the whole `ffmpeg` process tree is stopped (package managers install `ffmpeg`
+as a shim with the real binary as a child). Tests: `jpeg_frames_are_split_and_credentials_redacted`,
+`rtsp_backend_reads_frames_through_ffmpeg` (a generated clip through `ffmpeg`; an unreachable
+`rtsp://` URL fails without showing its password), `tests/rtsp_config.rs`. **Not yet run against
+the owner's real cameras.**
+
 ## Android client and LAN mode (18 November 2026)
 
 Owner decision ([ADR-042](architecture/martial-arts/adr/ADR-042-android-client.md)): an Android

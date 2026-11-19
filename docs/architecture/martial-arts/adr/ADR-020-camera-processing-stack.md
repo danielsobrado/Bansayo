@@ -27,6 +27,16 @@ offers MJPEG and NV12 up to 1920×1080, at most 30 fps). Commits `04dc99f`, `a11
 | Four cameras together | Not run: one camera attached |
 | Decode budget (≤ 4 ms, 1280×720) | **Borderline**: p50 2.5 ms, p95 4.3 ms, p99 6.5 ms over 10 s (`image` crate with `zune-jpeg`). Consequence: the `turbojpeg` trigger of item 3 is reached at p95 only; it is not taken until four-camera load is measured, and the stage-over-budget notice reports it when it happens. In debug builds the decoder is compiled optimised (dev profile), without which capture fell to 7–10 fps |
 
+## RTSP cameras (19 November 2026)
+
+Item 7 is built for the owner's Reolink and Aqara Wi-Fi cameras: a camera entry with `rtsp:` is
+read through an `ffmpeg` process (TCP transport, 5 s socket timeout, MJPEG on stdout scaled to the
+declared size), decoded in-process like USB MJPEG. This uses `ffmpeg` as a subprocess, which the
+table below rejects for USB capture (pipe latency, no exposure control, timestamps lost): for RTSP
+those costs are already in the stream itself (the camera sets its own exposure, the stream adds
+0.2–0.5 s and gives no capture time), and an H.264/H.265 decoder in-process would be a much larger
+dependency. RTSP cameras stay out of triangulation without a `time_sync` profile, as written.
+
 ## Context
 
 When this record was drafted no real camera code existed. ADR-009 deferred the capture crate to a Windows spike. Martial-arts

@@ -128,7 +128,7 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
             drops.insert(d.id.clone(), Arc::new(AtomicU64::new(0)));
             descriptors.push(d);
         }
-        sources.push(ConfiguredSource::Camera(source));
+        sources.push(ConfiguredSource::Camera(Box::new(source)));
     }
     let registry = Registry::new(descriptors, assignments, drops.clone());
     let data_dir = config.config.engine.data_dir.clone();
@@ -347,7 +347,7 @@ pub async fn run(
 /// Closed source kinds use static dispatch and one spawning match; no trait objects.
 enum ConfiguredSource {
     Simulated(Box<SimulatedSource>, watch::Receiver<Control>),
-    Camera(CameraSource),
+    Camera(Box<CameraSource>),
 }
 impl ConfiguredSource {
     fn spawn(
@@ -377,7 +377,7 @@ impl ConfiguredSource {
                 }
                 Self::Camera(source) => {
                     let devices = source.descriptors().into_iter().map(|d| d.id).collect();
-                    crate::sources::supervision::supervise(source, devices, common).await;
+                    crate::sources::supervision::supervise(*source, devices, common).await;
                 }
             }
             Ok(())

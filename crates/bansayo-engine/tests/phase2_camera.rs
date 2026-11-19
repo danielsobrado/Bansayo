@@ -378,6 +378,8 @@ async fn a_take_is_promoted_annotated_and_evaluated() {
     let id = s["session_id"].as_str().unwrap().to_owned();
     ok(addr, "POST", "training/command", json!({ "command": "ack_safety", "args": { "content_refs": ["taekwondo.dollyeo_chagi@1"] } })).await;
     wait_state(addr, 30, |s| s["phase"] == "ready").await;
+    // Start as a person would: a re-analysis cannot reproduce a start in the first ~100 ms (docs/13).
+    tokio::time::sleep(Duration::from_secs(1)).await;
     ok(
         addr,
         "POST",

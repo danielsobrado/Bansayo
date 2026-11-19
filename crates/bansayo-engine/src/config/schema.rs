@@ -414,6 +414,11 @@ pub struct LiveCameraConfig {
     /// `/api/v1/ingest/camera/{id}` (ADR-042). Exposure is set on the phone.
     #[serde(default)]
     pub network: bool,
+    /// An IP camera's RTSP stream, e.g. `rtsp://user:password@192.168.1.40:554/h264Preview_01_main`.
+    /// Read through `ffmpeg` (on PATH), scaled to `resolution_px`. Keep this in a git-ignored
+    /// local configuration: it holds the camera's password.
+    #[serde(default)]
+    pub rtsp: Option<String>,
     #[serde(default = "camera_rate_default")]
     pub rate_hz: f64,
     /// Requested capture size; the camera may negotiate another.

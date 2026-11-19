@@ -3,4 +3,4 @@
 /**
  * How the engine reaches a device.
  */
-export type Transport = "simulated" | "file" | "udp" | "usb" | "websocket";
+export type Transport = "simulated" | "file" | "udp" | "usb" | "websocket" | "rtsp";

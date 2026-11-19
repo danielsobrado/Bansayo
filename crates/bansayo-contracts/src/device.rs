@@ -25,6 +25,8 @@ pub enum Transport {
     Udp,
     Usb,
     Websocket,
+    /// A network camera's RTSP stream (IP cameras). Additive.
+    Rtsp,
 }
 
 /// A kind of observation a device can provide.

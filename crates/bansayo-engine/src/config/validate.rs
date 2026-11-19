@@ -723,6 +723,17 @@ fn check_camera_source(
             c.range(&format!("{p}.exposure_s"), e, 1e-5, 1.0);
         }
         let mut resolution = cam.resolution_px;
+        if let Some(url) = &cam.rtsp {
+            if !url.starts_with("rtsp://") {
+                c.err(format!("{p}.rtsp"), "must start with rtsp://");
+            }
+            if cam.exposure_s.is_some() || cam.gain.is_some() {
+                c.err(
+                    &p,
+                    "exposure_s and gain of an RTSP camera are set in the camera's own app",
+                );
+            }
+        }
         if cam.network && (cam.exposure_s.is_some() || cam.gain.is_some()) {
             c.err(
                 &p,
@@ -730,6 +741,18 @@ fn check_camera_source(
             );
         }
         let backend = match (&cam.device, &cam.frames_dir) {
+            (None, None) if cam.network && cam.rtsp.is_some() => {
+                c.err(
+                    &p,
+                    "set exactly one of device, frames_dir, network: true and rtsp",
+                );
+                None
+            }
+            (None, None) if cam.rtsp.is_some() => cam.rtsp.clone().map(capture::Backend::Rtsp),
+            (Some(_), _) | (_, Some(_)) if cam.rtsp.is_some() => {
+                c.err(&p, "an RTSP camera has no device or frames_dir");
+                None
+            }
             (None, None) if cam.network => Some(capture::Backend::Network(cam.id.clone())),
             (Some(_), _) | (_, Some(_)) if cam.network => {
                 c.err(&p, "a network camera has no device or frames_dir");
