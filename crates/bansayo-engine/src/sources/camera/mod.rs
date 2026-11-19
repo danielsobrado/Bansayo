@@ -83,7 +83,7 @@ pub fn apply_settings(
                     code: "exposure_automatic".into(),
                     subject: Some("exposure_s".into()),
                     message:
-                        "exposure_s is not set: automatic exposure blurs fast limbs (08 §3.2)."
+                        "exposure_s is not set: the camera keeps its own exposure (automatic unless another program or session set it), which blurs fast limbs (08 §3.2)."
                             .into(),
                 });
             }

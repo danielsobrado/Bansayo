@@ -132,7 +132,30 @@ impl<'a> Lifecycle<'a> {
         fallback_fps: &[f64],
     ) -> CaptureMode {
         let found = present.identity.clone();
-        // Re-read on every open: the user may have confirmed a new identity meanwhile.
+        self.check_identity(&found);
+        if self.status.identity_confirmed && self.profile.is_none() {
+            self.save_profile(&found, None);
+        }
+        self.status.identity = Some(found);
+        self.set(CameraLifecycle::Identified);
+        let chosen = modes::select(
+            advertised,
+            camera.resolution_px,
+            camera.rate_hz,
+            fallback_fps,
+        );
+        self.mode_note = chosen
+            .note
+            .as_ref()
+            .map(|n| reason("camera_mode_not_as_requested", Some(self.id.to_string()), n));
+        self.status.requested = Some(chosen.mode.clone());
+        self.set(CameraLifecycle::Configuring);
+        chosen.mode
+    }
+
+    /// Compares the hardware with the profile on disk. Re-read on every open and, while
+    /// unconfirmed, every publish: the user may have confirmed the identity meanwhile.
+    fn check_identity(&mut self, found: &CameraIdentity) {
         if let Ok(profile) = identity::load_profile(self.data_dir, &self.id) {
             self.profile = profile;
             if self
@@ -144,7 +167,7 @@ impl<'a> Lifecycle<'a> {
             }
         }
         let changed = |r: &Reason| r.code == "camera_identity_changed";
-        if identity::confirmed(self.profile.as_ref(), &found) {
+        if identity::confirmed(self.profile.as_ref(), found) {
             if self.identity_problem.as_ref().is_some_and(changed) {
                 self.identity_problem = None;
             }
@@ -163,26 +186,7 @@ impl<'a> Lifecycle<'a> {
                 ),
             ));
         }
-        let confirmed = self.identity_problem.is_none();
-        if confirmed && self.profile.is_none() {
-            self.save_profile(&found, None);
-        }
-        self.status.identity = Some(found);
-        self.status.identity_confirmed = confirmed;
-        self.set(CameraLifecycle::Identified);
-        let chosen = modes::select(
-            advertised,
-            camera.resolution_px,
-            camera.rate_hz,
-            fallback_fps,
-        );
-        self.mode_note = chosen
-            .note
-            .as_ref()
-            .map(|n| reason("camera_mode_not_as_requested", Some(self.id.to_string()), n));
-        self.status.requested = Some(chosen.mode.clone());
-        self.set(CameraLifecycle::Configuring);
-        chosen.mode
+        self.status.identity_confirmed = self.identity_problem.is_none();
     }
 
     fn save_profile(&mut self, found: &CameraIdentity, mode: Option<CaptureMode>) {
@@ -233,6 +237,11 @@ impl<'a> Lifecycle<'a> {
             return;
         }
         self.published_us = now_us;
+        if !self.status.identity_confirmed
+            && let Some(found) = self.status.identity.clone()
+        {
+            self.check_identity(&found);
+        }
         self.status.timing = self.stats.summary();
         let requested = self.status.requested.as_ref().and_then(|m| m.fps);
         self.rate_problem = match (&self.status.timing, requested) {
@@ -446,6 +455,15 @@ mod tests {
         );
         Lifecycle::confirm(dir.path(), &runtime, &slow.id).unwrap();
         assert!(status(&runtime).identity_confirmed);
+        // The capture thread's next publish must not overwrite the confirmation.
+        life3.opened(Some(mode(30.0)));
+        for i in 0..40u64 {
+            life3.frame(9_000_000 + i * 33_333, 4_000, 0.85);
+        }
+        assert!(
+            status(&runtime).identity_confirmed,
+            "confirmation survives the next publish"
+        );
         life3.identified(&b, &[mode(30.0)], &slow, &[]);
         assert!(
             status(&runtime).identity_confirmed,

@@ -253,6 +253,14 @@ impl Registry {
                     .as_ref()
                     .map(|c| c.reasons.clone())
                     .unwrap_or_default();
+                let camera_degraded = camera_runtime
+                    .as_ref()
+                    .is_some_and(|c| c.lifecycle == CameraLifecycle::Degraded);
+                // A camera's rate is judged against the mode it runs in, not the configured wish.
+                let nominal = camera_runtime
+                    .as_ref()
+                    .and_then(|c| c.requested.as_ref()?.fps)
+                    .or(e.descriptor.nominal_rate_hz);
                 let state = if e.failure.is_some() {
                     TrackingState::Unavailable
                 } else if !e.connected
@@ -262,14 +270,10 @@ impl Registry {
                 } else if last.is_none() {
                     TrackingState::Acquiring
                 } else if unapplied
-                    || camera_runtime
-                        .as_ref()
-                        .is_some_and(|c| c.lifecycle == CameraLifecycle::Degraded)
+                    || camera_degraded
                     || e.reported_quality < quality.degraded_quality as f32
                     || e.received > 2
-                        && e.descriptor
-                            .nominal_rate_hz
-                            .is_some_and(|n| rate < n * quality.degraded_rate_fraction as f32)
+                        && nominal.is_some_and(|n| rate < n * quality.degraded_rate_fraction as f32)
                 {
                     TrackingState::Degraded
                 } else {
@@ -283,7 +287,7 @@ impl Registry {
                         "Device is disconnected. Waiting for fresh data.",
                     )),
                     // Settings problems name their property (08 §3.2) and stand in for the generic reason.
-                    TrackingState::Degraded if unapplied || !camera_problems.is_empty() => {
+                    TrackingState::Degraded if unapplied || camera_degraded => {
                         reasons.extend(settings.iter().flat_map(|s| s.problems.iter().cloned()))
                     }
                     TrackingState::Degraded => reasons.push(reason(

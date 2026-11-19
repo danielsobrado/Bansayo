@@ -166,15 +166,18 @@ pub fn profile_path(data_dir: &Path, id: &DeviceId) -> PathBuf {
 pub fn load_profile(data_dir: &Path, id: &DeviceId) -> Result<Option<DeviceProfile>, String> {
     let path = profile_path(data_dir, id);
     match std::fs::read(&path) {
-        Ok(bytes) => serde_json::from_slice::<DeviceProfile>(&bytes)
-            .map_err(|e| format!("{}: {e}", path.display()))
-            .and_then(|p| {
-                if p.schema_version == PROFILE_SCHEMA_VERSION && &p.logical_id == id {
-                    Ok(Some(p))
-                } else {
-                    Err(format!("{}: unsupported schema or id", path.display()))
-                }
-            }),
+        // Windows editors (Notepad, PowerShell 5) write a UTF-8 byte-order mark.
+        Ok(bytes) => serde_json::from_slice::<DeviceProfile>(
+            bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(&bytes),
+        )
+        .map_err(|e| format!("{}: {e}", path.display()))
+        .and_then(|p| {
+            if p.schema_version == PROFILE_SCHEMA_VERSION && &p.logical_id == id {
+                Ok(Some(p))
+            } else {
+                Err(format!("{}: unsupported schema or id", path.display()))
+            }
+        }),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(e) => Err(format!("{}: {e}", path.display())),
     }
@@ -304,6 +307,13 @@ mod tests {
             &identity_from_endpoint("UGREEN", B)
         ));
         assert!(confirmed(None, &a));
+        let mut bom = b"\xEF\xBB\xBF".to_vec();
+        bom.extend(serde_json::to_vec(&profile).unwrap());
+        std::fs::write(profile_path(dir.path(), &id), bom).unwrap();
+        assert_eq!(
+            load_profile(dir.path(), &id).unwrap(),
+            Some(profile.clone())
+        );
         std::fs::write(profile_path(dir.path(), &id), b"{broken").unwrap();
         assert!(load_profile(dir.path(), &id).is_err());
     }
