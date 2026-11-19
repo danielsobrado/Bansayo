@@ -1,5 +1,8 @@
 extends Node3D
 
+signal closed
+
+const SpatialPanel = preload("res://scripts/spatial_panel.gd")
 const Ghost = preload("res://scripts/clinic_ghost.gd")
 const ClinicTarget = preload("res://scripts/clinic_target.gd")
 const GhostWalls = preload("res://scripts/ghost_walls.gd")
@@ -18,7 +21,10 @@ var world_frame: Node3D
 var right_hand: XRController3D
 var aligned := false
 var pose_available := false
-var _label := Label3D.new()
+var panel := SpatialPanel.new()
+var _hud := Label3D.new()
+var _controls_open := true
+var _tracking := "Waiting for tracking"
 var _ghost := Ghost.new()
 var _target := ClinicTarget.new()
 var _walls := GhostWalls.new()
@@ -49,18 +55,22 @@ var _use_targets := false
 var _target_reaches := 0
 var _last_reach_seq := 0
 var _next_safety_ms := 0
+var _next_readiness_ms := 0
 
 func _ready() -> void:
-	_label.font_size = 40
-	_label.pixel_size = 0.00135
-	_label.outline_size = 5
-	_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_label.position = Vector3(-1.0, 1.55, 0)
-	add_child(_label)
+	add_child(panel)
+	panel.selected.connect(_select_option)
+	_hud.font_size = 40
+	_hud.pixel_size = 0.0011
+	_hud.outline_size = 12
+	_hud.modulate = SpatialPanel.INK
+	add_child(_hud)
+	_hud.hide()
 	_ghost.position = Vector3(0.95, 0, 0)
 	add_child(_ghost)
 	add_child(_target)
 	add_child(_walls)
+	_walls.controls_changed.connect(_refresh)
 	hide()
 
 func build(skeleton: Dictionary) -> void:
@@ -97,12 +107,47 @@ func show_menu() -> void:
 	ground.y = 0
 	global_transform = Transform3D(Basis.looking_at(forward, Vector3.UP), ground)
 	opened = true
+	_controls_open = true
 	show()
+	recenter()
 	_refresh()
 	await _load_menu()
 
+func recenter() -> void:
+	if not is_instance_valid(camera):
+		return
+	panel.recenter(camera, 1.4 if xr != null else 2.0)
+	var basis := panel.global_basis.orthonormalized()
+	var forward := -basis.z
+	_hud.global_transform = Transform3D(basis,
+		camera.global_position + forward * 1.8 + basis.x * 0.42 - Vector3.UP * 0.40)
+
+func set_tracking(text: String) -> void:
+	if text != _tracking:
+		_tracking = text
+		_refresh()
+
+func toggle_controls() -> void:
+	if opened:
+		if _walls.opened:
+			var moving := _walls.phase in ["running", "countdown"]
+			var showing := panel.visible
+			_controls_open = moving or not showing
+			_walls.controls_requested = moving and not showing
+			if not showing:
+				recenter()
+			_walls.refresh_controls()
+			return
+		_controls_open = not _controls_open
+		if _controls_open:
+			recenter()
+		_refresh()
+	else:
+		show_menu()
+
 func _load_menu() -> void:
 	_pending = true
+	_refresh()
 	var people: Variant = await actions.request(HTTPClient.METHOD_GET, "/athletes")
 	if people is Array:
 		_athletes = people
@@ -120,6 +165,7 @@ func stream_state_changed(state: Dictionary) -> void:
 			_session = ""
 			_state = {}
 			_choice = 0
+			_controls_open = true
 			_space_confirmed = false
 			_target_reaches = 0
 			_cue = ""
@@ -139,6 +185,9 @@ func state_changed(state: Dictionary) -> void:
 	_state = state
 	if changed:
 		_choice = 0
+		_controls_open = _phase() not in ["active", "countdown"]
+		if opened and _controls_open:
+			recenter()
 		if _phase() == "active":
 			_cue = ""
 	_refresh()
@@ -196,16 +245,37 @@ func _menu() -> Array[String]:
 func next() -> void:
 	if _walls.opened:
 		_walls.next()
+		panel.show_choice(_walls._choice)
 		return
 	if opened:
 		_choice = (_choice + 1) % _menu().size()
 		_refresh()
+		panel.show_choice(_choice)
+
+func _select_option(index: int) -> void:
+	if _walls.opened:
+		if index == _walls._menu().size():
+			recenter()
+			return
+		_walls._choice = index
+	else:
+		var menu_count := _menu().size()
+		if index >= menu_count:
+			match index - menu_count:
+				0: recenter()
+				1: _ghost.paused = not _ghost.paused
+				2: _ghost.cycle_speed()
+				3: _ghost.restart()
+			_refresh()
+			return
+		_choice = index
+	await select()
 
 func select() -> void:
 	if _walls.opened:
 		_walls.select(_wall_space_ok())
 		if not _walls.opened:
-			_label.show()
+			_controls_open = true
 			if _restore_ghost:
 				_ghost.show()
 			_refresh()
@@ -220,12 +290,12 @@ func select() -> void:
 			return
 		_restore_ghost = _ghost.visible
 		_ghost.hide()
-		_label.hide()
 		_walls.open(camera, xr != null)
 		return
 	if not connected and action != "Close clinic":
 		return
 	_pending = true
+	_refresh()
 	match action:
 		"Prepare clinic", "Practise again":
 			await _prepare()
@@ -257,6 +327,7 @@ func select() -> void:
 		"Close clinic":
 			opened = false
 			hide()
+			closed.emit()
 		_:
 			if action.begins_with("Targets · "):
 				_use_targets = not _use_targets
@@ -363,6 +434,9 @@ func _process(delta: float) -> void:
 			preview.y = -0.19 if Input.is_physical_key_pressed(KEY_DOWN) else 0.0
 		_walls.step(delta, _wall_space_ok(), preview)
 		return
+	if opened and xr != null and _phase() in ["preparing", "ready"] and Time.get_ticks_msec() >= _next_readiness_ms:
+		_next_readiness_ms = Time.get_ticks_msec() + 200
+		_refresh()
 	if (opened and connected and _phase() == "ready" and _use_targets and aligned and xr_focused
 			and is_instance_valid(right_hand) and right_hand.get_has_tracking_data()):
 		var point := right_hand.global_position
@@ -479,7 +553,7 @@ func _load_ghost(id: String, review: Dictionary) -> bool:
 	var show_path: bool = height.get("grade") in ["A", "B"] and height.get("value") != null and height.get("unit") == "m"
 	if not _ghost.show_clip(motion, show_path):
 		return false
-	_reference = "Recorded reference · ½ speed · practise in place\n" + ("Peak foot height  " + _metric(height) if show_path else "Spatial height unavailable")
+	_reference = ("Peak foot height  " + _metric(height) if show_path else "Spatial height unavailable")
 	_notice = ""
 	return true
 
@@ -498,18 +572,46 @@ func _metric(m: Variant) -> String:
 	return "%.0f %s [%s]" % [float(value), m.get("unit", ""), m.get("grade", "")]
 
 func _refresh() -> void:
-	var lines: Array[String] = ["TAEKWONDO CLINIC"]
+	if not opened:
+		return
+	if _walls.opened or xr == null or _phase() not in ["preparing", "ready"]:
+		panel.play_area.hide()
+	if _walls.opened:
+		var moving := _walls.phase in ["running", "countdown"]
+		panel.visible = _controls_open and (not moving or _walls.controls_requested)
+		_hud.hide()
+		if not panel.visible:
+			return
+		var wall_options := _walls._menu()
+		wall_options.append("Recenter")
+		panel.present("Ghost Walls", _walls.control_status(), _walls.control_details(), wall_options,
+			-1 if xr != null else _walls._choice, false, _walls.phase == "paused")
+		return
+	panel.visible = _controls_open
+	_hud.visible = not _controls_open
+	var lines: Array[String] = []
+	var status := _tracking
+	var stop_practice := not connected or status == "Tracking unavailable"
+	var warning := status not in ["Tracking ready", "Simulated tracking"]
+	var progress := ""
+	var time_remaining := ""
 	if not connected:
-		lines.append("Engine connection needed. Stop practice.")
+		status = "Engine disconnected · stop practice"
+		warning = true
 	if not _state.is_empty():
 		var current: Dictionary = _state.get("current", {}) if _state.get("current") is Dictionary else {}
 		var counts: Dictionary = current.get("counts", {})
 		var position: Dictionary = _state.get("position", {})
 		lines.append("%s · %s · %s" % [TITLES[_kick], _side, _phase()])
-		lines.append("Set %d / %d · Rep %d / 4" % [int(position.get("set") if position.get("set") != null else 0), _sets, int(counts.get("done", 0))])
+		progress = "Set %d / %d   ·   Reps %d / 4" % [int(position.get("set") if position.get("set") != null else 0), _sets, int(counts.get("done", 0))]
+		lines.append(progress)
+		if current.get("sub_state") == "tracking_lost":
+			status = "Exercise tracking lost · stop practice"
+			stop_practice = true
 		var timer: Variant = current.get("timer")
 		if timer is Dictionary and timer.get("duration_ms") != null:
-			lines.append("%d s remaining" % maxi(0, ceili(float(timer["duration_ms"] - timer["elapsed_ms"]) / 1000.0)))
+			time_remaining = "%d s remaining" % maxi(0, ceili(float(timer["duration_ms"] - timer["elapsed_ms"]) / 1000.0))
+			lines.append(time_remaining)
 		if _phase() in ["active", "resting"]:
 			var rep: Variant = _state.get("last_rep")
 			if rep is Dictionary:
@@ -524,16 +626,34 @@ func _refresh() -> void:
 						lines.append(str(reason.get("message", "")))
 			for note in _definition.get("safety", {}).get("notes", []):
 				lines.append(_text(str(note)))
+			var radius := float(_definition.get("safety", {}).get("min_clear_radius_m", 2.0))
+			if xr != null:
+				var head_tracked := xr_focused and xr.get_tracking_status() == XRInterface.XR_NORMAL_TRACKING
+				var boundary := xr.get_play_area()
+				var clear := head_tracked and circle_fits(boundary, _head_position(), radius + 0.30)
+				panel.play_area.present(boundary, _head_position(), radius + 0.30, clear)
+				lines.append("Circle · needed space     Outline · headset boundary")
+				lines.append("Headset tracking · " + ("ready" if head_tracked else "unavailable"))
+				lines.append("Headset boundary · " + ("space reported" if clear else "%.1f m clear radius needed" % (radius + 0.30)))
+				lines.append("Room alignment · " + ("calibrated" if aligned else "assumed"))
+			else:
+				lines.append("Desktop preview · physical clearance is unchecked")
 			lines.append("Check your floor, cables and surroundings before starting.")
 			if _use_targets and _phase() == "ready":
 				lines.append("Hold the right controller where you want the ring.")
-				lines.append("Use left Y to confirm. Practise in clear air.")
+				lines.append("Point and select with the left controller. Practise in clear air.")
+	if _phase() == "setup":
+		if _athletes.is_empty():
+			lines.append("Create an athlete in Studio or mobile Admin to prepare a clinic.")
+		lines.append("Clear the floor and check overhead for cables and obstacles before practising.")
+		if _use_targets and not aligned:
+			lines.append("Align to the calibration board before placing a target.")
 	if not _cue.is_empty():
 		lines.append("Focus · " + _cue)
 	if _target_reaches > 0:
 		lines.append("Targets reached · %d" % _target_reaches)
 	if not _reference.is_empty() and _ghost.visible:
-		lines.append(_reference)
+		lines.append("Recorded reference · %s×\n%s" % [_ghost.speed(), _reference])
 	if _review.get("second") is Dictionary:
 		lines.append("FIRST COMPLETED ATTEMPT · SET %d / SET %d" % [
 			int(_review["first"]["set_index"]), int(_review["second"]["set_index"])
@@ -545,9 +665,21 @@ func _refresh() -> void:
 				lines.append("  Comparison unavailable")
 	if not _notice.is_empty():
 		lines.append(_notice)
-	lines.append("")
-	var menu := _menu()
-	for i in range(menu.size()):
-		lines.append(("›  " if i == mini(_choice, menu.size() - 1) else "     ") + menu[i])
-	lines.append("A/X · next    B/Y · select" if xr != null else "Tab · next    Enter · select")
-	_label.text = "\n".join(lines)
+	var options := _menu()
+	options.append("Recenter")
+	if _ghost.visible and _phase() in ["setup", "completed", "aborted"]:
+		options.append_array(["Resume replay" if _ghost.paused else "Pause replay", "Cycle replay speed", "Restart replay"])
+	panel.present("Taekwondo clinic", status, lines, options, -1 if xr != null else _choice, _pending, warning, stop_practice)
+	if _hud.visible:
+		var cue := _cue
+		if stop_practice:
+			cue = status
+		elif not _notice.is_empty() and not _space_confirmed:
+			cue = _notice
+		elif _phase() == "countdown":
+			cue = time_remaining if not time_remaining.is_empty() else "Get ready"
+		elif warning and cue.is_empty():
+			cue = status
+		var hud_lines := [TITLES[_kick] + " · " + _side, progress, cue]
+		_hud.text = "\n".join(hud_lines).strip_edges()
+		_hud.modulate = SpatialPanel.STOP if stop_practice else SpatialPanel.INK

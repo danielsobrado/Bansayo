@@ -2,6 +2,7 @@ extends Node3D
 
 const INK := Color(0.20, 0.95, 0.87)
 const SPARK := Color(1.0, 0.79, 0.43)
+var audio_enabled := true
 var target_id := ""
 var _rings := Node3D.new()
 var _burst := Node3D.new()
@@ -95,7 +96,8 @@ func reach(id: String) -> bool:
 	_burst.scale = Vector3.ONE
 	_flash.albedo_color = SPARK
 	_burst.show()
-	_sound.play()
+	if audio_enabled:
+		_sound.play()
 	_effect = create_tween().set_parallel(true)
 	_effect.tween_property(_burst, "scale", Vector3.ONE * 2.3, 0.26).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	_effect.tween_property(_flash, "albedo_color", Color(SPARK, 0.0), 0.26)

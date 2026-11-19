@@ -1,4 +1,5 @@
 extends SceneTree
+const AvatarRenderer = preload("res://scripts/avatar_renderer.gd")
 const PoseBuffer = preload("res://scripts/pose_buffer.gd")
 const MovementCounter = preload("res://scripts/movement_counter.gd")
 const Clinic = preload("res://scripts/clinic.gd")
@@ -51,11 +52,27 @@ func _check_target_effect() -> void:
 	assert(not target._burst.visible)
 	target.clear()
 	assert(not target.visible and not target._sound.playing)
-	if not _check_ghost_walls():
+	if not _check_avatar() or not _check_ghost_walls():
 		quit(1)
 		return
 	print("Bansayo Godot contract smoke passed")
 	quit(0)
+
+func _check_avatar() -> bool:
+	var avatar: Node3D = AvatarRenderer.new()
+	root.add_child(avatar)
+	if not avatar.has_method("set_mannequin"):
+		push_error("The avatar renderer needs a mannequin mode.")
+		return false
+	avatar.set_mannequin(true)
+	avatar.build({"rev": 1, "segments": [{"id": "left_foot", "tail_m": [0, -0.07, 0.19]}]})
+	var foot := {"position_m": [0, 0, 0], "rotation": [0, 0, 0, 1], "provenance": "inferred"}
+	avatar.apply_pose({"skeleton_rev": 1, "segments": [foot]})
+	assert(avatar._segments[0].visible and avatar._meshes[0].scale.is_equal_approx(Vector3.ONE * 0.06))
+	avatar.apply_pose({"skeleton_rev": 1, "segments": []})
+	assert(not avatar._segments[0].visible)
+	avatar.queue_free()
+	return true
 
 func _wall_ticks(walls: Node3D, seconds: float, offset := Vector3.ZERO) -> void:
 	for i in range(roundi(seconds / 0.05)):
@@ -76,7 +93,7 @@ func _check_ghost_walls() -> bool:
 	clinic.engine_state({})
 	clinic.select()
 	var walls := clinic._walls
-	assert(walls.opened and not clinic._label.visible)
+	assert(walls.opened and clinic.panel.visible)
 	walls.select(false)
 	assert(walls.phase == "ready")
 	walls.select(true)
@@ -113,7 +130,7 @@ func _check_ghost_walls() -> bool:
 	assert(walls.phase == "ready" and walls.cleared == 0)
 	clinic.next()
 	clinic.select()
-	assert(not walls.opened and clinic._label.visible)
+	assert(not walls.opened and clinic.panel.visible)
 	clinic._session = "current"
 	clinic.stream_state_changed({"session_id": "current", "phase": "ready", "rev": 1})
 	assert(clinic._menu().has("Confirm clear area & start"))

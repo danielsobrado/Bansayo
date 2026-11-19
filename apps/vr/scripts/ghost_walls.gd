@@ -1,4 +1,5 @@
 extends Node3D
+signal controls_changed
 
 const GLASS = preload("res://scripts/ghost_wall.gdshader")
 const ClinicTarget = preload("res://scripts/clinic_target.gd")
@@ -13,7 +14,11 @@ const SIDE_EDGE := 0.08
 const DUCK_EDGE := -0.055
 const CLEARANCE := 0.08
 
+var audio_enabled := true
 var opened := false
+var controls_requested := false
+var _control_status := ""
+var _control_details: Array[String] = []
 var phase := "ready"
 var cleared := 0
 var assessed := 0
@@ -85,6 +90,7 @@ func _anchor() -> void:
 	global_transform = Transform3D(Basis.looking_at(forward.normalized(), Vector3.UP), _camera.global_position)
 
 func _reset() -> void:
+	controls_requested = false
 	phase = "ready"
 	cleared = 0
 	assessed = 0
@@ -133,6 +139,7 @@ func select(space_ok: bool) -> void:
 	_refresh()
 
 func _countdown(next_phase: String) -> void:
+	controls_requested = false
 	phase = "countdown"
 	_clock = 3.0
 	_choice = 0
@@ -215,7 +222,8 @@ func _start_wall() -> void:
 	_result = ""
 	_wall.show()
 	_sound.pitch_scale = 0.65
-	_sound.play()
+	if audio_enabled:
+		_sound.play()
 
 func _draw_wall(head: Vector3) -> void:
 	_wall.position.z = wall_depth(_wall_clock)
@@ -232,7 +240,8 @@ func _draw_wall(head: Vector3) -> void:
 			cleared += 1
 			_result = "CLEAR"
 			_sound.pitch_scale = 1.25
-			_sound.play()
+			if audio_enabled:
+				_sound.play()
 		else:
 			_result = "CLIPPED"
 	_old_head = head
@@ -253,6 +262,9 @@ func _finish_wall() -> void:
 	else:
 		phase = "complete"
 		_choice = 0
+
+func refresh_controls() -> void:
+	_refresh()
 
 func _refresh() -> void:
 	var cue := "GHOST WALLS"
@@ -283,18 +295,25 @@ func _refresh() -> void:
 		lines.append("%d / %d cleared" % [cleared, assessed])
 	if not _notice.is_empty():
 		lines.append(_notice)
-	lines.append("")
-	var options := _menu()
-	for i in range(options.size()):
-		lines.append(("›  " if i == _choice else "    ") + options[i])
-	lines.append("A/X · next    B/Y · select" if native else "Tab / Enter · menu    ← → ↓ · preview body")
+	_control_status = cue
+	_control_details = lines
+	controls_changed.emit()
 	if _cue.text != cue:
 		_cue.text = cue
+	var show_cue := phase in ["running", "countdown"] and not controls_requested
+	_cue.visible = show_cue
+	_dashboard.visible = show_cue
 	_cue.modulate = color
 	_cue.position.x = guide.x
 	_cue.position.y = 0.48 + guide.y
 	_dashboard.position.x = guide.x
 	_dashboard.position.y = -0.02 + guide.y
-	var text := "\n".join(PackedStringArray(lines))
+	var text := "\n".join(PackedStringArray(lines)) if phase in ["running", "countdown"] else ""
 	if _dashboard.text != text:
 		_dashboard.text = text
+
+func control_status() -> String:
+	return _control_status
+
+func control_details() -> Array[String]:
+	return _control_details

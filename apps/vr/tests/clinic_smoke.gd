@@ -21,10 +21,23 @@ func _wait_phase(phase: String, seconds: int) -> bool:
 	return false
 
 func _choose(label: String) -> void:
-	room._clinic._choice = room._clinic._menu().find(label)
-	if not _check(room._clinic._choice >= 0, "Missing clinic action " + label):
+	var clinic = room._clinic
+	var index: int = clinic.panel._labels.find(label)
+	if not _check(index >= 0, "Missing clinic action " + label):
 		return
-	await room._clinic.select()
+	var panel = clinic.panel
+	panel.show_choice(index)
+	await process_frame
+	var point: Vector3 = panel.button_world_point(index)
+	var origin: Vector3 = clinic.camera.global_position
+	var pixel: Vector2 = panel.intersect_ray(origin, origin.direction_to(point))
+	if not _check(panel.press_at(pixel), "Ray could not select " + label):
+		return
+	for i in range(120):
+		if not clinic._pending:
+			return
+		await create_timer(0.1).timeout
+	_check(false, "Clinic action did not finish " + label)
 
 func _run() -> void:
 	room = Room.instantiate()
@@ -42,7 +55,16 @@ func _run() -> void:
 	await actions.request(POST, "/athletes", JSON.stringify({"id": athlete, "display_name": "XR Test", "height_m": 1.75, "default_stance": "orthodox"}))
 	await actions.request(POST, "/athletes/" + athlete + "/consent", JSON.stringify({"motion_data": true}))
 	await actions.request(PUT, "/simulation", JSON.stringify({"motion": "standing", "speed": 1}))
-	await room._clinic.show_menu()
+	await process_frame
+	var setup = room._panel.panel
+	var from: Vector3 = room._dev.camera.global_position
+	var point: Vector3 = setup.button_world_point(0)
+	if not _check(setup.press_at(setup.intersect_ray(from, from.direction_to(point))), "Ray could not open clinic"):
+		return
+	for i in range(120):
+		if not room._clinic._pending:
+			break
+		await create_timer(0.1).timeout
 	for i in range(room._clinic._athletes.size()):
 		if room._clinic._athletes[i].get("id") == athlete:
 			room._clinic._athlete = i
@@ -57,6 +79,15 @@ func _run() -> void:
 	await _choose("Confirm clear area & start")
 	if not _check(await _wait_phase("active", 12), "Clinic did not start"):
 		return
+	if not _check(not room._clinic.panel.visible and room._clinic._hud.visible, "Active clinic should show the compact HUD"):
+		return
+	room._toggle_menu()
+	await _choose("Pause")
+	if not _check(await _wait_phase("paused", 8), "Clinic did not pause"):
+		return
+	await _choose("Confirm clear area & resume")
+	if not _check(await _wait_phase("active", 12), "Clinic did not resume"):
+		return
 	await actions.request(PUT, "/simulation", JSON.stringify({"motion": "roundhouse_kick", "speed": 1}))
 	if not _check(await _wait_phase("resting", 95), "First set did not finish"):
 		return
@@ -70,6 +101,13 @@ func _run() -> void:
 	await _choose("Review sets & replay ghost")
 	if not _check(room._clinic._review.get("second") is Dictionary and room._clinic._ghost.visible, "Set comparison or ghost is missing"):
 		return
+	await _choose("Pause replay")
+	if not _check(room._clinic._ghost.paused, "Review ghost did not pause"):
+		return
+	await _choose("Cycle replay speed")
+	if not _check(is_equal_approx(room._clinic._ghost.speed(), 0.25), "Review ghost speed did not change"):
+		return
+	await _choose("Resume replay")
 	var previous: String = room._clinic._session
 	await _choose("Practise again")
 	if not _check(room._clinic._session != previous and await _wait_phase("ready", 12), "Repeat clinic did not prepare"):

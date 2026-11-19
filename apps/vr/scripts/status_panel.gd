@@ -1,12 +1,16 @@
 extends Node3D
-# World-space panel: connection, tracking quality, camera status, live joint angles with session
-# peaks, repetition counts and the last action. Every number comes from the engine stream.
+## Setup and on-demand tracking diagnostics.
+const SpatialPanel = preload("res://scripts/spatial_panel.gd")
 const MovementCounter = preload("res://scripts/movement_counter.gd")
 const READOUTS := ["left_knee_flexion", "right_knee_flexion", "left_hip_flexion", "right_hip_flexion", "trunk_forward_lean"]
 var counter := MovementCounter.new()
 var alignment_text := "XR alignment: assumed identity"
 var action_text := ""
-var _label := Label3D.new()
+var panel := SpatialPanel.new()
+var diagnostics := false
+var preferences: Array[String] = []
+var _tracking_state := ""
+var _simulated := false
 var _connected := false
 var _connection_message := "Engine not connected"
 var _state: Dictionary = {}
@@ -18,13 +22,7 @@ var _gap := true
 var _next_refresh_ms := 0
 
 func _ready() -> void:
-	_label.font_size = 32
-	_label.pixel_size = 0.0016
-	_label.outline_size = 4
-	_label.no_depth_test = true
-	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	add_child(_label)
+	add_child(panel)
 	_refresh()
 
 func connection(connected: bool, message: String) -> void:
@@ -45,6 +43,8 @@ func state_changed(state: Dictionary) -> void:
 
 func frame_received(frame: Dictionary) -> void:
 	_frame = frame
+	_tracking_state = str(frame.get("quality", {}).get("state", "unavailable"))
+	_simulated = "simulated" in frame.get("origins", [])
 	var angles := {}
 	var joints: Array = frame.get("joints", [])
 	for i in range(mini(joints.size(), _joint_ids.size())):
@@ -79,8 +79,42 @@ func set_action(text: String) -> void:
 	action_text = text
 	_refresh()
 
+func tracking_label() -> String:
+	if not _connected:
+		return "Engine disconnected"
+	if _gap:
+		return "Tracking unavailable"
+	if _tracking_state == "tracking":
+		return "Simulated tracking" if _simulated else "Tracking ready"
+	if _tracking_state == "degraded":
+		return "Tracking limited"
+	return "Tracking " + _tracking_state if not _tracking_state.is_empty() else "Waiting for tracking"
+
+func set_preferences(options: Array[String]) -> void:
+	preferences = options
+	_refresh()
+
+func set_diagnostics(enabled: bool) -> void:
+	diagnostics = enabled
+	_refresh()
+
 func _refresh() -> void:
-	var lines: Array[String] = ["BANSAYO · TRAINING ROOM", _connection_message]
+	var lines: Array[String] = [_connection_message]
+	if not preferences.is_empty():
+		lines = ["Set your panel size and height, choose an avatar and room, and control feedback sounds."]
+		if not action_text.is_empty():
+			lines.append(action_text)
+		panel.present("Preferences", "", lines, preferences, -1, false)
+		return
+	if not diagnostics:
+		lines.append(alignment_text)
+		lines.append_array(_camera_lines())
+		if not action_text.is_empty():
+			lines.append(action_text)
+		var options: Array[String] = ["Taekwondo clinic", "Tracking diagnostics", "Preferences", "Recenter", "Dismiss"]
+		var status := tracking_label()
+		panel.present("Bansayo", status, lines, options, -1, false, status not in ["Tracking ready", "Simulated tracking"], not _connected)
+		return
 	if _connected and not _frame.is_empty():
 		var origins: Array = _frame.get("origins", [])
 		var origin_text := ", ".join(PackedStringArray(origins)).to_upper()
@@ -96,7 +130,7 @@ func _refresh() -> void:
 			lines.append("No pose data · stream gap or pose unavailable")
 		lines.append("")
 		lines.append_array(_joint_lines())
-		lines.append("")
+		lines.append("Avatar · white measured, cyan derived, violet inferred. Missing segments are hidden.")
 		lines.append("Squats %d · Kicks L %d / R %d" % [counter.squats, counter.kicks["left"], counter.kicks["right"]])
 		var ankle := "—" if counter.max_ankle_height_m <= 0.0 else "%.2f m" % counter.max_ankle_height_m
 		var pelvis := "—" if counter.min_pelvis_height_m == INF else "%.2f m" % counter.min_pelvis_height_m
@@ -108,7 +142,9 @@ func _refresh() -> void:
 	if not action_text.is_empty():
 		lines.append(action_text)
 	lines.append("50 ms interpolation buffer · joint angles not validated")
-	_label.text = "\n".join(PackedStringArray(lines))
+	var options: Array[String] = ["Back to setup", "Record / stop", "Replay / live", "Reset diagnostic counts", "Recenter"]
+	var status := tracking_label()
+	panel.present("Tracking diagnostics", status, lines, options, -1, false, status not in ["Tracking ready", "Simulated tracking"], not _connected)
 
 func _camera_lines() -> Array[String]:
 	var out: Array[String] = []

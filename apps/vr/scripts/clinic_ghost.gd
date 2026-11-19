@@ -1,13 +1,16 @@
 extends Node3D
 # Recorded reference on its own display stage, independent of the athlete's physical position.
-const DebugSkeleton = preload("res://scripts/debug_skeleton.gd")
+const AvatarRenderer = preload("res://scripts/avatar_renderer.gd")
 const PoseBuffer = preload("res://scripts/pose_buffer.gd")
-var _body := DebugSkeleton.new()
+var _body := AvatarRenderer.new()
 var _path := MeshInstance3D.new()
 var _marker := MeshInstance3D.new()
 var _clip: Dictionary = {}
 var _root := Vector3.ZERO
-var _started := 0
+const SPEEDS := [0.5, 0.25, 1.0]
+var _playhead_us := 0.0
+var _speed_index := 0
+var paused := false
 var _index := 0
 
 func _ready() -> void:
@@ -40,8 +43,10 @@ func show_clip(clip: Dictionary, height_available: bool) -> bool:
 	_clip = clip
 	_root = PoseBuffer.vector(samples[0]["root_m"])
 	_root.y = 0.0
-	_started = Time.get_ticks_usec()
+	_playhead_us = 0.0
 	_index = 0
+	_speed_index = 0
+	paused = false
 	var points: Array = []
 	for path in clip.get("paths", []):
 		points = path.get("points_m", [])
@@ -64,13 +69,24 @@ func show_clip(clip: Dictionary, height_available: bool) -> bool:
 	show()
 	return true
 
-func _process(_delta: float) -> void:
+func speed() -> float:
+	return SPEEDS[_speed_index]
+
+func cycle_speed() -> void:
+	_speed_index = (_speed_index + 1) % SPEEDS.size()
+
+func restart() -> void:
+	_playhead_us = 0.0
+
+func _process(delta: float) -> void:
 	if _clip.is_empty() or not visible:
 		return
 	var frames: Array = _clip["samples"]
 	var start := int(frames[0]["t_us"])
 	var duration := maxi(1, int(frames.back()["t_us"]) - start)
-	var at := start + posmod(int((Time.get_ticks_usec() - _started) * 0.5), duration)
+	if not paused:
+		_playhead_us = fposmod(_playhead_us + delta * speed() * 1000000.0, float(duration))
+	var at := start + int(_playhead_us)
 	if at < int(frames[_index]["t_us"]):
 		_index = 0
 	while _index + 1 < frames.size() and int(frames[_index + 1]["t_us"]) <= at:
