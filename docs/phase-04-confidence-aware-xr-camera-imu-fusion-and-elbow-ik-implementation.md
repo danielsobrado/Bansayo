@@ -2,7 +2,7 @@
 
 **Status:** Implementation specification, NOT implementation code.  
 **Date:** 2026-11-20.  
-**Target repository:** https://github.com/danielsobrado/Bansayo — implement directly on \`main\`.  
+**Target repository:** https://github.com/danielsobrado/Bansayo — implement directly on `main`.  
 **Target source baseline inspected:** [38e999487b3ed609a7a78b592ee133966b2f55c3](https://github.com/danielsobrado/Bansayo/commit/38e999487b3ed609a7a78b592ee133966b2f55c3).  
 **Reference source baseline:** [FullBodyPoseEstimation@be895709](https://github.com/maceq687/FullBodyPoseEstimation/commit/be895709c0bf86d35f64eb2cd5d2ffb4c6838593).  
 **Prerequisites:** [Phase 01 — XR observation ingest](phase-01-openxr-observation-pipeline-implementation.md), [Phase 02 — clock and room alignment](phase-02-openxr-room-alignment-and-time-synchronization-implementation.md), and [Phase 03 — body proportions/grip-to-wrist calibration](phase-03-body-proportions-t-pose-and-controller-wrist-calibration-implementation.md).  
@@ -92,9 +92,9 @@ All below pinned to commit **38e9994**. If later main changes, explicitly re-map
 ### 1.3 Prerequisite symbols NOT present on inspected main
 
 These are **planned by the earlier documents**; verify actual names after those phases are implemented:
-- Phase 01: \`ObservationData::RigidPose\`, \`ObservationKind::RigidPose\`, \`DeviceKind::XrTrackedDevice\`, \`SensorCapability::RigidPose\`, and XR-HMD, XR-LEFT-GRIP, XR-RIGHT-GRIP device streams.
-- Phase 02: \`XrAlignmentData\` with \`q_xr_stage_from_world\`, \`t_xr_stage_from_world_m\`, stage session/generation/room/fingerprint, and \`TimeSyncStatus\` for current mapped XR observations.
-- Phase 03: \`BodyProportionsData\` measured individual left/right upper_arm and forearm lengths, \`XrGripWristOffsetData.r_grip_from_wrist_m\`, athlete+controller profile identity and validity.
+- Phase 01: `ObservationData::RigidPose`, `ObservationKind::RigidPose`, `DeviceKind::XrTrackedDevice`, `SensorCapability::RigidPose`, and XR-HMD, XR-LEFT-GRIP, XR-RIGHT-GRIP device streams.
+- Phase 02: `XrAlignmentData` with `q_xr_stage_from_world`, `t_xr_stage_from_world_m`, stage session/generation/room/fingerprint, and `TimeSyncStatus` for current mapped XR observations.
+- Phase 03: `BodyProportionsData` measured individual left/right upper_arm and forearm lengths, `XrGripWristOffsetData.r_grip_from_wrist_m`, athlete+controller profile identity and validity.
 - The code references in §1.2 identify **existing** modules; no false references to planned future code are used.
 
 ## 2. Architecture: one solver, a bounded optional arm stage
@@ -136,7 +136,7 @@ NO new camera solver, XR transport, rig, database, full-body optimizer or render
 1. **World metres:** Convert XR grip stage pose to verified camera world **before** IK. No visual/world double transform.
 2. **Active person:** Body and wrist offset profiles must both match selected athlete and the current supported skeleton model. No profile sharing by display name.
 3. **Current rig:** Stage session/generation, room, camera fingerprint, physical controller/grip revision match current Phase 02/03 evidence. Mismatches hard fail.
-4. **One time:** All constraints use existing session-clock \`t_ref\`; compare against camera \`t_cam\` and XR bracketing timestamps. No receive-time-only wrist IK.
+4. **One time:** All constraints use existing session-clock `t_ref`; compare against camera `t_cam` and XR bracketing timestamps. No receive-time-only wrist IK.
 5. **One anatomy:** Fetch measured a/b from **current Skeleton segments**, never approximate from HMD height, controller span or a default ratio while claiming calibrated.
 6. **One joint tree:** Update local arm world rotations, compute final positions **once** via current FK; no separate phantom elbows.
 7. **No imaginary twist:** Bone directions fix swing; axial twist remains from real mounted IMU if valid, otherwise inferred.
@@ -148,16 +148,16 @@ NO new camera solver, XR transport, rig, database, full-body optimizer or render
 
 ### 3.1 New shared identities (additive protocol-v1)
 
-- \`MethodId::XrConstrainedIk\` in \`crates/bansayo-contracts/src/motion.rs\`: a calibrated two-link swing constraint using a trusted XR wrist target. It does **not** imply the anatomical wrist quaternion is measured.
-- \`FeatureId::XrArmConstraints\` in \`crates/bansayo-contracts/src/quality.rs\`: independent status for optional arms, not full-body tracking.
-- Reuse existing \`SegmentPose\` fields: \`rotation\`, \`position_m\`, \`provenance\`, \`confidence\`, \`sources\`, \`method\`, \`t_obs_us\`.
-- Reuse existing \`BodyState.axis/twist\`, \`Evidence\`, \`TrackingQuality.reasons\` and \`CalibrationState\`. Do **not** modify \`ServerMessage::Frame\`, \`protocol_version=1\` or existing enum serialization names.
+- `MethodId::XrConstrainedIk` in `crates/bansayo-contracts/src/motion.rs`: a calibrated two-link swing constraint using a trusted XR wrist target. It does **not** imply the anatomical wrist quaternion is measured.
+- `FeatureId::XrArmConstraints` in `crates/bansayo-contracts/src/quality.rs`: independent status for optional arms, not full-body tracking.
+- Reuse existing `SegmentPose` fields: `rotation`, `position_m`, `provenance`, `confidence`, `sources`, `method`, `t_obs_us`.
+- Reuse existing `BodyState.axis/twist`, `Evidence`, `TrackingQuality.reasons` and `CalibrationState`. Do **not** modify `ServerMessage::Frame`, `protocol_version=1` or existing enum serialization names.
 
-**Source identity:** \`XrDevice\` remains a direct XR tracked-device method, not an anatomical elbow. \`XrConstrainedIk\` means geometrically derived bone direction. \`Provenance::Derived\` requires measured, valid input constraints and a trustworthy bend plane; \`Provenance::Inferred\` is required for an anatomical/prior-only elbow plane.
+**Source identity:** `XrDevice` remains a direct XR tracked-device method, not an anatomical elbow. `XrConstrainedIk` means geometrically derived bone direction. `Provenance::Derived` requires measured, valid input constraints and a trustworthy bend plane; `Provenance::Inferred` is required for an anatomical/prior-only elbow plane.
 
 ### 3.2 Planned small files
 
-**New \`crates/bansayo-engine/src/pipeline/xr_pose_align.rs\`:**
+**New `crates/bansayo-engine/src/pipeline/xr_pose_align.rs`:**
 
 ~~~rust
 pub struct AlignedXrPose {
@@ -173,9 +173,9 @@ pub fn rigid_pose_at(
 ) -> Option<AlignedXrPose>;
 ~~~
 
-Implementation may use an iterator instead of slice, but must be pure, accept **only** phase-01 atomic XR poses, validate same epoch, SLERP using existing \`align::slerp\`, LERP translation, and **never extrapolate**.
+Implementation may use an iterator instead of slice, but must be pure, accept **only** phase-01 atomic XR poses, validate same epoch, SLERP using existing `align::slerp`, LERP translation, and **never extrapolate**.
 
-**New \`pipeline/xr_wrist.rs\`:**
+**New `pipeline/xr_wrist.rs`:**
 
 ~~~rust
 pub struct WristTarget {
@@ -203,39 +203,39 @@ R_world_from_grip = R_world_from_stage*R_stage_from_grip
 p_world_wrist = p_world_grip + R_world_from_grip*r_grip_from_wrist
 ~~~
 
-The Phase 02 \`r_grip_from_tip\` physical pointer is **NOT** the Phase 03 \`r_grip_from_wrist\`. No finger rotation, palm normal or pronation offset is inferred.
+The Phase 02 `r_grip_from_tip` physical pointer is **NOT** the Phase 03 `r_grip_from_wrist`. No finger rotation, palm normal or pronation offset is inferred.
 
-**New \`pipeline/arm_ik.rs\`:** pure analytic two-link solver and world rotations with no registry/network dependencies.
+**New `pipeline/arm_ik.rs`:** pure analytic two-link solver and world rotations with no registry/network dependencies.
 
-**New \`pipeline/arm_evidence.rs\`:** camera-root/shoulder/elbow QA, athlete/profile gate and per-arm IMU/XR arbitration.
+**New `pipeline/arm_evidence.rs`:** camera-root/shoulder/elbow QA, athlete/profile gate and per-arm IMU/XR arbitration.
 
-**New \`pipeline/arm_state.rs\`:** deterministic bounded per-arm mode and bend-plane continuity, with reset key.
+**New `pipeline/arm_state.rs`:** deterministic bounded per-arm mode and bend-plane continuity, with reset key.
 
-\`pipeline/fusion.rs\` extends the current \`FusionState\` with **two fixed arm-state slots**. \`pipeline/solve.rs\` remains orchestrator and calls these tiny pure helpers **after baseline rotations/root** and **before FK**. Keep files small; split a >250-line new module by responsibility rather than creating a gigantic new solve().
+`pipeline/fusion.rs` extends the current `FusionState` with **two fixed arm-state slots**. `pipeline/solve.rs` remains orchestrator and calls these tiny pure helpers **after baseline rotations/root** and **before FK**. Keep files small; split a >250-line new module by responsibility rather than creating a gigantic new solve().
 
 ## 4. Temporal and spatial prerequisites (fail closed)
 
 ### 4.1 One existing reconstruction time
 
-Current \`solve.rs\` uses \`t_ref = t_imu.or(t_cam)\`. **Preserve this logic when fusion.xr_arms.enabled=false**.
+Current `solve.rs` uses `t_ref = t_imu.or(t_cam)`. **Preserve this logic when fusion.xr_arms.enabled=false**.
 
 When enabled:
-1. If \`tracking.mode\` is not \`hybrid_auto\`, skip XR constraints; \`camera_only\` and \`imu_only\` retain their established semantics.
-2. If no \`t_ref\`, skip all arm IK. Phase 04 does not bootstrap a whole-body root from OpenXR.
+1. If `tracking.mode` is not `hybrid_auto`, skip XR constraints; `camera_only` and `imu_only` retain their established semantics.
+2. If no `t_ref`, skip all arm IK. Phase 04 does not bootstrap a whole-body root from OpenXR.
 3. Require **fresh camera root measured on this tick**, not previous camera anchor, inferred root or floor-contact root. Never shift pelvis to satisfy wrist.
-4. Require camera observation \`t_cam\` within **20 ms** of \`t_ref\` for root/shoulder and optical bend-plane evidence. Otherwise skip arm IK entirely. This prevents applying a new wrist against stale shoulder/root pose.
-5. Require a current valid Phase 02 \`T_stage_from_world\` and matching live stage identity, room and camera fingerprint.
-6. Require Phase 02 four-timestamp estimator \`settled=true\`, current uncertainty <=5000us, XR \`TimeQuality::Estimated\` (or externally validated Synchronized). \`ReceiveTime\` **is insufficient** for arm IK during fast motion.
-7. Retrieve each XR grip RigidPose **bracketing** \`t_ref\`; maximum bracket 40ms, no extrapolation. Require tracking valid and no device epoch change. Maximum sample age 100ms.
+4. Require camera observation `t_cam` within **20 ms** of `t_ref` for root/shoulder and optical bend-plane evidence. Otherwise skip arm IK entirely. This prevents applying a new wrist against stale shoulder/root pose.
+5. Require a current valid Phase 02 `T_stage_from_world` and matching live stage identity, room and camera fingerprint.
+6. Require Phase 02 four-timestamp estimator `settled=true`, current uncertainty <=5000us, XR `TimeQuality::Estimated` (or externally validated Synchronized). `ReceiveTime` **is insufficient** for arm IK during fast motion.
+7. Retrieve each XR grip RigidPose **bracketing** `t_ref`; maximum bracket 40ms, no extrapolation. Require tracking valid and no device epoch change. Maximum sample age 100ms.
 8. Require an athlete-matched **measured** upper-arm and forearm pair and a valid, controller-matched grip→wrist calibration. Assumed lengths are allowed for the **legacy model only**, not marked as a measured XR IK constraint.
 9. Require finite unit quaternion, finite position within Phase 01 configured bounds and matching grip side (XR-LEFT-GRIP with left arm, XR-RIGHT-GRIP with right).
 10. If the real camera's exposure timestamp is not verifiably available, label temporal accuracy **unverified** in hardware QA even if engine clock skew <20ms.
 
 ### 4.2 RigidPose ring buffer
 
-Phase 01 adds \`ObservationKind::RigidPose\`, but latest accepted pose alone cannot bracket time.
+Phase 01 adds `ObservationKind::RigidPose`, but latest accepted pose alone cannot bracket time.
 
-In \`registry/mod.rs::Entry\` add \`rigid_poses: VecDeque<SensorObservation>\` capacity **64**. Only XR device descriptors with \`SensorCapability::RigidPose\` can use it. Accept sorted monotonic \`t_us\` and \`seq\` under current Registry rules. On \`DeviceLink(false)\`, \`DeviceLink(true)\`, XR stage-session change, tracking loss, engine/replay reset: **clear** buffer and prior mode. Do not interpolate across disconnected spans. All three Phase 01 streams are separate devices and have independent monotonic sequence.
+In `registry/mod.rs::Entry` add `rigid_poses: VecDeque<SensorObservation>` capacity **64**. Only XR device descriptors with `SensorCapability::RigidPose` can use it. Accept sorted monotonic `t_us` and `seq` under current Registry rules. On `DeviceLink(false)`, `DeviceLink(true)`, XR stage-session change, tracking loss, engine/replay reset: **clear** buffer and prior mode. Do not interpolate across disconnected spans. All three Phase 01 streams are separate devices and have independent monotonic sequence.
 
 For XR interpolation, if exact t_ref exists, return exact sample; otherwise require before <= t_ref < after and after-before <=40,000us, interpolate pos linearly and quaternion with shortest-path SLERP. Unknown tracker validity or any nonfinite result returns None. Bounded 64 items is enough for jitter at 60–120Hz; trim by count, not unlimited time.
 
@@ -245,16 +245,16 @@ The existing COCO17 index mapping is:
 - left: shoulder 5, elbow 7, wrist 9;
 - right: shoulder 6, elbow 8, wrist 10.
 
-Use a **single shared semantic extractor** from \`pipeline/skeleton_fit.rs\` or its \`pipeline/motion.rs\` canonical mapping; don't duplicate hardcoded mapping in two files. Only \`PoseLandmarks3D::Triangulated\` **FrameRef::World** (metric) accepted; reject \`ModelRelative\`, unknown schemas and one-camera guess.
+Use a **single shared semantic extractor** from `pipeline/skeleton_fit.rs` or its `pipeline/motion.rs` canonical mapping; don't duplicate hardcoded mapping in two files. Only `PoseLandmarks3D::Triangulated` **FrameRef::World** (metric) accepted; reject `ModelRelative`, unknown schemas and one-camera guess.
 
 **Optical elbow gate per side:**
 - Shoulder, elbow and (when present) camera wrist finite in metres.
 - Shoulder/elbow triangulation each has >=2 distinct confirmed cameras, confidence >=0.70, reprojection RMS <=5px.
-- Optional propagated \`sigma_m\` <=0.05m if present; missing sigma is not automatically a validated error bound.
-- Camera \`t_cam\` <=20ms from \`t_ref\`; camera calibration/profile identities current.
-- Camera shoulder vs current FK shoulder separation <=0.08m. If larger, reason \`camera_shoulder_mismatch\` and keep baseline, **do not rotate root to fit**.
+- Optional propagated `sigma_m` <=0.05m if present; missing sigma is not automatically a validated error bound.
+- Camera `t_cam` <=20ms from `t_ref`; camera calibration/profile identities current.
+- Camera shoulder vs current FK shoulder separation <=0.08m. If larger, reason `camera_shoulder_mismatch` and keep baseline, **do not rotate root to fit**.
 - Camera elbow-to-shoulder length deviation from measured upper-arm length <=0.07m, otherwise use prior bend (if any) rather than accepting a bad camera elbow.
-- If both camera wrist and XR wrist are qualified and differ >0.08m, classify \`xr_camera_wrist_disagree\`; do not silently choose one and mark it high-confidence.
+- If both camera wrist and XR wrist are qualified and differ >0.08m, classify `xr_camera_wrist_disagree`; do not silently choose one and mark it high-confidence.
 
 Camera elbow supplies primarily a **bend-plane direction**, not a hard elbow point. It can be noisy or momentarily occluded while the XR wrist is still accurate.
 
@@ -263,14 +263,14 @@ Camera elbow supplies primarily a **bend-plane direction**, not a hard elbow poi
 ### 5.1 Input geometry
 
 Each side's inputs in **camera world metres**:
-- \`S\` = shoulder joint from current FK of **measured camera-root** + torso/clavicle orientations.
-- \`W\` = current time-aligned XR-derived anatomical wrist target.
-- \`a\` = measured upper-arm length, norm of active Skeleton upper-arm tail.
-- \`b\` = measured forearm length, norm of active Skeleton forearm tail.
-- \`E_camera\` = optional quality-gated camera elbow point.
-- \`bend_hint\` = selected plane cue (camera, prior or anatomical).
-- \`q_clavicle_world\` = existing parent world orientation.
-- \`t_ref\` = reconstruction tick in engine session clock.
+- `S` = shoulder joint from current FK of **measured camera-root** + torso/clavicle orientations.
+- `W` = current time-aligned XR-derived anatomical wrist target.
+- `a` = measured upper-arm length, norm of active Skeleton upper-arm tail.
+- `b` = measured forearm length, norm of active Skeleton forearm tail.
+- `E_camera` = optional quality-gated camera elbow point.
+- `bend_hint` = selected plane cue (camera, prior or anatomical).
+- `q_clavicle_world` = existing parent world orientation.
+- `t_ref` = reconstruction tick in engine session clock.
 
 Reject nonfinite S/W, lengths <=0, d<0.01m and absent validated profile identity. No medical/anatomical claim beyond the 2-link approximation.
 
@@ -292,12 +292,12 @@ E = S + x*u + h*v
 ||W-E|| = b
 ~~~
 
-**Reachability:** physically \`abs(a-b) <= d <= a+b\`. With a numeric epsilon 0.001m:
-- If outside by **>0.04m**, reject IK and retain baseline with \`arm_target_unreachable\`.
+**Reachability:** physically `abs(a-b) <= d <= a+b`. With a numeric epsilon 0.001m:
+- If outside by **>0.04m**, reject IK and retain baseline with `arm_target_unreachable`.
 - If outside by <=0.04m, clamp d to the nearest safe endpoint to form **W_solve=S+clamp(d)*u**, solve against W_solve; publish residual **abs(d-clamp(d))**, never claim raw wrist is exactly reached.
 - When floating roundoff makes h² slightly negative (>=-1e-8), clamp h=0; more negative fails.
-- Near full extension \`h<0.01m\` makes bend plane unobservable; hold latest short-lived plane or return an inferred stable fallback without a sudden flip.
-- Check FK lengths against \`a,b\` to 0.002m tolerance; for a clamped wrist measure residual to **W_solve**, separately record raw-target residual.
+- Near full extension `h<0.01m` makes bend plane unobservable; hold latest short-lived plane or return an inferred stable fallback without a sudden flip.
+- Check FK lengths against `a,b` to 0.002m tolerance; for a clamped wrist measure residual to **W_solve**, separately record raw-target residual.
 - No blend of endpoints, no multi-iteration global optimizer and no fixed midpoint assumption.
 
 **Deterministic numeric fixture:**
@@ -320,19 +320,19 @@ Also test identity, 90° world yaw, opposite side, straight extension, collapsed
 
 ### 5.3 Elbow bend-plane priority
 
-Obtain orthogonal \`v\` in this **exact** priority:
+Obtain orthogonal `v` in this **exact** priority:
 
-1. **Camera elbow:** \`bend = E_camera - S\`, project against u: \`bend_perp = bend - dot(bend,u)*u\`. Require projected norm >=0.03m, optical QA passed, physically plausible upper-arm radius and no high-confidence XR/camera wrist conflict. Normalize to obtain v. Source \`camera\`.
-2. **Recent prior plane:** if same athlete/room/stage/profile key and prior accepted \`last_bend\` age <=150ms, reproject perpendicular to current u; if projected norm >=0.10, normalize. Source \`prior\`, **inferred**.
-3. **Anatomical fallback:** chest/world forward vector projected perpendicular to u, then chest-up if degenerate, then deterministic world axis least parallel to u. Source \`anatomical\`, **inferred**.
+1. **Camera elbow:** `bend = E_camera - S`, project against u: `bend_perp = bend - dot(bend,u)*u`. Require projected norm >=0.03m, optical QA passed, physically plausible upper-arm radius and no high-confidence XR/camera wrist conflict. Normalize to obtain v. Source `camera`.
+2. **Recent prior plane:** if same athlete/room/stage/profile key and prior accepted `last_bend` age <=150ms, reproject perpendicular to current u; if projected norm >=0.10, normalize. Source `prior`, **inferred**.
+3. **Anatomical fallback:** chest/world forward vector projected perpendicular to u, then chest-up if degenerate, then deterministic world axis least parallel to u. Source `anatomical`, **inferred**.
 
-Do not change elbow side randomly: if a new camera plane is opposed to prior (dot<0), demand **three consecutive qualified optical frames** with same new hemisphere and plausible geometry before switching; until then retain prior or fallback with \`elbow_plane_ambiguity\`. When a genuine arm crosses extension, a switch can happen after confirmation. Maximum plane angular rate **360°/s**, maximum one-tick step **45°**, both configuration values. A plane is still just an estimate; do not report high accuracy from an inferred fallback.
+Do not change elbow side randomly: if a new camera plane is opposed to prior (dot<0), demand **three consecutive qualified optical frames** with same new hemisphere and plausible geometry before switching; until then retain prior or fallback with `elbow_plane_ambiguity`. When a genuine arm crosses extension, a switch can happen after confirmation. Maximum plane angular rate **360°/s**, maximum one-tick step **45°**, both configuration values. A plane is still just an estimate; do not report high accuracy from an inferred fallback.
 
 ### 5.4 Arm rotations and forward kinematics
 
 The Bansayo rest model has upper-arm rest tails along left +X/right -X; child forearm offset equals upper tail, hand offset equals forearm tail.
 
-Let \`upper_dir = normalize(E-S)\` and \`forearm_dir = normalize(W_solve-E)\`.
+Let `upper_dir = normalize(E-S)` and `forearm_dir = normalize(W_solve-E)`.
 
 ~~~text
 R_upper = smallest_arc(R_clavicle*upper_rest_tail, upper_dir) * R_clavicle
@@ -342,7 +342,7 @@ FK_elbow = S + R_upper * forearm_offset
 FK_wrist = FK_elbow + R_forearm * hand_offset
 ~~~
 
-**Do not rotate pelvis, chest, clavicle or camera to force a wrist match.** Use deterministic parent axis for 180° antiparallel swing, not arbitrary quaternion signs. Check FK_elbow≈E and FK_wrist≈W_solve before accepting a candidate. Store world rotations exactly as current \`SkeletonPose\` expects. BodyState twist stays **inferred** unless a valid independent mounted IMU observes it; XR controller orientation is a grip pose, not measured anatomical forearm pronation.
+**Do not rotate pelvis, chest, clavicle or camera to force a wrist match.** Use deterministic parent axis for 180° antiparallel swing, not arbitrary quaternion signs. Check FK_elbow≈E and FK_wrist≈W_solve before accepting a candidate. Store world rotations exactly as current `SkeletonPose` expects. BodyState twist stays **inferred** unless a valid independent mounted IMU observes it; XR controller orientation is a grip pose, not measured anatomical forearm pronation.
 
 ### 5.5 No fabricated shoulder / head
 
@@ -357,8 +357,8 @@ The current solver is **IMU-first** on valid mounted segment orientations. Retai
 | Feature off | Baseline solve output byte/semantically unchanged. |
 | XR/room/time/body invalid | No IK; preserve baseline and report reason only when enabled. |
 | No valid mounted IMUs on either upper/forearm | Full two-link IK if camera-root, calibrated lengths, XR target, valid bend and all gates pass. |
-| Both upper-arm and forearm mounted IMUs valid | **Preserve both rotations**. Compute FK predicted wrist vs XR wrist. If <=0.05m, report agreement, no overridden rotation; else \`imu_xr_wrist_disagree\`. |
-| Upper-arm IMU valid, forearm IMU absent | Preserve upper-arm rotation and FK elbow; if \`abs(||W-E||-b)<=0.05m\`, solve **forearm swing only** and mark derived; else preserve baseline and report. |
+| Both upper-arm and forearm mounted IMUs valid | **Preserve both rotations**. Compute FK predicted wrist vs XR wrist. If <=0.05m, report agreement, no overridden rotation; else `imu_xr_wrist_disagree`. |
+| Upper-arm IMU valid, forearm IMU absent | Preserve upper-arm rotation and FK elbow; if `abs(||W-E||-b)<=0.05m`, solve **forearm swing only** and mark derived; else preserve baseline and report. |
 | Forearm IMU valid, upper-arm absent | Preserve forearm orientation. Candidate upper swing only if it can satisfy wrist target with <=0.05m positional residual and the resulting forearm direction agrees with measured forearm IMU within **15°**. Else leave baseline. |
 | One IMU stale/unmounted/low quality | Apply existing mount/recency gates; only allow XR IK where no **valid** mounted segment orientation remains. Never contradict existing baseline validity silently. |
 | Optical elbow but no valid XR wrist | Existing camera fit, not Phase 04 IK. |
@@ -369,18 +369,18 @@ The current solver is **IMU-first** on valid mounted segment orientations. Retai
 
 ### 6.1 Confidence and observed[]
 
-- OpenXR tracking=true with no accuracy model is **not confidence=1.0**. Keep \`confidence=None\` if no defensible numeric confidence.
-- With reliable camera elbow, calibrated geometry and XR wrist, arm-axis provenance **Derived**, method \`XrConstrainedIk\`, and \`observed=true\` only for axes that are sufficiently constrained. Numerical quality can use min(qualified camera shoulder, camera elbow detector confidence) times deterministic freshness/residual penalties. It is a **relative quality indicator**, not calibrated probability.
-- With prior/anatomical plane and no current camera elbow, geometry may be useful, but bend-dependent arm direction provenance is **Inferred** and \`observed=false\` for elbow-joint measurement. Otherwise \`pipeline/joints.rs\` would invent a numeric elbow angle.
-- A current valid mounted IMU retains its existing \`ImuMounted\` or \`ImuOpticalFused\` method, source and twist evidence; do not relabel it as XR simply because the wrist agrees.
-- Camera-only existing \`SkeletonFitAxis\` stays derived when qualifying observed evidence exists.
-- Source IDs on a constrained segment include contributing \`XR-LEFT/RIGHT-GRIP\` plus camera IDs where a camera plane was used; sort and deduplicate. Calibration profile identity participates in \`calibration_set_id\`, not fake DeviceId strings.
-- Set \`t_obs_us\` to the session time of the **oldest accepted contributing** observation, not engine render time; no later than t_ref. Unknown source timing must not acquire a made-up observation timestamp.
-- The training \`BodyState.axis\` follows same method/provenance, \`twist\` stays inferred unless real IMU supplies it. Propagated sigma stays \`SigmaBasis::Propagated\`, not \`Validated\`.
+- OpenXR tracking=true with no accuracy model is **not confidence=1.0**. Keep `confidence=None` if no defensible numeric confidence.
+- With reliable camera elbow, calibrated geometry and XR wrist, arm-axis provenance **Derived**, method `XrConstrainedIk`, and `observed=true` only for axes that are sufficiently constrained. Numerical quality can use min(qualified camera shoulder, camera elbow detector confidence) times deterministic freshness/residual penalties. It is a **relative quality indicator**, not calibrated probability.
+- With prior/anatomical plane and no current camera elbow, geometry may be useful, but bend-dependent arm direction provenance is **Inferred** and `observed=false` for elbow-joint measurement. Otherwise `pipeline/joints.rs` would invent a numeric elbow angle.
+- A current valid mounted IMU retains its existing `ImuMounted` or `ImuOpticalFused` method, source and twist evidence; do not relabel it as XR simply because the wrist agrees.
+- Camera-only existing `SkeletonFitAxis` stays derived when qualifying observed evidence exists.
+- Source IDs on a constrained segment include contributing `XR-LEFT/RIGHT-GRIP` plus camera IDs where a camera plane was used; sort and deduplicate. Calibration profile identity participates in `calibration_set_id`, not fake DeviceId strings.
+- Set `t_obs_us` to the session time of the **oldest accepted contributing** observation, not engine render time; no later than t_ref. Unknown source timing must not acquire a made-up observation timestamp.
+- The training `BodyState.axis` follows same method/provenance, `twist` stays inferred unless real IMU supplies it. Propagated sigma stays `SigmaBasis::Propagated`, not `Validated`.
 
 ## 7. Bounded continuity, hysteresis and reset behavior
 
-Add per-side \`ArmConstraintState\` in the **existing** FusionState with exactly two arm slots (left/right), not a per-user unbounded map.
+Add per-side `ArmConstraintState` in the **existing** FusionState with exactly two arm slots (left/right), not a per-user unbounded map.
 
 ~~~rust
 pub enum ArmConstraintMode {
@@ -405,23 +405,23 @@ pub struct ArmConstraintState {
 }
 ~~~
 
-\`ArmCalibrationKey\` hashes selected athlete ID, skeleton model/revision, body-proportion profile content, wrist-offset profile content, XR alignment fingerprint, room, stage ID/generation and physical grip revision. Use the existing canonical hashing helper and include actual content hash rather than only profile IDs. Do not embed private athlete name in logs.
+`ArmCalibrationKey` hashes selected athlete ID, skeleton model/revision, body-proportion profile content, wrist-offset profile content, XR alignment fingerprint, room, stage ID/generation and physical grip revision. Use the existing canonical hashing helper and include actual content hash rather than only profile IDs. Do not embed private athlete name in logs.
 
 **Switch policy:**
 - Enter a new XR mode only after **3 consecutive eligible** frames; meanwhile show normal baseline output.
 - Exit after **2 consecutive soft failures** (occlusion, low confidence). During a soft-failure frame do **not** synthesize another wrist position from a stale target: baseline output may be used immediately while the mode label ages.
 - Exit **immediately** on hard invalidation: stage recenter, device disconnect, profile/athlete/room/model changed, nonfinite transform, recording mode reset or missing camera root.
 - Camera optical confidence enter >=0.70, stay >=0.50 if all remaining hard gates pass. Losing camera elbow may select recent plane only; losing camera root always disables IK.
-- Reject apparent wrist displacement >6.0m/s between valid t_ref frames with \`xr_wrist_jump\` as provisional outlier gate, configurable for martial-arts testing rather than claiming a physiological maximum.
+- Reject apparent wrist displacement >6.0m/s between valid t_ref frames with `xr_wrist_jump` as provisional outlier gate, configurable for martial-arts testing rather than claiming a physiological maximum.
 - Prior bend expires after 150ms, even if the controller keeps streaming.
 - Never maintain a cross-session or cross-athlete prior.
 - No observer switch may create a >45° new elbow-plane step in one tick; max 360°/s when updating.
 
-**Replay caveat:** The existing Registry has \`fusion\` state advanced with each tick. The replay engine must replay the **same tick sequence** or restore checkpoints that include the arm continuity state. If random seek currently reconstructs only SourceEvents without equivalent solver ticks, deterministic seek will fail; correct this rather than silently dropping bend history. Do not persist arbitrary Godot transient poses as source truth.
+**Replay caveat:** The existing Registry has `fusion` state advanced with each tick. The replay engine must replay the **same tick sequence** or restore checkpoints that include the arm continuity state. If random seek currently reconstructs only SourceEvents without equivalent solver ticks, deterministic seek will fail; correct this rather than silently dropping bend history. Do not persist arbitrary Godot transient poses as source truth.
 
 ## 8. Configuration: strict YAML, disabled by default
 
-Add \`fusion.xr_arms\` as a nested \`XrArmFusionConfig\` in the already existing \`FusionConfig\`, \`serde(default, deny_unknown_fields)\`. All algorithm thresholds below are centralized in the config defaults and validated with path-qualified errors in \`config/validate.rs\`. The existing \`fusion\` heading/root options remain unchanged.
+Add `fusion.xr_arms` as a nested `XrArmFusionConfig` in the already existing `FusionConfig`, `serde(default, deny_unknown_fields)`. All algorithm thresholds below are centralized in the config defaults and validated with path-qualified errors in `config/validate.rs`. The existing `fusion` heading/root options remain unchanged.
 
 ~~~yaml
 schema_version: 2
@@ -469,48 +469,48 @@ fusion:
     max_wrist_speed_m_s: 6.0
 ~~~
 
-Default \`fusion.xr_arms.enabled=false\`. This snippet is an **XR-enabled section**, not by itself a full runtime config with actual camera/IMU/XR sources; the implementing AI must extend a verified complete Phase 01/02/03 example instead of checking an invalid YAML sample and declaring it ready.
+Default `fusion.xr_arms.enabled=false`. This snippet is an **XR-enabled section**, not by itself a full runtime config with actual camera/IMU/XR sources; the implementing AI must extend a verified complete Phase 01/02/03 example instead of checking an invalid YAML sample and declaring it ready.
 
-**Validation:** strict ranges for all numeric values, finite thresholds, \`0<stay<=enter<=1\`, history capacity <=128, \`min_camera_views>=2\`, \`enter_good_frames>=1\`, \`exit_bad_frames>=1\`, \`opposite_bend_confirm_frames>=2\`, max clock/skew consistent with Phase 02 and max history gap, \`max_fk_residual_m\` <= \`max_unreachable_tolerance_m\`. Explicit XR-arm enabled configuration must be rejected under schema_version=1 or without required XR source config. Static config validates presence of XR support; **live calibration readiness remains dynamic**, not assumed from YAML.
+**Validation:** strict ranges for all numeric values, finite thresholds, `0<stay<=enter<=1`, history capacity <=128, `min_camera_views>=2`, `enter_good_frames>=1`, `exit_bad_frames>=1`, `opposite_bend_confirm_frames>=2`, max clock/skew consistent with Phase 02 and max history gap, `max_fk_residual_m` <= `max_unreachable_tolerance_m`. Explicit XR-arm enabled configuration must be rejected under schema_version=1 or without required XR source config. Static config validates presence of XR support; **live calibration readiness remains dynamic**, not assumed from YAML.
 
 ### 8.1 Reproducibility identity
 
-Current \`fusion::METHOD_VERSION\` is \`bansayo.fusion.anchored_fk.v1\`. Keep original identity for disabled old behavior; when XR arms enabled include **\`bansayo.fusion.xr_arms_ik.v1\`** in \`pipeline/capability.rs::identity_bodies\` plus all xr_arms settings, active athlete/skeleton geometry, XR alignment calibration content hash and current wrist-offset/body profiles. Current \`calibration_set_id\` builder filters profiles by subject.device_id and would **omit Phase 03 athlete-only body measurements**: fix this explicitly while retaining legacy behavior when feature is off. A calibration change must alter comparison identity; only current valid profiles count.
+Current `fusion::METHOD_VERSION` is `bansayo.fusion.anchored_fk.v1`. Keep original identity for disabled old behavior; when XR arms enabled include **`bansayo.fusion.xr_arms_ik.v1`** in `pipeline/capability.rs::identity_bodies` plus all xr_arms settings, active athlete/skeleton geometry, XR alignment calibration content hash and current wrist-offset/body profiles. Current `calibration_set_id` builder filters profiles by subject.device_id and would **omit Phase 03 athlete-only body measurements**: fix this explicitly while retaining legacy behavior when feature is off. A calibration change must alter comparison identity; only current valid profiles count.
 
 ## 9. Implementation file manifest
 
 | File | Operation | Precise responsibility |
 |---|---|---|
-| \`crates/bansayo-contracts/src/motion.rs\` | Edit | New \`MethodId::XrConstrainedIk\`, additive enum serialization. |
-| \`crates/bansayo-contracts/src/quality.rs\` | Edit | New \`FeatureId::XrArmConstraints\`. |
-| \`crates/bansayo-contracts/tests/contracts.rs\` | Edit | Golden serde/protocol backward compatibility. |
-| \`crates/bansayo-contracts/tests/support/examples.rs\` | Edit | Samples for constrained method, tracking status, inferred fallback. |
-| \`crates/bansayo-contracts/tests/support/generated.rs\` | Edit | Generate TypeScript with BANSAYO_BLESS, no hand editing. |
-| \`crates/bansayo-engine/src/config/schema.rs\` | Edit | Typed nested XrArmFusionConfig default false. |
-| \`crates/bansayo-engine/src/config/validate.rs\` | Edit | Strict numeric, cross-field, prerequisite validation. |
-| \`crates/bansayo-engine/src/registry/mod.rs\` | Edit | Bounded XR rigid pose history, link/reset cleanup. |
-| \`crates/bansayo-engine/src/pipeline/xr_pose_align.rs\` | **New** | Interpolate rigid position+rotation with no extrapolation. |
-| \`crates/bansayo-engine/src/pipeline/xr_wrist.rs\` | **New** | Convert aligned grip pose and per-athlete local offset into metric world wrist target. |
-| \`crates/bansayo-engine/src/pipeline/arm_ik.rs\` | **New** | Two-link geometry, reachability, swing rotations and FK residual. |
-| \`crates/bansayo-engine/src/pipeline/arm_evidence.rs\` | **New** | Optical points, room/clock/profile gates, mounted IMU arbitration. |
-| \`crates/bansayo-engine/src/pipeline/arm_state.rs\` | **New** | Bend plane continuity, source hysteresis and reset key. |
-| \`crates/bansayo-engine/src/pipeline/fusion.rs\` | Edit | Add fixed two-arm state, preserve heading and camera root. |
-| \`crates/bansayo-engine/src/pipeline/solve.rs\` | Edit | One optional orchestrator call after baseline rotations/root, before FK. |
-| \`crates/bansayo-engine/src/pipeline/mod.rs\` | Edit | Exports for small new modules. |
-| \`crates/bansayo-engine/src/pipeline/motion.rs\` | Edit | Accurate axis/twist/provenance and inferred keypoint labels. |
-| \`crates/bansayo-engine/src/pipeline/joints.rs\` | Verify/edit as necessary | Inferred elbows produce null numeric joint angles. |
-| \`crates/bansayo-engine/src/pipeline/capability.rs\` | Edit | XR fusion method/config/athlete profiles in tracking and calibration identity. |
-| \`crates/bansayo-engine/src/pipeline/features.rs\` | Edit | Correct XR Arm Constraints status, no false full-body fusion claim. |
-| \`crates/bansayo-engine/src/pipeline/runtime.rs\` | Edit | Publish per-arm new fusion state, reset on context/profile changes. |
-| \`crates/bansayo-engine/src/recording/replay.rs\` | Edit if tests expose gap | Deterministic same-tick replay and seek rebuilding bend-plane state. |
-| \`crates/bansayo-engine/tests/xr_arm_ik.rs\` | **New** | Unit geometry, fallback and source conflict matrix. |
-| \`crates/bansayo-engine/tests/xr_arm_fusion.rs\` | **New** | End-to-end deterministic events, profile readiness, replay, perf smoke. |
-| \`apps/vr/scripts/status_panel.gd\` | Small edit | Optional XR arm constrained/degraded reason and per-side status; no IK math. |
-| \`apps/vr/tests/xr_arm_fusion_smoke.gd\` | **New** | Headless UI with simulated state/pose, false-measurement prevention. |
-| \`apps/desktop/src/viewport/SkeletonRig.ts\` | Verify/edit only if necessary | Display current engine segment poses without duplicate IK. |
-| \`docs/05-calibration-and-fusion.md\` | Edit after implementation | Describe actual fusion, gates and limitations. |
-| \`docs/13-implementation-status.md\` | Edit after implementation | Link test results and real hardware status. |
-| \`.github/workflows/ci.yml\` | Edit | Add Rust/Godot regression tests with pinned tools. |
+| `crates/bansayo-contracts/src/motion.rs` | Edit | New `MethodId::XrConstrainedIk`, additive enum serialization. |
+| `crates/bansayo-contracts/src/quality.rs` | Edit | New `FeatureId::XrArmConstraints`. |
+| `crates/bansayo-contracts/tests/contracts.rs` | Edit | Golden serde/protocol backward compatibility. |
+| `crates/bansayo-contracts/tests/support/examples.rs` | Edit | Samples for constrained method, tracking status, inferred fallback. |
+| `crates/bansayo-contracts/tests/support/generated.rs` | Edit | Generate TypeScript with BANSAYO_BLESS, no hand editing. |
+| `crates/bansayo-engine/src/config/schema.rs` | Edit | Typed nested XrArmFusionConfig default false. |
+| `crates/bansayo-engine/src/config/validate.rs` | Edit | Strict numeric, cross-field, prerequisite validation. |
+| `crates/bansayo-engine/src/registry/mod.rs` | Edit | Bounded XR rigid pose history, link/reset cleanup. |
+| `crates/bansayo-engine/src/pipeline/xr_pose_align.rs` | **New** | Interpolate rigid position+rotation with no extrapolation. |
+| `crates/bansayo-engine/src/pipeline/xr_wrist.rs` | **New** | Convert aligned grip pose and per-athlete local offset into metric world wrist target. |
+| `crates/bansayo-engine/src/pipeline/arm_ik.rs` | **New** | Two-link geometry, reachability, swing rotations and FK residual. |
+| `crates/bansayo-engine/src/pipeline/arm_evidence.rs` | **New** | Optical points, room/clock/profile gates, mounted IMU arbitration. |
+| `crates/bansayo-engine/src/pipeline/arm_state.rs` | **New** | Bend plane continuity, source hysteresis and reset key. |
+| `crates/bansayo-engine/src/pipeline/fusion.rs` | Edit | Add fixed two-arm state, preserve heading and camera root. |
+| `crates/bansayo-engine/src/pipeline/solve.rs` | Edit | One optional orchestrator call after baseline rotations/root, before FK. |
+| `crates/bansayo-engine/src/pipeline/mod.rs` | Edit | Exports for small new modules. |
+| `crates/bansayo-engine/src/pipeline/motion.rs` | Edit | Accurate axis/twist/provenance and inferred keypoint labels. |
+| `crates/bansayo-engine/src/pipeline/joints.rs` | Verify/edit as necessary | Inferred elbows produce null numeric joint angles. |
+| `crates/bansayo-engine/src/pipeline/capability.rs` | Edit | XR fusion method/config/athlete profiles in tracking and calibration identity. |
+| `crates/bansayo-engine/src/pipeline/features.rs` | Edit | Correct XR Arm Constraints status, no false full-body fusion claim. |
+| `crates/bansayo-engine/src/pipeline/runtime.rs` | Edit | Publish per-arm new fusion state, reset on context/profile changes. |
+| `crates/bansayo-engine/src/recording/replay.rs` | Edit if tests expose gap | Deterministic same-tick replay and seek rebuilding bend-plane state. |
+| `crates/bansayo-engine/tests/xr_arm_ik.rs` | **New** | Unit geometry, fallback and source conflict matrix. |
+| `crates/bansayo-engine/tests/xr_arm_fusion.rs` | **New** | End-to-end deterministic events, profile readiness, replay, perf smoke. |
+| `apps/vr/scripts/status_panel.gd` | Small edit | Optional XR arm constrained/degraded reason and per-side status; no IK math. |
+| `apps/vr/tests/xr_arm_fusion_smoke.gd` | **New** | Headless UI with simulated state/pose, false-measurement prevention. |
+| `apps/desktop/src/viewport/SkeletonRig.ts` | Verify/edit only if necessary | Display current engine segment poses without duplicate IK. |
+| `docs/05-calibration-and-fusion.md` | Edit after implementation | Describe actual fusion, gates and limitations. |
+| `docs/13-implementation-status.md` | Edit after implementation | Link test results and real hardware status. |
+| `.github/workflows/ci.yml` | Edit | Add Rust/Godot regression tests with pinned tools. |
 
 **Leave alone:** OpenXR server transport and StageInfo contract, camera detectors/triangulation mathematics, ChArUco calibration geometry, independent IMU mounting solver, body proportions calibration process, avatar mesh/rig assets, training workouts/kata scoring and schema-1 fixture behavior.
 
@@ -518,76 +518,76 @@ Current \`fusion::METHOD_VERSION\` is \`bansayo.fusion.anchored_fk.v1\`. Keep or
 
 ### 10.1 Analytic IK geometry (pure unit)
 
-- [ ] \`ik_known_lengths_0p30_0p25_and_d0p45\`: computed E satisfies both lengths within 1e-9 f64.
-- [ ] \`ik_left_right_rest_axes_have_consistent_mirror\`.
-- [ ] \`ik_world_yaw90_and_translation_are_invariant\`.
-- [ ] \`ik_exact_full_extension_is_finite_no_plane_flip\`.
-- [ ] \`ik_near_collapsed_equal_length_arm_no_division_by_zero\`.
-- [ ] \`ik_unreachable_4cm_tolerance_clamped_and_residual_reported\`.
-- [ ] \`ik_unreachable_beyond_4cm_rejected_without_changing_baseline\`.
-- [ ] \`ik_rejects_nonfinite_zero_and_negative_lengths\`.
-- [ ] \`ik_antiparallel_swing_uses_deterministic_axis\`.
-- [ ] \`ik_camera_elbow_plane_perpendicular_projection\`.
-- [ ] \`ik_observed_camera_elbow_outlier_above_7cm_rejected\`.
-- [ ] \`ik_previous_plane_150ms_expiry_and_reprojection\`.
-- [ ] \`ik_opposite_bend_requires_three_qualified_frames\`.
-- [ ] \`ik_bend_rate_limit_and_single_step_45deg\`.
-- [ ] \`ik_parent_clavicle_rotation_unmodified\`.
-- [ ] \`ik_fk_reconstructs_elbow_and_wrist_2mm_tolerance\`.
-- [ ] \`ik_output_quaternions_unit_and_nan_free\`.
+- [ ] `ik_known_lengths_0p30_0p25_and_d0p45`: computed E satisfies both lengths within 1e-9 f64.
+- [ ] `ik_left_right_rest_axes_have_consistent_mirror`.
+- [ ] `ik_world_yaw90_and_translation_are_invariant`.
+- [ ] `ik_exact_full_extension_is_finite_no_plane_flip`.
+- [ ] `ik_near_collapsed_equal_length_arm_no_division_by_zero`.
+- [ ] `ik_unreachable_4cm_tolerance_clamped_and_residual_reported`.
+- [ ] `ik_unreachable_beyond_4cm_rejected_without_changing_baseline`.
+- [ ] `ik_rejects_nonfinite_zero_and_negative_lengths`.
+- [ ] `ik_antiparallel_swing_uses_deterministic_axis`.
+- [ ] `ik_camera_elbow_plane_perpendicular_projection`.
+- [ ] `ik_observed_camera_elbow_outlier_above_7cm_rejected`.
+- [ ] `ik_previous_plane_150ms_expiry_and_reprojection`.
+- [ ] `ik_opposite_bend_requires_three_qualified_frames`.
+- [ ] `ik_bend_rate_limit_and_single_step_45deg`.
+- [ ] `ik_parent_clavicle_rotation_unmodified`.
+- [ ] `ik_fk_reconstructs_elbow_and_wrist_2mm_tolerance`.
+- [ ] `ik_output_quaternions_unit_and_nan_free`.
 
 ### 10.2 XR transform / clock / input
 
-- [ ] \`xr_wrist_identity_stage_calibrated_local_offset\`.
-- [ ] \`xr_wrist_stage_yaw90_sign_and_inverse_transform\`.
-- [ ] \`xr_wrist_left_and_right_device_ids_never_swap\`.
-- [ ] \`xr_pose_interpolation_two_positions_and_shortest_slerp\`.
-- [ ] \`xr_pose_single_exact_t_ref_accepts\`.
-- [ ] \`xr_pose_no_extrapolation_before_or_after_history\`.
-- [ ] \`xr_pose_gap_gt40ms_rejected\`.
-- [ ] \`xr_pose_ring64_bounded_and_reconnect_clears\`.
-- [ ] \`xr_pose_tracking_loss_cannot_bridge_history\`.
-- [ ] \`xr_clock_receive_time_only_cannot_drive_ik\`.
-- [ ] \`xr_clock_uncertainty_gt5ms_and_not_settled_rejected\`.
-- [ ] \`xr_stage_changed_and_room_or_camera_fingerprint_changed_rejected\`.
-- [ ] \`xr_athlete_profile_cross_contamination_rejected\`.
-- [ ] \`xr_assumed_body_length_never_claims_calibrated_ik\`.
-- [ ] \`xr_camera_time_skew_gt20ms_preserves_baseline\`.
-- [ ] \`xr_camera_root_held_or_floor_contact_preserves_baseline\`.
+- [ ] `xr_wrist_identity_stage_calibrated_local_offset`.
+- [ ] `xr_wrist_stage_yaw90_sign_and_inverse_transform`.
+- [ ] `xr_wrist_left_and_right_device_ids_never_swap`.
+- [ ] `xr_pose_interpolation_two_positions_and_shortest_slerp`.
+- [ ] `xr_pose_single_exact_t_ref_accepts`.
+- [ ] `xr_pose_no_extrapolation_before_or_after_history`.
+- [ ] `xr_pose_gap_gt40ms_rejected`.
+- [ ] `xr_pose_ring64_bounded_and_reconnect_clears`.
+- [ ] `xr_pose_tracking_loss_cannot_bridge_history`.
+- [ ] `xr_clock_receive_time_only_cannot_drive_ik`.
+- [ ] `xr_clock_uncertainty_gt5ms_and_not_settled_rejected`.
+- [ ] `xr_stage_changed_and_room_or_camera_fingerprint_changed_rejected`.
+- [ ] `xr_athlete_profile_cross_contamination_rejected`.
+- [ ] `xr_assumed_body_length_never_claims_calibrated_ik`.
+- [ ] `xr_camera_time_skew_gt20ms_preserves_baseline`.
+- [ ] `xr_camera_root_held_or_floor_contact_preserves_baseline`.
 
 ### 10.3 Sensor conflicts / truthfulness
 
-- [ ] \`fusion_disabled_mode_matches_old_golden_frame_and_motion\`.
-- [ ] \`fusion_tracking_mode_camera_only_ignores_xr_constraints\`.
-- [ ] \`fusion_tracking_mode_imu_only_ignores_xr_constraints\`.
-- [ ] \`fusion_two_valid_imus_are_preserved_even_on_xr_disagreement\`.
-- [ ] \`fusion_upper_imu_preserved_forearm_ik_only_if_reachable\`.
-- [ ] \`fusion_forearm_imu_preserved_upper_only_if_direction_compatible\`.
-- [ ] \`fusion_low_quality_camera_elbow_reverts_to_prior_inferred\`.
-- [ ] \`fusion_anatomical_plane_not_marked_measured_or_observed\`.
-- [ ] \`fusion_inferred_elbow_joint_angle_is_null_with_reason\`.
-- [ ] \`fusion_imu_twist_retained_and_xr_grip_twist_not_invented\`.
-- [ ] \`fusion_wrist_jump_6m_s_emits_reason_no_pose_snap\`.
-- [ ] \`fusion_left_failure_does_not_disable_right\`.
-- [ ] \`fusion_three_good_frames_to_enter_two_to_exit_soft_mode\`.
-- [ ] \`fusion_recenter_and_athlete_switch_clear_prior_immediately\`.
-- [ ] \`fusion_sources_t_obs_us_and_provenance_correct\`.
-- [ ] \`fusion_capability_identity_changes_with_profile_content_same_id\`.
-- [ ] \`fusion_feature_status_only_reports_arm_constraints_not_full_body\`.
+- [ ] `fusion_disabled_mode_matches_old_golden_frame_and_motion`.
+- [ ] `fusion_tracking_mode_camera_only_ignores_xr_constraints`.
+- [ ] `fusion_tracking_mode_imu_only_ignores_xr_constraints`.
+- [ ] `fusion_two_valid_imus_are_preserved_even_on_xr_disagreement`.
+- [ ] `fusion_upper_imu_preserved_forearm_ik_only_if_reachable`.
+- [ ] `fusion_forearm_imu_preserved_upper_only_if_direction_compatible`.
+- [ ] `fusion_low_quality_camera_elbow_reverts_to_prior_inferred`.
+- [ ] `fusion_anatomical_plane_not_marked_measured_or_observed`.
+- [ ] `fusion_inferred_elbow_joint_angle_is_null_with_reason`.
+- [ ] `fusion_imu_twist_retained_and_xr_grip_twist_not_invented`.
+- [ ] `fusion_wrist_jump_6m_s_emits_reason_no_pose_snap`.
+- [ ] `fusion_left_failure_does_not_disable_right`.
+- [ ] `fusion_three_good_frames_to_enter_two_to_exit_soft_mode`.
+- [ ] `fusion_recenter_and_athlete_switch_clear_prior_immediately`.
+- [ ] `fusion_sources_t_obs_us_and_provenance_correct`.
+- [ ] `fusion_capability_identity_changes_with_profile_content_same_id`.
+- [ ] `fusion_feature_status_only_reports_arm_constraints_not_full_body`.
 
 ### 10.4 Persistence/replay and no regressions
 
-- [ ] \`replay_recorded_xr_camera_imu_events_identical_sequential_ticks\`.
-- [ ] \`replay_seek_rebuilds_same_bend_history_at_target_frame\`.
-- [ ] \`replay_new_athlete_or_body_profile_outside_recording_has_no_effect\`.
-- [ ] \`replay_stage_recenter_and_disconnect_reset_fusion_state\`.
-- [ ] \`replay_legacy_recording_without_new_evidence_loads_unchanged\`.
-- [ ] \`camera_only_existing_coco17_and_triangulation_fixtures_unchanged\`.
-- [ ] \`imu_only_existing_mounting_and_heading_fixtures_unchanged\`.
-- [ ] \`camera_plus_imu_existing_rung1_root_and_heading_behavior_unchanged_when_off\`.
-- [ ] \`full_pose_has_no_nonfinite_world_values_and_same_skeleton_rev\`.
-- [ ] \`replay_and_live_method_provenance_metadata_equal\`.
-- [ ] \`performance_no_network_or_unbounded_heap_on_ik_hot_path\`.
+- [ ] `replay_recorded_xr_camera_imu_events_identical_sequential_ticks`.
+- [ ] `replay_seek_rebuilds_same_bend_history_at_target_frame`.
+- [ ] `replay_new_athlete_or_body_profile_outside_recording_has_no_effect`.
+- [ ] `replay_stage_recenter_and_disconnect_reset_fusion_state`.
+- [ ] `replay_legacy_recording_without_new_evidence_loads_unchanged`.
+- [ ] `camera_only_existing_coco17_and_triangulation_fixtures_unchanged`.
+- [ ] `imu_only_existing_mounting_and_heading_fixtures_unchanged`.
+- [ ] `camera_plus_imu_existing_rung1_root_and_heading_behavior_unchanged_when_off`.
+- [ ] `full_pose_has_no_nonfinite_world_values_and_same_skeleton_rev`.
+- [ ] `replay_and_live_method_provenance_metadata_equal`.
+- [ ] `performance_no_network_or_unbounded_heap_on_ik_hot_path`.
 
 ### 10.5 Exact validation commands
 
@@ -616,7 +616,7 @@ A tool or prerequisite file absent from the actual implementation baseline is **
 
 ## 11. Hardware validation: independent physical measurements
 
-Write results to \`docs/validation/YYYY-MM-DD-phase04-xr-arm-fusion.md\` with before/after commit, camera models/FPS, headset/controller, active athlete ID (not name), calibration fingerprints, stage IDs, source timestamp quality, confidence, observed physical setup and raw error summary.
+Write results to `docs/validation/YYYY-MM-DD-phase04-xr-arm-fusion.md` with before/after commit, camera models/FPS, headset/controller, active athlete ID (not name), calibration fingerprints, stage IDs, source timestamp quality, confidence, observed physical setup and raw error summary.
 
 1. Confirm phases 01–03 on real hardware first: XR head and both grips tracked, multi-camera world calibration, current athlete-specific arm lengths and grip-to-wrist offsets. No fake calibration data.
 2. Two or more calibrated cameras view shoulders/elbows/wrists; establish board room and physical reference floor marks. Record actual camera reprojection error and known frame time uncertainties.
@@ -633,55 +633,55 @@ Write results to \`docs/validation/YYYY-MM-DD-phase04-xr-arm-fusion.md\` with be
 13. Run camera-only, IMU-only and legacy simulation. Confirm no regression and exact feature-off equivalence.
 14. Mark each item PASS/FAIL/BLOCKED. **Physical accuracy target <=5cm is provisional** and only meaningful with a trustworthy independent reference.
 
-**Known hardware limitation:** existing \`sources/camera/timing.rs\` tracks arrival intervals, not necessarily exposure start; the Phase 02 four-timestamp estimator maps Godot **polling** time, not guaranteed OpenXR sensor exposure time. Physical fast-motion accuracy therefore needs independent QA. Report the uncertainty, do not mask it with a synchronized flag.
+**Known hardware limitation:** existing `sources/camera/timing.rs` tracks arrival intervals, not necessarily exposure start; the Phase 02 four-timestamp estimator maps Godot **polling** time, not guaranteed OpenXR sensor exposure time. Physical fast-motion accuracy therefore needs independent QA. Report the uncertainty, do not mask it with a synchronized flag.
 
 ## 12. Seven direct-to-main implementation commits, in exact order
 
 ### Commit 01 — prerequisites, contracts and YAML
 
-- [ ] Fetch latest \`main\`; record HEAD and actual code mapping. Verify Phase 01/02/03 **implemented and tested**, not just docs.
-- [ ] Add \`MethodId::XrConstrainedIk\`, \`FeatureId::XrArmConstraints\`; regenerate TS/golden.
-- [ ] Add nested disabled-by-default \`XrArmFusionConfig\`, strict validation and complete runtime YAML example.
+- [ ] Fetch latest `main`; record HEAD and actual code mapping. Verify Phase 01/02/03 **implemented and tested**, not just docs.
+- [ ] Add `MethodId::XrConstrainedIk`, `FeatureId::XrArmConstraints`; regenerate TS/golden.
+- [ ] Add nested disabled-by-default `XrArmFusionConfig`, strict validation and complete runtime YAML example.
 - [ ] Verify old config schema 1, protocol 1, existing camera/IMU test outputs.
-- **Commit message:** \`contracts,config: define optional XR arm constraints and quality gates\`.
+- **Commit message:** `contracts,config: define optional XR arm constraints and quality gates`.
 - **Gate:** no existing wire contract changed and feature-off behavior matches prior golden results.
 
 ### Commit 02 — bounded XR pose interpolation and world wrist
 
 - [ ] Add 64-sample XR pose histories to Registry and reset on disconnect/session.
-- [ ] Add pure \`xr_pose_align.rs\` and \`xr_wrist.rs\` with no extrapolation and correct frame transform.
+- [ ] Add pure `xr_pose_align.rs` and `xr_wrist.rs` with no extrapolation and correct frame transform.
 - [ ] Implement Stage/athlete/room/fingerprint/clock and controller side guard.
 - [ ] Test identity/yaw90, time skew, untracked data, identity mismatch, reconnect and staged calibration.
-- **Commit message:** \`engine: align OpenXR grip poses and derive calibrated world wrist targets\`.
+- **Commit message:** `engine: align OpenXR grip poses and derive calibrated world wrist targets`.
 - **Gate:** no raw XR-stage point can reach the camera-world IK stage untransformed.
 
 ### Commit 03 — closed-form elbow IK and numerical safety
 
-- [ ] Add pure \`arm_ik.rs\` and bend-plane math with all finite/reachability gates.
+- [ ] Add pure `arm_ik.rs` and bend-plane math with all finite/reachability gates.
 - [ ] Implement measured-current-length FK-consistent segment swing and 180° deterministic axis.
 - [ ] Implement optical/prior/anatomical bend-plane policy and time/rate guards in pure module.
 - [ ] Unit test geometry, unreachable/near-singular, left/right mirrors, held-out camera plane.
-- **Commit message:** \`engine: solve two-link elbow geometry with calibrated lengths and safe bend planes\`.
+- **Commit message:** `engine: solve two-link elbow geometry with calibrated lengths and safe bend planes`.
 - **Gate:** f64 length residuals and output quaternion validity pass; inferred source never reports observed camera elbow.
 
 ### Commit 04 — IMU arbitration and integrated solve
 
-- [ ] Add \`arm_evidence.rs\` and exact §6 sensor rule table.
-- [ ] Insert one optional arm stage in existing \`pipeline/solve.rs\` after baseline camera/IMU/root and before FK.
+- [ ] Add `arm_evidence.rs` and exact §6 sensor rule table.
+- [ ] Insert one optional arm stage in existing `pipeline/solve.rs` after baseline camera/IMU/root and before FK.
 - [ ] Maintain existing heading estimator/root anchor unchanged. Preserve observed/method/age per arm.
-- [ ] Integrate canonical \`motion.rs\` evidence, \`joints.rs\` null-on-inferred and new feature status.
+- [ ] Integrate canonical `motion.rs` evidence, `joints.rs` null-on-inferred and new feature status.
 - [ ] Run camera-only, IMU-only, mixed and no-XR regression suite.
-- **Commit message:** \`engine: gate XR elbow constraints against optical and mounted IMU evidence\`.
+- **Commit message:** `engine: gate XR elbow constraints against optical and mounted IMU evidence`.
 - **Gate:** valid IMU rotations survive conflicts, one broken arm does not break opposite arm, no second solver.
 
 ### Commit 05 — continuity, recording and replay identity
 
-- [ ] Add \`arm_state.rs\` to bounded \`FusionState\`; entry 3 frames, exit 2 soft / immediate hard.
+- [ ] Add `arm_state.rs` to bounded `FusionState`; entry 3 frames, exit 2 soft / immediate hard.
 - [ ] Wire reset to athlete/room/stage/profile/reconnect and explicit source gaps.
 - [ ] Update tracking/config calibration identity to include body/wrist profiles and algorithm v1 while enabled.
 - [ ] Assert **sequential replay == seek replay** on mixed camera/IMU/XR recordings with bend history.
 - [ ] Check runtime ticks/recording reconstruction, no wall-clock hidden state or unbounded history.
-- **Commit message:** \`engine: make XR arm continuity deterministic across occlusion and replay\`.
+- **Commit message:** `engine: make XR arm continuity deterministic across occlusion and replay`.
 - **Gate:** recorded outputs and source attribution stable under restart and seek.
 
 ### Commit 06 — compact UI and operational feedback
@@ -690,7 +690,7 @@ Write results to \`docs/validation/YYYY-MM-DD-phase04-xr-arm-fusion.md\` with be
 - [ ] Keep existing VR mannequin, BodyRoot, headset camera and 50ms presentation buffer; no new avatar IK.
 - [ ] Desktop can show quality source/provenance without introducing a separate renderer or networking client.
 - [ ] Add Godot headless smoke tests covering inferred vs measured labels and recenter.
-- **Commit message:** \`ui: display per-arm XR fusion quality and calibration blockers\`.
+- **Commit message:** `ui: display per-arm XR fusion quality and calibration blockers`.
 - **Gate:** clear diagnostics, no false "full-body measured" state, no VR navigation regression.
 
 ### Commit 07 — CI, docs and physical signoff
@@ -699,7 +699,7 @@ Write results to \`docs/validation/YYYY-MM-DD-phase04-xr-arm-fusion.md\` with be
 - [ ] Update docs/05-calibration-and-fusion.md, docs/13-implementation-status.md and CI.
 - [ ] Produce hardware validation with measured metrics or explicit **BLOCKED**; never claim simulated checks are hardware signoff.
 - [ ] Fetch latest main before final commit, review diff for unrelated changes, preserve concurrent commits.
-- **Commit message:** \`docs,ci: validate Phase 04 XR camera IMU elbow fusion\`.
+- **Commit message:** `docs,ci: validate Phase 04 XR camera IMU elbow fusion`.
 - **Gate:** green CI, source identity evidence, reproducible replay, honest real-world limitations.
 
 ## 13. Phase 04 completion-report checklist (implementing AI)
@@ -712,7 +712,7 @@ Report:
 5. Measured arm lengths, optical elbow quality, IK elbow/W_solve geometry and residual, plus source priority result.
 6. Complete per-side arbitration examples: zero IMUs, both IMUs, only upper, only forearm, no camera elbow, unreachable target, short dropout.
 7. Proof of inferred vs derived/observed null joint semantics, stable elbow bend and no NaN.
-8. Calibration/athlete/stage/profile invalidation and reproducible \`tracking_config_id\`/\`calibration_set_id\`.
+8. Calibration/athlete/stage/profile invalidation and reproducible `tracking_config_id`/`calibration_set_id`.
 9. Recorded-live vs sequential-replay vs seek-replay equality proof with bend-plane continuity.
 10. Physically measured elbow accuracy and frame time/latency, or clearly **BLOCKED** if no headset/cameras.
 11. Measured p50/p95 overhead and regression evidence against feature-off.
@@ -720,7 +720,7 @@ Report:
 
 ## 14. Non-goals and future dependencies
 
-- **Phase 05:** Humanoid \`Skeleton3D\` / skinned avatar mesh rest-pose retargeting and full VR character presentation. Phase 04 outputs canonical world pose only.
+- **Phase 05:** Humanoid `Skeleton3D` / skinned avatar mesh rest-pose retargeting and full VR character presentation. Phase 04 outputs canonical world pose only.
 - **Phase 06:** Benchmark COCO17 vs 33-keypoint heel/toe tracking, not assumed improvement; no model switch in this phase.
 - **Phase 07:** Hardware multi-camera/headset/controller/SlimeVR validation at martial-arts speed, including latency, exposure skew, drift and held-out error.
 - **Deferred beyond phase:** Real hand/palm anatomical orientation calibration, calibrated HMD-eye-to-head-joint transform, EKF/factor graph, full-body mechanical optimization, OSC/VMT/SteamVR drivers, Kinect/Unity interoperability, markerless single-camera absolute metric arm measurement and advanced contact physics.
