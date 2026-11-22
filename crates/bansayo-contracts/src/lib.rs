@@ -29,6 +29,7 @@ pub mod state;
 pub mod time;
 pub mod training;
 pub mod wire;
+pub mod xr;
 
 pub use api::*;
 pub use athlete::*;
@@ -50,3 +51,4 @@ pub use state::*;
 pub use time::*;
 pub use training::*;
 pub use wire::*;
+pub use xr::*;

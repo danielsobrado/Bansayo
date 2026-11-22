@@ -1,0 +1,28 @@
+{
+  "device_id": "XR-HMD",
+  "source_id": "xr-openxr",
+  "origin": "live",
+  "seq": 42,
+  "t_us": 4567890,
+  "device_time_us": 123456789,
+  "time_quality": "receive_time",
+  "calibration_ref": null,
+  "confidence": null,
+  "data": {
+    "kind": "rigid_pose",
+    "frame": {
+      "type": "xr_stage"
+    },
+    "position_m": [
+      0.0,
+      1.72,
+      0.0
+    ],
+    "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  }
+}

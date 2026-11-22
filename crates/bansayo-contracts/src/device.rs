@@ -14,6 +14,8 @@ use crate::{
 pub enum DeviceKind {
     ImuTracker,
     Camera,
+    /// An OpenXR headset or controller reporting 6-DoF poses in XR stage space. Additive.
+    XrTrackedDevice,
 }
 
 /// How the engine reaches a device.
@@ -59,6 +61,8 @@ pub enum SensorCapability {
     SignalStrength,
     /// Device-reported quality, fraction.
     Quality,
+    /// Atomic position + orientation of a tracked device in a named frame. Additive.
+    RigidPose,
 }
 
 /// Camera-specific descriptor fields.

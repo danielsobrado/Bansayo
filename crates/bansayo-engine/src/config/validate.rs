@@ -176,6 +176,7 @@ fn check_training_sections(c: &mut Check, config: &Config) {
         ("progress", config.progress.is_some()),
         ("storage", config.storage.is_some()),
         ("diagnostics", config.diagnostics.is_some()),
+        ("xr", config.xr.is_some()),
     ];
     if config.schema_version < 2 {
         for (key, present) in v2 {
@@ -411,6 +412,7 @@ pub(super) fn validate(config: Config) -> Result<Validated, Vec<Problem>> {
     for source in &mut cameras {
         source.fiducials = config.fiducials.clone();
     }
+    check_xr(&mut c, &config, &devices);
     let assignments = check_assignments(
         &mut c,
         &config.assignments,
@@ -430,6 +432,66 @@ pub(super) fn validate(config: Config) -> Result<Validated, Vec<Problem>> {
         })
     } else {
         Err(c.problems)
+    }
+}
+
+fn check_xr(c: &mut Check, config: &Config, devices: &HashMap<String, bool>) {
+    let x = config.xr();
+    c.range("xr.nominal_rate_hz", x.nominal_rate_hz, 1.0, 120.0);
+    c.range(
+        "xr.max_ingest_rate_hz",
+        x.max_ingest_rate_hz,
+        x.nominal_rate_hz.max(1.0),
+        240.0,
+    );
+    c.range(
+        "xr.max_position_norm_m",
+        x.max_position_norm_m.into(),
+        1.0,
+        f64::from(crate::sources::xr::MAX_POSITION_NORM_M),
+    );
+    c.positive(
+        "xr.max_quaternion_norm_error",
+        x.max_quaternion_norm_error.into(),
+        f64::from(crate::sources::xr::MAX_QUATERNION_NORM_ERROR),
+    );
+    c.range(
+        "xr.max_message_bytes",
+        x.max_message_bytes as f64,
+        512.0,
+        16384.0,
+    );
+    c.range(
+        "xr.tracking_stale_after_ms",
+        x.tracking_stale_after_ms as f64,
+        50.0,
+        2000.0,
+    );
+    if !x.enabled {
+        return;
+    }
+    // The XR ids are reserved: a configured device with one would share its registry entry.
+    for id in crate::sources::xr::DEVICE_IDS {
+        if devices.contains_key(id) {
+            c.err(
+                "xr.enabled",
+                format!("device id {id:?} is reserved for OpenXR"),
+            );
+        }
+    }
+    for (i, s) in config.sources.iter().enumerate() {
+        let id = match s {
+            SourceConfig::Simulated(s) => &s.id,
+            SourceConfig::Camera(k) => &k.id,
+            SourceConfig::SlimevrSolarxr(s) => &s.id,
+            SourceConfig::Esp32Udp(e) => &e.id,
+        };
+        if id == crate::sources::xr::SOURCE_ID {
+            c.err(
+                format!("sources[{i}].id"),
+                format!("{id:?} is reserved for OpenXR while xr.enabled is true"),
+            );
+        }
     }
 }
 
@@ -1324,5 +1386,71 @@ sources:
             p.iter().any(|l| l.starts_with("progress.trend_sessions")),
             "{p:#?}"
         );
+    }
+
+    #[test]
+    fn xr_config_rejects_invalid_bounds_and_unknown_fields() {
+        // Absent: defaults, off, valid under schema 1.
+        let off = parse("schema_version: 1").expect("defaults");
+        assert_eq!(off.config.xr(), crate::config::XrConfig::default());
+        assert!(!off.config.xr().enabled);
+        assert!(
+            problems(
+                "schema_version: 1
+xr: { enabled: true }"
+            )
+            .iter()
+            .any(|l| l.starts_with("xr: needs schema_version: 2"))
+        );
+        let bad = problems(
+            "schema_version: 2
+xr: { enabled: true, nominal_rate_hz: .nan, max_ingest_rate_hz: 30, max_position_norm_m: -1, max_quaternion_norm_error: 0, max_message_bytes: 1000000, tracking_stale_after_ms: 10 }",
+        );
+        for key in [
+            "xr.nominal_rate_hz",
+            "xr.max_position_norm_m",
+            "xr.max_quaternion_norm_error",
+            "xr.max_message_bytes",
+            "xr.tracking_stale_after_ms",
+        ] {
+            assert!(bad.iter().any(|l| l.starts_with(key)), "{key}: {bad:#?}");
+        }
+        let slow = problems(
+            "schema_version: 2
+xr: { nominal_rate_hz: 60, max_ingest_rate_hz: 30 }",
+        );
+        assert!(
+            slow.iter().any(|l| l.starts_with("xr.max_ingest_rate_hz")),
+            "{slow:#?}"
+        );
+        assert!(matches!(
+            parse(
+                "schema_version: 2
+xr: { enabled: true, token: x }"
+            ),
+            Err(ConfigError::Parse(_))
+        ));
+        // Reserved identities may not be taken by configured sources while XR is on.
+        let clash = "schema_version: 2
+xr: { enabled: ENABLED }
+sources:
+  - { id: xr-openxr, kind: simulated, trackers: [ { id: XR-HMD, rate_hz: 100 } ] }
+";
+        let p = problems(&clash.replace("ENABLED", "true"));
+        assert!(
+            p.iter()
+                .any(|l| l.contains("XR-HMD") && l.contains("reserved")),
+            "{p:#?}"
+        );
+        assert!(p.iter().any(|l| l.starts_with("sources[0].id")), "{p:#?}");
+        assert!(problems(&clash.replace("ENABLED", "false")).is_empty());
+        let example = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../config/xr-local.example.yaml"),
+        )
+        .expect("example config");
+        let v = parse(&example).expect("xr-local example validates");
+        assert!(v.config.xr().enabled);
+        assert!(v.bind.ip().is_loopback());
     }
 }

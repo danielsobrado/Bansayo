@@ -359,6 +359,80 @@ fn observations() -> Vec<Example> {
     ]
 }
 
+/// The OpenXR uplink (Phase 01): handshake, a full and a partly untracked frame, and the
+/// observation the engine derives (server receive time, client clock kept as device time).
+fn xr_examples() -> Vec<Example> {
+    let tracked = |role, p: Vec3| XrDeviceSample {
+        role,
+        tracked: true,
+        position_m: Some(p),
+        rotation_xyzw: Some(IDENTITY),
+    };
+    let frame = |right: XrDeviceSample| {
+        XrClientMessage::Frame(XrFrame {
+            seq: 42,
+            client_time_us: 123_456_789,
+            samples: [
+                tracked(XrRole::Head, [0.0, 1.72, 0.0]),
+                tracked(XrRole::LeftGrip, [-0.35, 1.25, -0.22]),
+                right,
+            ],
+        })
+    };
+    let pose = SensorObservation {
+        device_id: dev("XR-HMD"),
+        source_id: src("xr-openxr"),
+        origin: Origin::Live,
+        seq: 42,
+        t_us: 4_567_890,
+        device_time_us: Some(123_456_789),
+        time_quality: TimeQuality::ReceiveTime,
+        calibration_ref: None,
+        confidence: None,
+        data: ObservationData::RigidPose {
+            frame: FrameRef::XrStage,
+            position_m: [0.0, 1.72, 0.0],
+            rotation: IDENTITY,
+        },
+    };
+    vec![
+        ex(
+            "xr_client_hello",
+            XrClientMessage::Hello(XrHello {
+                protocol_version: XR_PROTOCOL_VERSION,
+            }),
+        ),
+        ex(
+            "xr_server_ready",
+            XrServerMessage::Ready {
+                protocol_version: XR_PROTOCOL_VERSION,
+                time_quality: TimeQuality::ReceiveTime,
+            },
+        ),
+        ex(
+            "xr_server_error",
+            XrServerMessage::Error {
+                code: "xr_sequence".into(),
+                message: "seq must strictly increase on a connection".into(),
+            },
+        ),
+        ex(
+            "xr_client_frame",
+            frame(tracked(XrRole::RightGrip, [0.35, 1.25, -0.22])),
+        ),
+        ex(
+            "xr_client_frame_partly_untracked",
+            frame(XrDeviceSample {
+                role: XrRole::RightGrip,
+                tracked: false,
+                position_m: None,
+                rotation_xyzw: None,
+            }),
+        ),
+        ex("sensor_observation_rigid_pose", pose),
+    ]
+}
+
 fn source_events() -> Vec<Example> {
     vec![
         ex(
@@ -733,6 +807,7 @@ pub fn all() -> Vec<Example> {
     out.extend(training_examples());
     out.extend(observations());
     out.extend(source_events());
+    out.extend(xr_examples());
     out.extend(api());
     out
 }

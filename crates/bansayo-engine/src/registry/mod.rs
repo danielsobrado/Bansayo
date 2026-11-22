@@ -19,6 +19,7 @@ pub enum ObservationKind {
     Landmarks2d,
     Landmarks3d,
     Diagnostics,
+    RigidPose,
 }
 impl ObservationKind {
     pub fn of(data: &ObservationData) -> Self {
@@ -32,6 +33,7 @@ impl ObservationKind {
             ObservationData::Landmarks2d { .. } => Self::Landmarks2d,
             ObservationData::Landmarks3d { .. } => Self::Landmarks3d,
             ObservationData::Diagnostics { .. } => Self::Diagnostics,
+            ObservationData::RigidPose { .. } => Self::RigidPose,
         }
     }
 }
@@ -182,6 +184,12 @@ impl Registry {
             .contains(&SensorCapability::Landmarks2d)
         {
             ObservationKind::Landmarks2d
+        } else if entry
+            .descriptor
+            .capabilities
+            .contains(&SensorCapability::RigidPose)
+        {
+            ObservationKind::RigidPose
         } else {
             kind
         };

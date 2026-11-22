@@ -5,6 +5,7 @@ pub mod simulated;
 pub mod slimevr;
 pub mod supervision;
 pub mod validation;
+pub mod xr;
 use crate::clock::SessionClock;
 use bansayo_contracts::{DeviceId, SourceEvent};
 use std::collections::BTreeMap;

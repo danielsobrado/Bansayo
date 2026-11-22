@@ -1,0 +1,20 @@
+# Phase 01: local OpenXR head + grip pose ingest (GET /api/v1/ingest/xr), nothing else.
+# Loopback only. Poses stay in raw XR stage space and are not used by the solver yet.
+# Run: cargo run -p bansayo-engine -- --config config/xr-local.example.yaml
+# and set bansayo/xr_uplink_enabled=true in a local (uncommitted) Godot override.
+schema_version: 2
+engine:
+  publish_rate_hz: 60
+  stale_after_ms: 250
+  data_dir: ./data
+api:
+  bind: 127.0.0.1:7700
+xr:
+  enabled: true
+  nominal_rate_hz: 60.0
+  max_ingest_rate_hz: 120.0
+  max_position_norm_m: 20.0
+  max_quaternion_norm_error: 0.005
+  max_message_bytes: 4096
+  tracking_stale_after_ms: 250
+sources: []

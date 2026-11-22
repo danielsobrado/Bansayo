@@ -58,6 +58,12 @@ pub enum ObservationData {
         rssi_dbm: Option<i16>,
         quality: Option<f32>,
     },
+    /// Atomic 6-DoF device pose: `rotation` is `q_frame_from_device`, position in metres.
+    RigidPose {
+        frame: FrameRef,
+        position_m: Vec3,
+        rotation: Quat,
+    },
 }
 
 /// Everything a source emits.

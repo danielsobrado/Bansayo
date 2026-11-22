@@ -71,6 +71,9 @@ pub struct Config {
     /// `diagnostics.timing`: per-stage latency histograms (15 §4.1). Schema version 2.
     #[serde(default)]
     pub diagnostics: Option<DiagnosticsConfig>,
+    /// `xr`: the local OpenXR tracked-device uplink (`/api/v1/ingest/xr`). Schema version 2.
+    #[serde(default)]
+    pub xr: Option<XrConfig>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -154,6 +157,39 @@ impl Config {
     }
     pub fn diagnostics(&self) -> DiagnosticsConfig {
         self.diagnostics.clone().unwrap_or_default()
+    }
+    pub fn xr(&self) -> XrConfig {
+        self.xr.clone().unwrap_or_default()
+    }
+}
+
+/// OpenXR head and grip pose ingest. Off unless enabled; bounds are validated in `validate.rs`.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct XrConfig {
+    pub enabled: bool,
+    /// Rate the VR client is expected to send at; the device status judges against it.
+    pub nominal_rate_hz: f64,
+    /// Frames arriving faster than this are dropped and counted.
+    pub max_ingest_rate_hz: f64,
+    pub max_position_norm_m: f32,
+    /// Allowed `| |q| - 1 |`; quaternions outside are rejected, never renormalised.
+    pub max_quaternion_norm_error: f32,
+    pub max_message_bytes: usize,
+    /// No frame for this long marks tracked devices disconnected; the socket stays open.
+    pub tracking_stale_after_ms: u64,
+}
+impl Default for XrConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            nominal_rate_hz: 60.0,
+            max_ingest_rate_hz: 120.0,
+            max_position_norm_m: 20.0,
+            max_quaternion_norm_error: 0.005,
+            max_message_bytes: 4096,
+            tracking_stale_after_ms: 250,
+        }
     }
 }
 

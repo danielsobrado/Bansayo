@@ -1,0 +1,52 @@
+{
+  "type": "frame",
+  "seq": 42,
+  "client_time_us": 123456789,
+  "samples": [
+    {
+      "role": "head",
+      "tracked": true,
+      "position_m": [
+        0.0,
+        1.72,
+        0.0
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "role": "left_grip",
+      "tracked": true,
+      "position_m": [
+        -0.35,
+        1.25,
+        -0.22
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "role": "right_grip",
+      "tracked": true,
+      "position_m": [
+        0.35,
+        1.25,
+        -0.22
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    }
+  ]
+}

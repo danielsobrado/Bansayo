@@ -118,6 +118,23 @@ pub fn observation(
             }
             return Ok(());
         }
+        ObservationData::RigidPose {
+            frame,
+            position_m,
+            rotation,
+        } => {
+            // Only OpenXR devices report rigid poses, and only in raw stage space (Phase 01).
+            let (p, q) = crate::sources::xr::pose_ok(
+                position_m,
+                rotation,
+                crate::sources::xr::MAX_POSITION_NORM_M,
+                crate::sources::xr::MAX_QUATERNION_NORM_ERROR,
+            );
+            if d.kind != DeviceKind::XrTrackedDevice || *frame != FrameRef::XrStage || !p || !q {
+                return Err("Rigid pose frame, device kind or values are invalid.".into());
+            }
+            SensorCapability::RigidPose
+        }
         ObservationData::Landmarks3d { .. } => {
             return Err("3D landmarks are not supported by this engine build.".into());
         }

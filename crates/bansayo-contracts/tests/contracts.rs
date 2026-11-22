@@ -194,3 +194,137 @@ fn api_envelope_shape() {
     );
     assert!(serde_json::from_value::<SimulationUpdateRequest>(json!({})).is_ok());
 }
+
+#[test]
+fn xr_client_hello_round_trip() {
+    let wire = json!({ "type": "hello", "protocol_version": 1 });
+    let hello: XrClientMessage = serde_json::from_value(wire.clone()).expect("hello");
+    assert_eq!(
+        hello,
+        XrClientMessage::Hello(XrHello {
+            protocol_version: XR_PROTOCOL_VERSION
+        })
+    );
+    assert_eq!(serde_json::to_value(&hello).ok(), Some(wire));
+    let ready = XrServerMessage::Ready {
+        protocol_version: 1,
+        time_quality: TimeQuality::ReceiveTime,
+    };
+    assert_eq!(
+        serde_json::to_value(&ready).ok(),
+        Some(json!({ "type": "ready", "protocol_version": 1, "time_quality": "receive_time" }))
+    );
+    let extra = json!({ "type": "hello", "protocol_version": 1, "device_id": "XR-HMD" });
+    assert!(serde_json::from_value::<XrClientMessage>(extra).is_err());
+}
+
+fn xr_frame_json(samples: Value) -> Value {
+    json!({ "type": "frame", "seq": 42, "client_time_us": 123_456_789u64, "samples": samples })
+}
+fn xr_sample(role: &str) -> Value {
+    json!({ "role": role, "tracked": true, "position_m": [0.0, 1.7, 0.0], "rotation_xyzw": [0.0, 0.0, 0.0, 1.0] })
+}
+
+#[test]
+fn xr_frame_requires_three_ordered_roles() {
+    let three = xr_frame_json(json!([
+        xr_sample("head"),
+        xr_sample("left_grip"),
+        xr_sample("right_grip")
+    ]));
+    let Ok(XrClientMessage::Frame(frame)) = serde_json::from_value::<XrClientMessage>(three) else {
+        panic!("a three-sample frame decodes");
+    };
+    assert_eq!(frame.samples.map(|s| s.role), XrRole::ORDER);
+    // Count, unknown roles and client-chosen identity are refused at decode; order and
+    // duplicates are refused by the engine's frame validation (sources/xr.rs).
+    for bad in [
+        xr_frame_json(json!([xr_sample("head"), xr_sample("left_grip")])),
+        xr_frame_json(json!([
+            xr_sample("head"),
+            xr_sample("left_grip"),
+            xr_sample("right_grip"),
+            xr_sample("right_grip")
+        ])),
+        xr_frame_json(json!([
+            xr_sample("head"),
+            xr_sample("left_hand"),
+            xr_sample("right_grip")
+        ])),
+        {
+            let mut f = xr_frame_json(json!([
+                xr_sample("head"),
+                xr_sample("left_grip"),
+                xr_sample("right_grip")
+            ]));
+            f["frame"] = json!({ "type": "world" });
+            f
+        },
+    ] {
+        assert!(serde_json::from_value::<XrClientMessage>(bad).is_err());
+    }
+}
+
+#[test]
+fn xr_untracked_requires_absent_pose() {
+    let untracked = json!({ "role": "right_grip", "tracked": false, "position_m": null, "rotation_xyzw": null });
+    let s: XrDeviceSample = serde_json::from_value(untracked).expect("untracked");
+    assert!(!s.tracked && s.position_m.is_none() && s.rotation_xyzw.is_none());
+    // Non-numbers never become a pose: JSON has no NaN, strings are refused.
+    let nan = json!({ "role": "head", "tracked": true, "position_m": ["NaN", 0.0, 0.0], "rotation_xyzw": [0.0, 0.0, 0.0, 1.0] });
+    assert!(serde_json::from_value::<XrDeviceSample>(nan).is_err());
+    let short = json!({ "role": "head", "tracked": true, "position_m": [0.0, 0.0], "rotation_xyzw": [0.0, 0.0, 0.0, 1.0] });
+    assert!(serde_json::from_value::<XrDeviceSample>(short).is_err());
+}
+
+#[test]
+fn rigid_pose_contract_round_trip() {
+    let wire = json!({
+        "device_id": "XR-HMD", "source_id": "xr-openxr", "origin": "live", "seq": 42,
+        "t_us": 4_567_890, "device_time_us": 123_456_789u64, "time_quality": "receive_time",
+        "calibration_ref": null, "confidence": null,
+        "data": { "kind": "rigid_pose", "frame": { "type": "xr_stage" },
+                  "position_m": [0.0, 1.72, 0.0], "rotation": [0.0, 0.0, 0.0, 1.0] }
+    });
+    let o: SensorObservation = serde_json::from_value(wire.clone()).expect("rigid pose");
+    assert!(matches!(
+        o.data,
+        ObservationData::RigidPose {
+            frame: FrameRef::XrStage,
+            ..
+        }
+    ));
+    let back: Value =
+        serde_json::from_str(&serde_json::to_string(&o).expect("serialise")).expect("parse");
+    assert_eq!(back, wire);
+    assert_eq!(
+        serde_json::to_value(DeviceKind::XrTrackedDevice).ok(),
+        Some(json!("xr_tracked_device"))
+    );
+    assert_eq!(
+        serde_json::to_value(SensorCapability::RigidPose).ok(),
+        Some(json!("rigid_pose"))
+    );
+}
+
+#[test]
+fn legacy_observation_examples_unchanged() {
+    // Shapes recorded before RigidPose existed still decode to the same variants.
+    for (file, kind) in [
+        ("sensor_observation_orientation.json", "orientation"),
+        ("sensor_observation_position.json", "position"),
+        ("sensor_observation_landmarks_2d.json", "landmarks_2d"),
+    ] {
+        let e = examples::all()
+            .into_iter()
+            .find(|e| e.file == file)
+            .expect("legacy example");
+        let o: SensorObservation = serde_json::from_value(e.value()).expect(file);
+        assert_eq!(
+            serde_json::to_value(&o.data)
+                .ok()
+                .and_then(|v| v["kind"].as_str().map(String::from)),
+            Some(kind.to_owned())
+        );
+    }
+}

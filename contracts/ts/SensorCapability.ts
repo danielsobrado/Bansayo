@@ -3,4 +3,4 @@
 /**
  * A kind of observation a device can provide.
  */
-export type SensorCapability = "orientation" | "angular_velocity" | "acceleration" | "position" | "distance" | "contact" | "image" | "landmarks_2d" | "landmarks_3d_model" | "battery" | "signal_strength" | "quality";
+export type SensorCapability = "orientation" | "angular_velocity" | "acceleration" | "position" | "distance" | "contact" | "image" | "landmarks_2d" | "landmarks_3d_model" | "battery" | "signal_strength" | "quality" | "rigid_pose";

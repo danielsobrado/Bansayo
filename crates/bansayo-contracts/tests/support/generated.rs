@@ -60,6 +60,8 @@ pub fn typescript() -> BTreeMap<String, String> {
     c.visit::<ServerMessage>();
     c.visit::<MotionSample>();
     c.visit::<SourceEvent>();
+    c.visit::<XrClientMessage>();
+    c.visit::<XrServerMessage>();
     c.visit::<CalibrationProfile>();
     c.visit::<MountingData>();
     c.visit::<MountingQuality>();

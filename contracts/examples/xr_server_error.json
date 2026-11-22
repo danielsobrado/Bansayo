@@ -1,0 +1,5 @@
+{
+  "type": "error",
+  "code": "xr_sequence",
+  "message": "seq must strictly increase on a connection"
+}

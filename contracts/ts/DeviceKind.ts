@@ -3,4 +3,4 @@
 /**
  * Broad device category. Capabilities, not kind, decide what a device provides.
  */
-export type DeviceKind = "imu_tracker" | "camera";
+export type DeviceKind = "imu_tracker" | "camera" | "xr_tracked_device";
