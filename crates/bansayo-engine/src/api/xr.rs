@@ -257,13 +257,10 @@ async fn session(
         // One receive instant for the whole frame: all three devices share it.
         let received_us = ingress.clock.now_us();
         let result = match serde_json::from_str::<XrClientMessage>(&text) {
-            Ok(XrClientMessage::Frame(frame)) if state.borrow().playback.is_some() => {
-                let _ = frame;
-                Err((
-                    "xr_replay_active",
-                    "A recording is playing back; live poses are ignored.".to_owned(),
-                ))
-            }
+            Ok(XrClientMessage::Frame(_)) if state.borrow().playback.is_some() => Err((
+                "xr_replay_active",
+                "A recording is playing back; live poses are ignored.".to_owned(),
+            )),
             Ok(XrClientMessage::Frame(frame)) => {
                 match link.frame(&frame, config, received_us, |e| ingress.enqueue(e)) {
                     Ok(n) => {
