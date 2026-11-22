@@ -4,6 +4,68 @@ This record includes Phase 2 (18 November 2026; machine part delivered, owner pa
 Phase 1 and Phase 0 (both 17 November 2026), followed by the historical Stage 1–3 and camera/VR
 record. Phase 0 began at `b61c6b7`. All phases are on `main`.
 
+## Roadmap Phase 01 — OpenXR observation pipeline (22 November 2026)
+
+Phase 01 of the 2026-11-20 tracking roadmap
+([spec](phase-01-openxr-observation-pipeline-implementation.md)), **not** the historical Phase 1
+below. Started at `92f159e`; the spec's pinned baseline `b348d89` had no differences in `crates/`,
+`apps/vr/`, `config/`, `scripts/` or `.github/`, so its source map held.
+
+Delivered: the VR client streams raw head and controller-**grip** poses in XR stage space; the
+engine validates them at `GET /api/v1/ingest/xr`, stamps each frame with one server receive time,
+and records, replays and reports `XR-HMD`, `XR-LEFT-GRIP`, `XR-RIGHT-GRIP` (source `xr-openxr`,
+origin `live`, kind `xr_tracked_device`, no segment assignment). Off by default on both sides.
+**Nothing consumes the poses** — solver, fusion, skeleton, avatar and BodyRoot are unchanged —
+and they are **not aligned** to camera world (Phase 02).
+
+| Area | Files |
+|---|---|
+| Contracts | `contracts/src/xr.rs` (new), `RigidPose` in `observation.rs`, `XrTrackedDevice` / `RigidPose` in `device.rs`; goldens + TS regenerated |
+| Config | `xr` section (schema 2) in `config/schema.rs`, bounds and reserved-id checks in `validate.rs`, `config/xr-local.example.yaml` |
+| Adapter | `sources/xr.rs` (descriptors, frame validation, `XrLink` ordering/rate/link state), `sources/validation.rs`, `registry/mod.rs` |
+| Endpoint | `api/xr.rs` (new), route in `api/mod.rs`, registration in `app.rs` |
+| VR client | `scripts/xr_pose_capture.gd`, `scripts/xr_pose_uplink.gd` (new), `training_room.gd`, `project.godot` |
+| Tests | `bansayo-contracts/tests/contracts.rs`, `tests/xr_registry.rs`, `tests/xr_ingest.rs`, unit tests in `sources/xr.rs`, `api/xr.rs`, `config/validate.rs`; `apps/vr/tests/xr_observation_smoke.gd`, `xr_uplink_live.gd` (manual) |
+| CI | `vr` job: pinned Godot 4.5.1, import + three headless smokes |
+
+**Decisions and deviations from the spec.**
+
+- `XrClientMessage::Hello` is a newtype over `XrHello { protocol_version }`: ts-rs does not
+  apply `deny_unknown_fields` on an internally tagged enum, and a strict struct keeps unknown
+  fields refused with an identical wire shape. `XrServerMessage` accepts additive fields.
+- `XR_PROTOCOL_VERSION = 1` is its own constant; the downlink `PROTOCOL_VERSION` is unchanged.
+- `Config.xr` is `Option<XrConfig>` with `config.xr()`, like the other schema-2 sections, so
+  "present under schema 1" can be refused while absence stays valid.
+- Quaternions inside the configured tolerance are recorded **as sent** (not renormalised). The
+  pipeline validator therefore checks `rigid_pose` against the configurable ceilings (50 m,
+  0.02), not the 1e-3 IMU tolerance; the adapter applies the tighter configured bounds first.
+- Rate gate: average-rate, at most half an interval of arrival-jitter credit, no lasting burst
+  credit; over-rate frames are dropped and counted. Bursty arrival (Nagle) trips it, so the
+  Godot sender and the tests disable Nagle.
+- Tracking loss / silence: `DeviceLink(false)` once per transition; reacquisition sends
+  `DeviceLink(true)` before the pose. A device's link state only advances when its link event was
+  queued, so a full queue can never leave a pose ahead of its link.
+- Godot head validity: `XRServer` tracker `head`, pose `default`, `has_tracking_data` and
+  confidence ≠ NONE. `XRCamera3D` has no `get_has_tracking_data()`; OpenXR's
+  `XRInterface.get_tracking_status()` was not relied on.
+- Plan commits 01+02 and 04+05 were combined: each pair is not separable at compile/parse time.
+
+**Checks run** (22 November 2026, Windows): `cargo fmt --all -- --check`, `cargo clippy
+--workspace --all-targets -- -D warnings`, `BANSAYO_BLESS=1 cargo test -p bansayo-contracts`
+then `cargo test -p bansayo-contracts` (clean), `cargo test --workspace --no-fail-fast` (279
+passed, 4 ignored), `node scripts/verify-gate1.mjs` (8 checks), `node scripts/verify-gate2.mjs` (5
+checks), Godot 4.5.1 editor import and `contract_smoke`, `spatial_ui_smoke`,
+`xr_observation_smoke`. `clinic_smoke` and `pose_mirror_smoke` fail identically on untouched
+`92f159e` (pre-existing; not in CI). Sender ↔ engine without headset: 60.1 Hz, 0 rejected
+([report](validation/2026-11-22-phase01-openxr-uplink.md)).
+
+**BLOCKED — physical OpenXR hardware unavailable:** headset and controller tracking, real
+left/right roles, tracking-loss recovery on hardware, actual observation rates (≥ 45 Hz target),
+native view stability, a recorded physical session. See the validation report.
+
+Known limits: the downlink `diagnostics` message labels every drop counter `camera_frames:<id>`,
+XR ones included (pre-existing naming); per-frame ingest latency is not instrumented.
+
 ## RTSP IP cameras (19 November 2026)
 
 For the owner's Reolink and Aqara Wi-Fi cameras (ADR-020 item 7, decision note there): a camera

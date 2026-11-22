@@ -27,7 +27,46 @@ Validation commands, when Godot is installed:
 godot --headless --path apps/vr --editor --quit
 godot --headless --path apps/vr --xr-mode off --script tests/contract_smoke.gd
 godot --headless --path apps/vr --xr-mode off --script tests/spatial_ui_smoke.gd
+godot --headless --path apps/vr --xr-mode off --script tests/xr_observation_smoke.gd
 ```
+
+## OpenXR pose uplink (Phase 01)
+
+In headset mode the room can stream the raw headset pose and both controllers' **grip** poses
+to the engine (`GET /api/v1/ingest/xr`) as engine devices `XR-HMD`, `XR-LEFT-GRIP` and
+`XR-RIGHT-GRIP`. The engine records and replays them and shows them in device status; it does
+**not** use them for the body, the avatar or alignment yet (Phases 02–05). Both sides are off by
+default:
+
+1. Engine: `xr.enabled: true` (`config/xr-local.example.yaml`, loopback only).
+2. Godot: `bansayo/xr_uplink_enabled=true` in a local, uncommitted override (for example
+   `apps/vr/override.cfg` with a `[bansayo]` section). Rate, buffer and backoff are the other
+   `bansayo/xr_uplink_*` settings in `project.godot`.
+
+```sh
+cargo run -p bansayo-engine -- --config config/xr-local.example.yaml
+godot --path apps/vr
+```
+
+What is sent: positions in metres and `[x, y, z, w]` rotations in **XR stage space** (the
+XROrigin3D's own space, so the room's presentation offset is removed), stamped with
+`Time.get_ticks_usec()`. The engine re-stamps every frame with its own receive time
+(`time_quality: receive_time`) and keeps the client clock as `device_time_us`; the two clocks are
+not synchronised in this phase. An untracked or unfocused device is sent as `tracked: false`
+with no pose, never a zero or identity pose. The aim-pose controllers that drive the UI are
+unchanged; the grip nodes are separate and invisible. A grip pose is a controller point, not the
+wrist.
+
+Status: the uplink prints one line per state change (`XR uplink: streaming (receive_time)`,
+`... retrying`, `disabled`), never per frame. In the engine, the three devices are `acquiring`
+until their first pose, `disconnected` when untracked, when the client is silent for
+`xr.tracking_stale_after_ms`, or after the socket closes. A second uplink, a remote machine or a
+running replay is refused (409 / 403 / 409).
+
+Without a headset, `tests/xr_uplink_live.gd` drives the real uplink with synthetic nodes against a
+running engine (see the script header). It is not headset validation; the headset checklist is
+[docs/validation/2026-11-22-phase01-openxr-uplink.md](../../docs/validation/2026-11-22-phase01-openxr-uplink.md)
+(currently BLOCKED: no headset tested).
 
 ## Training view
 

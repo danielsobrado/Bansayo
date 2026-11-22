@@ -38,3 +38,23 @@ jobs:
       - run: npm test
       # Type-checks, then builds.
       - run: npm run build
+
+  # VR client headless smokes. No OpenXR runtime or headset: geometry, wire shape and the desktop
+  # fallback only. clinic_smoke and pose_mirror_smoke are not run: they already fail on main
+  # (92f159e) and are tracked separately.
+  vr:
+    runs-on: ubuntu-latest
+    env:
+      GODOT_VERSION: 4.5.1-stable
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Godot (pinned)
+        run: |
+          curl -fsSL -o godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
+          unzip -q godot.zip
+          sudo mv "Godot_v${GODOT_VERSION}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+      - run: godot --headless --path apps/vr --editor --quit
+      - run: godot --headless --path apps/vr --xr-mode off --script tests/contract_smoke.gd
+      - run: godot --headless --path apps/vr --xr-mode off --script tests/spatial_ui_smoke.gd
+      - run: godot --headless --path apps/vr --xr-mode off --script tests/xr_observation_smoke.gd

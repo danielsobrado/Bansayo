@@ -8,6 +8,7 @@ One Markdown file per experiment run (martial-arts [16 §10](../architecture/mar
 |---|---|
 | [PHASE2-OWNER-CHECKLIST.md](PHASE2-OWNER-CHECKLIST.md) | The roadmap Phase 2 steps that need the owner, a camera and real people |
 | [2026-11-18-phase2-camera-bringup.md](2026-11-18-phase2-camera-bringup.md) | First physical webcam: formats, rate, manual exposure, stage timings; engine part of L-06 |
+| [2026-11-22-phase01-openxr-uplink.md](2026-11-22-phase01-openxr-uplink.md) | Roadmap Phase 01 OpenXR uplink; headset checks BLOCKED (no hardware), sender ↔ engine machine check |
 | [templates/V-19.md](templates/V-19.md) | Repetition counting per technique and profile |
 | [templates/V-20.md](templates/V-20.md) | Phase boundaries |
 | [templates/L-01.md](templates/L-01.md) | Camera exposure → arrival latency |
