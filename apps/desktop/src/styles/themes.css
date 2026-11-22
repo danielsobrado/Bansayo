@@ -41,32 +41,68 @@
   --panel-padding: 16px;
   --transport-height: 46px;
 }
-/* Frosted glass chrome for dark themes (graphite default, onyx). */
+/* Frosted glass chrome for dark themes (graphite default, onyx): dark crimson glass over silk folds, no warm/brown hues. */
 :root:not([data-theme="silver"]) {
-  --glass-fill: linear-gradient(160deg, oklch(30% 0.03 240 / 0.55), oklch(18% 0.02 250 / 0.72));
-  --glass-reflect: radial-gradient(120% 60% at 20% 0%, oklch(78% 0.09 230 / 0.14), transparent 60%);
-  --glass-edge: oklch(85% 0.05 230 / 0.16);
-  --glass-highlight: inset 0 1px 0 oklch(95% 0.03 230 / 0.12);
-  --glass-blur: blur(14px) saturate(140%);
-  --glass-glow: drop-shadow(0 0 6px color-mix(in oklch, var(--accent) 70%, transparent));
+  --glass-fill: linear-gradient(180deg, oklch(26% 0.024 15 / 0.42), oklch(16% 0.020 15 / 0.58));
+  --glass-reflect: linear-gradient(115deg, oklch(100% 0 0 / 0.07), transparent 35%, transparent 65%, oklch(100% 0 0 / 0.04));
+  --glass-edge: oklch(100% 0 0 / 0.1);
+  --glass-highlight: inset 0 1px 0 oklch(100% 0 0 / 0.14), inset 1px 0 0 oklch(100% 0 0 / 0.04);
+  --glass-blur: blur(26px) saturate(150%);
+  --glass-glow: drop-shadow(0 0 6px oklch(100% 0 0 / 0.55)) drop-shadow(0 0 12px oklch(58% 0.110 18 / 0.7));
+  --glass-band: oklch(46% 0.020 15 / 0.55);
 }
-:root:not([data-theme="silver"]) :is(.workbench-menubar, .app-shell > .navigation, .workbench-dropdown) {
-  background: var(--glass-reflect), var(--glass-fill), var(--surface-1);
+/* Slow-drifting silk folds behind the chrome so the frost has something to reflect. */
+:root:not([data-theme="silver"]) .app-shell { isolation: isolate; }
+:root:not([data-theme="silver"]) .app-shell::before {
+  content: "";
+  position: fixed;
+  inset: -15%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 90% 55% at 85% 115%, transparent 52%, var(--glass-band) 60%, transparent 68%),
+    radial-gradient(ellipse 110% 60% at 10% 120%, transparent 50%, oklch(38% 0.020 15 / 0.5) 58%, transparent 66%),
+    radial-gradient(ellipse 80% 45% at 60% -10%, transparent 48%, oklch(40% 0.024 15 / 0.45) 57%, transparent 66%),
+    radial-gradient(ellipse 70% 50% at 0% 30%, transparent 45%, oklch(34% 0.028 18 / 0.5) 55%, transparent 65%),
+    radial-gradient(ellipse 60% 70% at 100% 40%, oklch(24% 0.032 15 / 0.6), transparent 70%),
+    linear-gradient(160deg, oklch(15% 0.008 15), oklch(9% 0.004 15));
+  animation: glass-drift 45s ease-in-out infinite alternate;
+}
+@keyframes glass-drift {
+  to { transform: translate(4%, 5%) rotate(4deg) scale(1.05); }
+}
+:root:not([data-theme="silver"]) :is(.workbench-menubar, .app-shell > .navigation) {
+  background: var(--glass-reflect), var(--glass-fill);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   box-shadow: var(--glass-highlight);
   border-color: var(--glass-edge);
 }
 :root:not([data-theme="silver"]) .workbench-dropdown {
-  background: var(--glass-reflect), var(--glass-fill);
-  box-shadow: var(--glass-highlight), var(--shadow-float);
-  border-radius: 6px;
+  /* Nested in the menubar's backdrop-filter, so its own blur can't see the page: keep it near-opaque. */
+  background: var(--glass-reflect), linear-gradient(180deg, oklch(22% 0.024 15 / 0.95), oklch(14% 0.016 15 / 0.97));
+  border-color: var(--glass-edge);
+  border-radius: 8px;
+  box-shadow: var(--glass-highlight), 0 14px 36px oklch(5% 0.008 15 / 0.75);
 }
-:root:not([data-theme="silver"]) .app-shell > .navigation { box-shadow: var(--glass-highlight), inset -1px 0 0 var(--glass-edge); }
+/* Thin divider that fades out at both ends, like an etched glass line. */
+:root:not([data-theme="silver"]) .navigation .rail-toggle { position: relative; }
+:root:not([data-theme="silver"]) .navigation .rail-toggle::after {
+  content: "";
+  position: absolute;
+  left: -6px; right: -6px; bottom: -6px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, oklch(100% 0 0 / 0.35), transparent);
+}
+:root:not([data-theme="silver"]) .navigation .nav-icon { color: var(--ink-1); opacity: 0.8; }
 :root:not([data-theme="silver"]) :is(.navigation > a[aria-current="page"], .workbench-menu[open] summary, .workbench-dropdown > :is(a, button):hover:not(:disabled)) {
-  background: linear-gradient(90deg, oklch(70% 0.1 230 / 0.16), oklch(70% 0.1 230 / 0.04));
+  background: linear-gradient(90deg, oklch(55% 0.099 18 / 0.28), oklch(55% 0.099 18 / 0.04));
 }
-:root:not([data-theme="silver"]) .navigation > a[aria-current="page"] .nav-icon { filter: var(--glass-glow); }
+:root:not([data-theme="silver"]) .navigation > a[aria-current="page"] { border-left-color: oklch(62% 0.110 18); }
+:root:not([data-theme="silver"]) .navigation > a[aria-current="page"] .nav-icon { color: #fff; opacity: 1; filter: var(--glass-glow); }
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-theme="silver"]) .app-shell::before { animation: none; }
+}
 @media (prefers-reduced-transparency: reduce) {
   :root:not([data-theme="silver"]) :is(.workbench-menubar, .app-shell > .navigation, .workbench-dropdown) {
     background: var(--surface-1);
