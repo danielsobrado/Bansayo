@@ -100,6 +100,13 @@
 }
 :root:not([data-theme="silver"]) .navigation > a[aria-current="page"] { border-left-color: oklch(62% 0.110 18); }
 :root:not([data-theme="silver"]) .navigation > a[aria-current="page"] .nav-icon { color: #fff; opacity: 1; filter: var(--glass-glow); }
+/* Chrome accents in crimson instead of the blue accent / amber banner text. */
+:root:not([data-theme="silver"]) .workbench-tabs a[aria-current="page"] { border-bottom-color: oklch(62% 0.11 18); }
+:root:not([data-theme="silver"]) .connection-banner {
+  color: var(--ink-1);
+  background: linear-gradient(90deg, oklch(55% 0.099 18 / 0.18), transparent 60%), var(--surface-2);
+  box-shadow: inset 2px 0 0 oklch(62% 0.11 18);
+}
 @media (prefers-reduced-motion: reduce) {
   :root:not([data-theme="silver"]) .app-shell::before { animation: none; }
 }
