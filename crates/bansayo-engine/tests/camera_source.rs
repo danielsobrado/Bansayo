@@ -142,10 +142,7 @@ async fn camera_profiles_import_validate_persist_and_survive_a_failing_detector(
     renamed["id"] = json!("my-profile");
     for (body, text) in [
         (json!([intrinsics("NOPE", 50.0)]), "not a configured camera"),
-        (
-            Value::Array(vec![renamed]),
-            "id camera-intrinsics-CAM1",
-        ),
+        (Value::Array(vec![renamed]), "id camera-intrinsics-CAM1"),
         (json!([extrinsics("CAM1", 0.0)]), "need its intrinsics"),
         (json!([intrinsics("CAM1", -5.0)]), "invalid or non-finite"),
         (json!([]), "at least one"),
