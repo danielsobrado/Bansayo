@@ -2,6 +2,7 @@
 mod control;
 mod training;
 mod ws;
+pub mod xr;
 use crate::pipeline::{
     Streams,
     command::{Client, ControlError},
@@ -41,6 +42,8 @@ pub struct Api {
     pub store: Option<crate::store::Writer>,
     pub data_dir: std::path::PathBuf,
     pub progress: crate::config::ProgressSection,
+    /// OpenXR pose ingest; `None` when `xr.enabled` is false (the route answers 404).
+    pub xr: Option<Arc<xr::XrIngress>>,
 }
 pub fn router(api: Api) -> Router {
     Router::new()
@@ -60,6 +63,7 @@ pub fn router(api: Api) -> Router {
         )
         .route("/api/v1/lan/pairing", get(lan_pairing))
         .route("/api/v1/ingest/camera/{id}", get(ingest_camera))
+        .route("/api/v1/ingest/xr", get(xr::upgrade))
         .route("/api/v1/devices/{id}/assignment", put(control::assignment))
         .route("/api/v1/rig", put(control::rig))
         .route(

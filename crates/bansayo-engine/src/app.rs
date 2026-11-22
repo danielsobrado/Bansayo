@@ -159,6 +159,11 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
         }
         sources.push(ConfiguredSource::Esp32(Box::new(source)));
     }
+    // Reserved ids; validation refuses configured devices that would collide with them.
+    for d in crate::sources::xr::descriptors(&config.config.xr()) {
+        drops.insert(d.id.clone(), Arc::new(AtomicU64::new(0)));
+        descriptors.push(d);
+    }
     let mut registry = Registry::new(descriptors, assignments, drops.clone());
     registry.runtime = runtime.clone();
     let data_dir = config.config.engine.data_dir.clone();
@@ -252,7 +257,17 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
     } else {
         None
     };
+    let xr = config.config.xr().enabled.then(|| {
+        Arc::new(api::xr::XrIngress::new(
+            config.config.xr(),
+            clock.clone(),
+            events_tx.clone(),
+            cancel.clone(),
+            drops.clone(),
+        ))
+    });
     let api = Api {
+        xr,
         client,
         streams,
         allowed_origins: Arc::new(config.config.api.allowed_origins.clone()),
