@@ -10,6 +10,8 @@ const ComfortSettings = preload("res://scripts/comfort_settings.gd")
 const VrInputRouter = preload("res://scripts/vr_input_router.gd")
 const PoseMirror = preload("res://scripts/pose_mirror.gd")
 const Clinic = preload("res://scripts/clinic.gd")
+const XrPoseCapture = preload("res://scripts/xr_pose_capture.gd")
+const XrPoseUplink = preload("res://scripts/xr_pose_uplink.gd")
 const ALIGNMENT_FILE := "user://xr_alignment.cfg"
 const STUDIO_DARK := [Color("#202a35"), Color("#273543"), Color("#344150"), Color("#5d7880"), Color("#121a25")]
 const STUDIO_LIGHT := [Color("#958979"), Color("#668082"), Color("#cbbba3"), Color("#49686a"), Color("#c4cbd0")]
@@ -30,6 +32,10 @@ var _xr_interface: XRInterface
 var _xr_camera: XRCamera3D
 var _has_xr_focus := false
 var _right_hand: XRController3D
+## Hidden grip_pose controllers for the engine uplink only; UI keeps the aim_pose controllers.
+var _grips: Array[XRController3D] = []
+var _xr_uplink: XrPoseUplink
+var _engine_url := ""
 
 func _ready() -> void:
 	_build_room()
@@ -66,6 +72,7 @@ func _ready() -> void:
 			_buffer.clear()
 	)
 	add_child(client)
+	_engine_url = client.engine_url
 	_actions.engine_url = client.engine_url
 	_actions.message.connect(_panel.set_action)
 	_actions.message.connect(_clinic.set_notice)
@@ -357,6 +364,20 @@ func _initialise_xr() -> void:
 		if hand == "right_hand":
 			_right_hand = controller
 			_clinic.right_hand = controller
+	for hand in ["left_hand", "right_hand"]:
+		var grip := XRController3D.new()
+		grip.name = hand.capitalize().replace(" ", "") + "Grip"
+		grip.tracker = StringName(hand)
+		grip.pose = &"grip_pose"
+		_xr_origin.add_child(grip)
+		_grips.append(grip)
+	if XrPoseUplink.enabled():
+		_xr_uplink = XrPoseUplink.new()
+		_xr_uplink.configure(_engine_url)
+		_xr_uplink.capture = _capture_xr
+		add_child(_xr_uplink)
+	else:
+		print("XR uplink: disabled (bansayo/xr_uplink_enabled)")
 	get_viewport().use_xr = true
 	_dev.enabled = false
 	if _xr_interface.has_signal("session_stopping"):
@@ -365,6 +386,8 @@ func _initialise_xr() -> void:
 		_xr_interface.connect("session_visible", _xr_focus_lost)
 		_xr_interface.connect("session_loss_pending", _xr_focus_lost)
 		_xr_interface.connect("pose_recentered", func():
+			if _xr_uplink:
+				_xr_uplink.recentered()
 			_clinic.aligned = false
 			_panel.alignment_text = "XR alignment: headset recentered · align again"
 			_clinic.suspend()
@@ -376,20 +399,38 @@ func _initialise_xr() -> void:
 				_show_setup()
 		)
 
+## One tick's raw stage poses; a device counts as tracked only while the session is focused.
+func _capture_xr() -> Array:
+	var focused := _clinic.xr_focused and _xr_interface != null
+	var tracked: Array[bool] = [
+		focused and XrPoseCapture.head_tracked(),
+		focused and _grips[0].get_has_tracking_data(),
+		focused and _grips[1].get_has_tracking_data(),
+	]
+	return XrPoseCapture.samples(_xr_origin, _xr_camera, _grips[0], _grips[1], tracked)
+
 func _xr_focus_gained() -> void:
 	if _xr_interface == null:
 		return
+	if _xr_uplink:
+		_xr_uplink.focused = true
 	_clinic.xr_focused = true
 	if not _has_xr_focus:
 		_has_xr_focus = true
 		_show_setup()
 
 func _xr_focus_lost() -> void:
+	if _xr_uplink:
+		_xr_uplink.focused = false
 	_clinic.xr_focused = false
 	_clinic.suspend()
 
 func _return_to_desktop() -> void:
 	_xr_focus_lost()
+	if _xr_uplink:
+		_xr_uplink.stop()
+		_xr_uplink.queue_free()
+		_xr_uplink = null
 	_input_router.focused = false
 	_clinic.xr = null
 	_clinic.aligned = false

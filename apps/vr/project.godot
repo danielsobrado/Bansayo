@@ -22,3 +22,8 @@ shaders/enabled=true
 
 [bansayo]
 engine_url="http://127.0.0.1:7700"
+xr_uplink_enabled=false
+xr_uplink_rate_hz=60
+xr_uplink_max_buffered_bytes=8192
+xr_uplink_reconnect_initial_ms=500
+xr_uplink_reconnect_max_ms=8000
