@@ -43,8 +43,10 @@
 }
 /* Frosted glass chrome for dark themes (graphite default, onyx): dark crimson glass over silk folds, no warm/brown hues. */
 :root:not([data-theme="silver"]) {
-  --glass-fill: linear-gradient(180deg, oklch(26% 0.024 15 / 0.42), oklch(16% 0.020 15 / 0.58));
-  --glass-reflect: linear-gradient(115deg, oklch(100% 0 0 / 0.07), transparent 35%, transparent 65%, oklch(100% 0 0 / 0.04));
+  --glass-fill: linear-gradient(165deg, oklch(30% 0.026 15 / 0.5), oklch(19% 0.02 15 / 0.6) 45%, oklch(13% 0.015 15 / 0.7));
+  --glass-reflect: radial-gradient(130% 50% at 0% 0%, oklch(100% 0 0 / 0.09), transparent 70%);
+  --glass-pill: linear-gradient(180deg, oklch(42% 0.05 15 / 0.55), oklch(30% 0.04 15 / 0.45));
+  --glass-pill-edge: oklch(85% 0.03 15 / 0.32);
   --glass-edge: oklch(100% 0 0 / 0.1);
   --glass-highlight: inset 0 1px 0 oklch(100% 0 0 / 0.14), inset 1px 0 0 oklch(100% 0 0 / 0.04);
   --glass-blur: blur(26px) saturate(150%);
@@ -71,7 +73,7 @@
 @keyframes glass-drift {
   to { transform: translate(4%, 5%) rotate(4deg) scale(1.05); }
 }
-:root:not([data-theme="silver"]) :is(.workbench-menubar, .app-shell > .navigation) {
+:root:not([data-theme="silver"]) :is(.workbench-menubar, .app-shell > .navigation, .workbench-tabs, .app-shell > .statusbar, .app-shell > .transport) {
   background: var(--glass-reflect), var(--glass-fill);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
@@ -95,13 +97,24 @@
   background: linear-gradient(90deg, transparent, oklch(100% 0 0 / 0.35), transparent);
 }
 :root:not([data-theme="silver"]) .navigation .nav-icon { color: var(--ink-1); opacity: 0.8; }
-:root:not([data-theme="silver"]) :is(.navigation > a[aria-current="page"], .workbench-menu[open] summary, .workbench-dropdown > :is(a, button):hover:not(:disabled)) {
-  background: linear-gradient(90deg, oklch(55% 0.099 18 / 0.28), oklch(55% 0.099 18 / 0.04));
+/* Rounded glass pills for active/hover items: lighter top, thin bright edge, soft top highlight. */
+:root:not([data-theme="silver"]) :is(.navigation > a, .workbench-tabs a, .workbench-menu summary, .workbench-dropdown > :is(a, button)) {
+  border: 1px solid transparent;
+  border-radius: 6px;
 }
-:root:not([data-theme="silver"]) .navigation > a[aria-current="page"] { border-left-color: oklch(62% 0.110 18); }
+:root:not([data-theme="silver"]) .navigation > a { margin: 2px 6px; }
+:root:not([data-theme="silver"]) .workbench-tabs a { margin: 3px 2px; }
+:root:not([data-theme="silver"]) :is(.navigation > a[aria-current="page"], .workbench-tabs a[aria-current="page"], .workbench-menu[open] summary) {
+  background: var(--glass-pill);
+  border-color: var(--glass-pill-edge);
+  box-shadow: inset 0 1px 0 oklch(100% 0 0 / 0.14), 0 2px 8px oklch(5% 0.02 15 / 0.45);
+}
+:root:not([data-theme="silver"]) :is(.navigation > a, .workbench-tabs a, .workbench-menu summary, .workbench-dropdown > :is(a, button)):hover:not(:disabled):not([aria-current="page"]) {
+  background: oklch(100% 0 0 / 0.06);
+  border-color: oklch(100% 0 0 / 0.08);
+}
 :root:not([data-theme="silver"]) .navigation > a[aria-current="page"] .nav-icon { color: #fff; opacity: 1; filter: var(--glass-glow); }
 /* Chrome accents in crimson instead of the blue accent / amber banner text. */
-:root:not([data-theme="silver"]) .workbench-tabs a[aria-current="page"] { border-bottom-color: oklch(62% 0.11 18); }
 :root:not([data-theme="silver"]) .connection-banner {
   color: var(--ink-1);
   background: linear-gradient(90deg, oklch(55% 0.099 18 / 0.18), transparent 60%), var(--surface-2);
@@ -111,7 +124,7 @@
   :root:not([data-theme="silver"]) .app-shell::before { animation: none; }
 }
 @media (prefers-reduced-transparency: reduce) {
-  :root:not([data-theme="silver"]) :is(.workbench-menubar, .app-shell > .navigation, .workbench-dropdown) {
+  :root:not([data-theme="silver"]) :is(.workbench-menubar, .app-shell > .navigation, .workbench-tabs, .app-shell > .statusbar, .app-shell > .transport, .workbench-dropdown) {
     background: var(--surface-1);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
