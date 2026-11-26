@@ -12,7 +12,7 @@ export function useCapture(live:boolean) {
   useEffect(()=>{if(!live)stopRef.current("Engine left live mode");},[live]);
   useEffect(()=>()=>{controller.current?.abort();},[]);
   function start(ids:string[],seconds:number) {
-    if(!live||running||!ids.length)return;
+    if(!live||running||!ids.length||(controller.current&&!controller.current.signal.aborted))return;
     const ctl=new AbortController();controller.current=ctl;
     const capture:Capture={samples:[],markers:[],lost:0,resets:0,started:new Date().toISOString(),reason:"Capturing"};
     data.current=capture;latest.current=0;setRunning(true);setElapsed(0);setRevision(v=>v+1);

@@ -40,6 +40,25 @@ test("sensor studio instrumentation and responsive layouts",async({page},info)=>
   await views.getByRole("button",{name:"Events",exact:true}).click();
   await expect(studio.getByText("Observed device events")).toBeVisible();
   await expect(studio.getByRole("cell",{name:"MOSAICO-01",exact:true}).first()).toBeVisible();
+  await views.getByRole("button",{name:"Capture",exact:true}).click();
+  let cursor=0;
+  await page.route("**/inspection/batch*",route=>{
+    const url=new URL(route.request().url());
+    if(!url.searchParams.has("epoch"))return route.fulfill({json:{ok:true,data:{epoch:1,next:0,lost:0,reset:false,entries:[]}}});
+    const entries=Array.from({length:64},()=>{const n=++cursor;return {cursor:n,channel:"gyro",point:{t_us:1_000_000+n*5000,seq:n,device_time_us:null,values:[Math.sin(n*.2),0,0]}};});
+    return route.fulfill({json:{ok:true,data:{epoch:1,next:cursor,lost:0,reset:false,entries}}});
+  });
+  await studio.getByRole("checkbox",{name:"MOSAICO-01",exact:true}).check();
+  await studio.getByRole("button",{name:"Start full-rate capture"}).click();
+  await expect(studio.getByText(/64 observations/)).toBeVisible();
+  await studio.getByRole("button",{name:"Add event marker"}).click();
+  await studio.getByRole("button",{name:"Stop capture"}).click();
+  await expect(studio.getByRole("img",{name:"Recorded signal and event markers"})).toBeVisible();
+  await expect(studio.getByRole("img",{name:"FFT amplitude spectrum"})).toBeVisible();
+  await page.screenshot({path:info.outputPath("capture-analysis.png")});
+  const recording=page.waitForEvent("download");
+  await studio.getByRole("button",{name:"Export recording"}).click();
+  expect((await recording).suggestedFilename()).toBe("bansayo-full-rate.json");
   await page.setViewportSize({width:390,height:844});
   await views.getByRole("button",{name:"Signals",exact:true}).click();
   await expect(studio.getByLabel("Signal time window")).toBeVisible();

@@ -130,6 +130,29 @@ assignments:
             .len()
             > 2
     );
+    let start = ok(
+        addr,
+        "GET",
+        "devices/MOSAICO/inspection/batch",
+        Value::Null,
+    )
+    .await;
+    let epoch = start["epoch"].as_u64().unwrap();
+    let cursor = start["next"].as_u64().unwrap();
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let path = format!("devices/MOSAICO/inspection/batch?epoch={epoch}&after={cursor}");
+    let batch = ok(addr, "GET", &path, Value::Null).await;
+    assert_eq!(batch["lost"], 0);
+    assert_eq!(batch["reset"], false);
+    assert!(
+        batch["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|e| e["channel"] == "gyro")
+            .count()
+            > 15
+    );
     let preview = ok(
         addr,
         "POST",
@@ -154,6 +177,8 @@ assignments:
 
     generation.store(102, Ordering::Relaxed);
     wait_for(addr, |state| mounting_state(state, "stale")).await;
+    let reset = ok(addr, "GET", &path, Value::Null).await;
+    assert_eq!(reset["reset"], true);
     let preview = ok(
         addr,
         "POST",

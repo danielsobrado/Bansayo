@@ -1,25 +1,29 @@
-import { useMemo,useState } from "react";
+import { useRef,useState } from "react";
 import { CHANNELS,type ChannelId } from "./trace";
 import type { Capture,Sample } from "./captureTypes";
 import { AXIS_CSS } from "./studioConfig";
 const WIDTH=720,HEIGHT=180,BINS=600;
 
-export function Timeline({capture,revision}:{capture:Capture;revision:number}) {
+export function Timeline({capture}:{capture:Capture}) {
   const [device,setDevice]=useState(""),[channel,setChannel]=useState<ChannelId>("gyro"),[axis,setAxis]=useState(0);
   const [windowSec,setWindowSec]=useState(30),[offset,setOffset]=useState(0);
-  const groups=useMemo(()=>{
-    const map=new Map<string,Map<ChannelId,Sample[]>>();
-    for(const sample of capture.samples){let channels=map.get(sample.device);if(!channels){channels=new Map();map.set(sample.device,channels);}let points=channels.get(sample.channel);if(!points){points=[];channels.set(sample.channel,points);}points.push(sample);}
-    return map;
-  },[capture,revision]);
+  const index=useRef<{capture:Capture;count:number;groups:Map<string,Map<ChannelId,Sample[]>>;min:number;max:number}|null>(null);
+  if(!index.current||index.current.capture!==capture)index.current={capture,count:0,groups:new Map(),min:Infinity,max:0};
+  const indexed=index.current;
+  const groups=indexed.groups;
+  for(let i=indexed.count;i<capture.samples.length;i++){
+    const sample=capture.samples[i]!;
+    let channels=groups.get(sample.device);if(!channels){channels=new Map();groups.set(sample.device,channels);}
+    let points=channels.get(sample.channel);if(!points){points=[];channels.set(sample.channel,points);}points.push(sample);
+    indexed.min=Math.min(indexed.min,sample.point.t_us);indexed.max=Math.max(indexed.max,sample.point.t_us);
+  }
+  indexed.count=capture.samples.length;
   const id=groups.has(device)?device:groups.keys().next().value??"";
   const channels=groups.get(id);
   const selected=channels?.has(channel)?channel:channels?.keys().next().value??"gyro";
   const points=channels?.get(selected)??[];
   const a=Math.min(axis,CHANNELS[selected].axes.length-1);
-  const bounds=useMemo(()=>{
-    let min=Infinity,max=0;for(const p of capture.samples){min=Math.min(min,p.point.t_us);max=Math.max(max,p.point.t_us);}return {min:Number.isFinite(min)?min:0,max};
-  },[capture,revision]);
+  const bounds={min:Number.isFinite(indexed.min)?indexed.min:0,max:indexed.max};
   const duration=(bounds.max-bounds.min)/1e6;
   const span=Math.max(.001,Math.min(windowSec,duration));
   const end=bounds.max-Math.min(offset,Math.max(0,duration-span))*1e6,start=end-span*1e6;
