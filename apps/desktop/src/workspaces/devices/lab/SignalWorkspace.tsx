@@ -50,6 +50,7 @@ function Instrument({id,channel,end,seconds,cursor,onCursor,expanded,onExpand}:{
 export function SignalWorkspace({device,channels,known,focus,onFocus,compact=false,frozen}:{
   device:DeviceStatus;channels:Snapshot["channels"];known:Snapshot["channels"];focus:SignalFocus;onFocus:(focus:SignalFocus)=>void;compact?:boolean;frozen:boolean;
 }) {
+  const cursorId=useId();
   const [seconds,setSeconds]=useState<number>(HISTORY_SECONDS);
   const [cursor,setCursor]=useState(0);
   const [offset,setOffset]=useState(0);
@@ -80,6 +81,6 @@ export function SignalWorkspace({device,channels,known,focus,onFocus,compact=fal
       {!compact&&!maximized&&<div className="studio-dock-tools"><span draggable onDragStart={e=>{setDrag(id);e.dataTransfer.setData("text/plain",id);}} onDragEnd={()=>setDrag(null)} title="Drag to reorder">⠿</span><button aria-label={"Move "+CHANNELS[id].title+" earlier"} disabled={i===0} onClick={()=>move(id,ids[i-1]!)}>←</button><button aria-label={"Move "+CHANNELS[id].title+" later"} disabled={i===ids.length-1} onClick={()=>move(id,ids[i+1]!)}>→</button><button aria-pressed={wide.includes(id)} onClick={()=>setWide(v=>v.includes(id)?v.filter(x=>x!==id):[...v,id])}>Wide</button></div>}
       <Instrument id={id} channel={channels[id]} end={end} seconds={seconds} cursor={selected} onCursor={setCursor} expanded={maximized===id} onExpand={()=>setMaximized(v=>v===id?null:id)}/></div>)}</div>
     {!ids.length&&<p className="studio-empty">No supported signals announced by this device.</p>}
-    <div className="studio-timeline"><Icon name="crosshair"/><label htmlFor={compact?"overview-cursor":"signal-cursor"}>Shared cursor</label><input id={compact?"overview-cursor":"signal-cursor"} aria-label="Shared signal cursor" type="range" min={0} max={seconds} step={0.01} value={seconds-selected} onChange={e=>setCursor(seconds-Number(e.target.value))}/><span className="mono" title="Offset from newest sample">−{(selected+offset).toFixed(2)} s</span><button onClick={()=>{setCursor(0);setOffset(0);}}>Latest</button></div>
+    <div className="studio-timeline"><Icon name="crosshair"/><label htmlFor={cursorId}>Shared cursor</label><input id={cursorId} aria-label="Shared signal cursor" type="range" min={0} max={seconds} step={0.01} value={seconds-selected} onChange={e=>setCursor(seconds-Number(e.target.value))}/><span className="mono" title="Offset from newest sample">−{(selected+offset).toFixed(2)} s</span><button onClick={()=>{setCursor(0);setOffset(0);}}>Latest</button></div>
   </section>;
 }
