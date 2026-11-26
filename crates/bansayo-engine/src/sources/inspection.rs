@@ -115,7 +115,7 @@ pub fn record(runtime: &RuntimeMap, event: &SourceEvent) {
         all.entry(o.device_id.clone())
             .or_default()
             .inspection
-            .get_or_insert_with(Default::default)
+            .get_or_insert_default()
             .clone()
     };
     let Ok(mut trace) = trace.lock() else {
@@ -186,7 +186,11 @@ mod tests {
         let points = &result.channels["orientation"].points;
         assert_eq!(points.len(), CAPACITY);
         assert_eq!(points.last().unwrap().seq, 598);
-        assert!(points.windows(2).all(|w| w[1].t_us - w[0].t_us >= SAMPLE_INTERVAL_US));
+        assert!(
+            points
+                .windows(2)
+                .all(|w| w[1].t_us - w[0].t_us >= SAMPLE_INTERVAL_US)
+        );
         record(
             &runtime,
             &SourceEvent::DeviceLink {

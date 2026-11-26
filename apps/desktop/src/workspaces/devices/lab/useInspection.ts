@@ -19,7 +19,7 @@ export function useInspection(id: string, enabled: boolean, frozen: boolean) {
       if (controller.signal.aborted) return;
       if (!document.hidden) {
         const res = await request<unknown>("GET", `/devices/${seg(id)}/inspection`, undefined,
-          (url, init) => fetch(url, { ...init, cache: "no-store", signal: controller.signal }));
+          (url, init) => fetch(url, { ...init, cache: "no-store", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(2000)]) }));
         if (controller.signal.aborted) return;
         if (res.ok) {
           const snapshot = parseSnapshot(res.data);

@@ -58,14 +58,14 @@ export function Devices({
               Live diagnostics
             </button>
             <button
-              aria-pressed={view === "cards"}
-              onClick={() => setMode("cards")}
+              aria-pressed={!lab && view === "cards"}
+              onClick={() => { setLab(false); setMode("cards"); }}
             >
               Cards
             </button>
             <button
-              aria-pressed={view === "table"}
-              onClick={() => setMode("table")}
+              aria-pressed={!lab && view === "table"}
+              onClick={() => { setLab(false); setMode("table"); }}
             >
               Table
             </button>
@@ -78,50 +78,50 @@ export function Devices({
       {lab ? (
         <DeviceLab devices={devices} live={state?.engine.mode === "live"} />
       ) : (
-      <div className="devices-layout">
-        <section className={`device-collection ${view}`} aria-label="Devices">
-          {devices.length === 0 ? (
-            <EmptyState title="No devices configured">
-              <p>
-                Sources are defined in the engine configuration. Try
-                sim-full-body.yaml, sim-six-trackers.yaml,
-                sim-camera-only.yaml or cameras-two.yaml.
+        <div className="devices-layout">
+          <section className={`device-collection ${view}`} aria-label="Devices">
+            {devices.length === 0 ? (
+              <EmptyState title="No devices configured">
+                <p>
+                  Sources are defined in the engine configuration. Try
+                  sim-full-body.yaml, sim-six-trackers.yaml,
+                  sim-camera-only.yaml or cameras-two.yaml.
+                </p>
+              </EmptyState>
+            ) : (
+              devices.map((device) => (
+                <Device
+                  key={device.descriptor.id}
+                  device={device}
+                  state={state!}
+                  skeleton={skeleton}
+                  onChange={(segment) => setChange({ device, segment })}
+                  onFocus={() => setHighlight(device.assignment)}
+                  onBlur={() => setHighlight(null)}
+                />
+              ))
+            )}
+          </section>
+          <aside className="device-map dock">
+            <div className="panel-heading">BODY MAP</div>
+            <BodyMap
+              skeleton={skeleton}
+              values={sampled.segments}
+              highlight={highlight}
+            />
+            <div className="page-panel-content">
+              <h3 className="eyebrow">Unassigned segments</h3>
+              <p className="subtle">
+                {skeleton?.segments
+                  .filter((s) => !devices.some((d) => d.assignment === s.id))
+                  .map((s) => humanizeId(s.id))
+                  .join(", ") || "—"}
               </p>
-            </EmptyState>
-          ) : (
-            devices.map((device) => (
-              <Device
-                key={device.descriptor.id}
-                device={device}
-                state={state!}
-                skeleton={skeleton}
-                onChange={(segment) => setChange({ device, segment })}
-                onFocus={() => setHighlight(device.assignment)}
-                onBlur={() => setHighlight(null)}
-              />
-            ))
-          )}
-        </section>
-        <aside className="device-map dock">
-          <div className="panel-heading">BODY MAP</div>
-          <BodyMap
-            skeleton={skeleton}
-            values={sampled.segments}
-            highlight={highlight}
-          />
-          <div className="page-panel-content">
-            <h3 className="eyebrow">Unassigned segments</h3>
-            <p className="subtle">
-              {skeleton?.segments
-                .filter((s) => !devices.some((d) => d.assignment === s.id))
-                .map((s) => humanizeId(s.id))
-                .join(", ") || "—"}
-            </p>
-          </div>
-          <SegmentEvidence skeleton={skeleton} />
-          <PhonePairing />
-        </aside>
-      </div>
+            </div>
+            <SegmentEvidence skeleton={skeleton} />
+            <PhonePairing />
+          </aside>
+        </div>
       )}
       {change && (
         <AssignmentDialog

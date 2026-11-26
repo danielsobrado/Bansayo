@@ -50,6 +50,19 @@ export function parseSnapshot(value: unknown): Snapshot | null {
   return { channels };
 }
 
+/** Never show a historical observation as live after the HTTP stream stalls. */
+export function freshChannels(channels: Snapshot["channels"], elapsedMs: number, available: boolean): Snapshot["channels"] {
+  const result: Snapshot["channels"] = {};
+  if (!available || !Number.isFinite(elapsedMs)) return result;
+  for (const id of CHANNEL_IDS) {
+    const channel = channels[id];
+    if (!channel) continue;
+    const age_ms = channel.age_ms + Math.max(0, elapsedMs);
+    if (age_ms <= STALE_MS) result[id] = { ...channel, age_ms };
+  }
+  return result;
+}
+
 export function rotate(v: readonly number[], q: readonly number[]): number[] {
   const n = Math.hypot(...q);
   if (n < 1e-6 || !Number.isFinite(n)) return [...v];

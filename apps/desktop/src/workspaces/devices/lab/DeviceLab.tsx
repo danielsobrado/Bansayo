@@ -6,7 +6,7 @@ import { StatePill } from "../../../ui/StatePill";
 import { Reasons } from "../../../ui/Reasons";
 import { CameraPreview } from "../../cameras/CameraPreview";
 import { OrientationView, TracePlot } from "./Plots";
-import { CHANNEL_IDS, CHANNELS, STALE_MS, motionSummary, type ChannelId, type Snapshot } from "./trace";
+import { CHANNEL_IDS, CHANNELS, STALE_MS, freshChannels, motionSummary, type ChannelId, type Snapshot } from "./trace";
 import { useInspection } from "./useInspection";
 import "./lab.css";
 
@@ -44,11 +44,14 @@ function Inspector({ device, live }: { device: DeviceStatus; live: boolean }) {
   const [capture, captureStatus] = useAction(actions.captureReferencePose);
   const reading = useInspection(device.descriptor.id, live && device.descriptor.kind !== "camera", frozen);
   const snapshot = reading.snapshot;
-  const channels = snapshot?.channels ?? {};
+  const rawChannels = snapshot?.channels ?? {};
+  const available = live && device.state !== "disconnected" && device.state !== "unavailable";
+  const channels = frozen ? rawChannels : freshChannels(rawChannels,
+    performance.now() - reading.receivedAt, available);
   const timing = device.time_sync;
-  const motion = motionSummary(channels.gyro, channels.accel);
+  const motion = !frozen ? motionSummary(channels.gyro, channels.accel) : null;
   const qChannel = channels.orientation ?? channels.pose_rotation;
-  const q = qChannel && (frozen || qChannel.age_ms <= STALE_MS) ? qChannel.points.at(-1)?.values : undefined;
+  const q = qChannel?.points.at(-1)?.values;
   const used = useSampledFrame(4, (frame, age) => frame && age <= STALE_MS ? (frame.pose?.segments ?? []).filter(s => s.sources.includes(device.descriptor.id)).length : null);
   const canCapture = live && !frozen && device.descriptor.kind === "imu_tracker" && !!device.assignment &&
     !!q && device.state !== "disconnected" && device.state !== "unavailable" && ready && !captureStatus.pending;
@@ -60,9 +63,11 @@ function Inspector({ device, live }: { device: DeviceStatus; live: boolean }) {
     ["Clock uncertainty", timing?.uncertainty_us == null ? "—" : `±${(timing.uncertainty_us/1000).toFixed(2)} ms`],
     ["Clock drift", timing?.drift_ppm == null ? "—" : `${timing.drift_ppm.toFixed(1)} ppm`],
     ["Clock resets", String(timing?.resets ?? "—")],
+    ["Clock quality", timing?.time_quality ?? device.stream.time_quality],
+    ["Clock settled", timing ? (timing.settled ? "Yes" : "No") : "—"],
     ["Segment", device.assignment ?? "Unassigned"], ["Solver segments using device", String(used ?? "—")],
   ];
-  const visible = focus === "all" ? CHANNEL_IDS.filter(id => channels[id] !== undefined) : [focus];
+  const visible = focus === "all" ? CHANNEL_IDS.filter(id => rawChannels[id] !== undefined) : [focus];
   return <div className="lab-main">
     <header className="lab-header">
       <div><h2 className="mono">{device.descriptor.id}</h2><p className="subtle">{device.descriptor.model ?? device.descriptor.kind} · {device.descriptor.transport} · {device.descriptor.origin}</p></div>
@@ -83,6 +88,8 @@ function Inspector({ device, live }: { device: DeviceStatus; live: boolean }) {
     ) : <>
       {reading.error && <p role="alert" className="error">{reading.error}</p>}
       {live && !snapshot && !reading.error && <p role="status">Waiting for accepted sensor samples…</p>}
+      {live && snapshot && !frozen && Object.keys(channels).length === 0 &&
+        <p role="status" className="lab-notice">No fresh component data. Check the device, transport, and engine connection.</p>}
       <div className="lab-grid">
         <OrientationView q={q}/>
         <section className="lab-card">
@@ -92,7 +99,7 @@ function Inspector({ device, live }: { device: DeviceStatus; live: boolean }) {
             <span>Gyro peak: {motion ? motion.peak.toFixed(3) : "—"} rad/s</span>
             <span>Gravity error: {motion ? motion.gravityError.toFixed(3) : "—"} m/s²</span>
           </div>
-          <p role="status">{motion ? (motion.still ? "Stationary in sampled window" : "Motion detected") : "Need fresh gyro and accelerometer samples for stillness check."}</p>
+          <p role="status">{frozen ? "Resume traces to check stillness." : motion ? (motion.still ? "Stationary in sampled window" : "Motion detected") : "Need fresh gyro and accelerometer samples for stillness check."}</p>
           <p className="subtle">Advisory only. Board-level bias recalibration uses the Mosaico touchscreen. Mounting calibration requires a body reference pose.</p>
           <label><input type="checkbox" checked={ready} onChange={e => {setReady(e.target.checked);setCaptured(false);}}/> Tracker mounted; upright T-pose ready</label>
           <button disabled={!canCapture} onClick={async () => {
@@ -120,7 +127,7 @@ function Inspector({ device, live }: { device: DeviceStatus; live: boolean }) {
         const channel = channels[id];
         const indices = CHANNELS[id].axes.map((_,i) => i).filter(i => axis === "all" || i === axis);
         if (!indices.length) return null;
-        return <TracePlot key={id} id={id} channel={channel && (frozen || channel.age_ms <= STALE_MS) ? channel : undefined} axes={indices}/>;
+        return <TracePlot key={id} id={id} channel={channel} axes={indices}/>;
       })}</div>
     </>}
   </div>;

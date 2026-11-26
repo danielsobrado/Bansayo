@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { motionSummary, parseSnapshot, rotate } from "./trace";
+import { freshChannels, motionSummary, parseSnapshot, rotate } from "./trace";
 
 describe("device inspection", () => {
   it("rejects malformed measurements", () => {
     expect(parseSnapshot({channels:{gyro:{age_ms:0,points:[{t_us:1,seq:1,device_time_us:null,values:[1,2]}]}}})).toBeNull();
     expect(parseSnapshot({channels:{}})).toEqual({channels:{}});
+  });
+  it("expires samples if the HTTP poll stalls or the device disconnects", () => {
+    const channels = {gyro: {age_ms: 30, points: []}};
+    expect(freshChannels(channels, 50, true).gyro?.age_ms).toBe(80);
+    expect(freshChannels(channels, 600, true)).toEqual({});
+    expect(freshChannels(channels, 0, false)).toEqual({});
   });
   it("rotates sensor axes using XYZW", () => {
     const r = rotate([1,0,0],[0,0,Math.SQRT1_2,Math.SQRT1_2]);

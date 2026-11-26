@@ -13,7 +13,10 @@ pub async fn snapshot(State(api): State<Api>, Path(id): Path<String>) -> Respons
     {
         let state = api.streams.state.borrow();
         if matches!(state.engine.mode, EngineMode::Replay) {
-            return failure(ApiErrorCode::Conflict, "Live inspection is unavailable during replay.");
+            return failure(
+                ApiErrorCode::Conflict,
+                "Live inspection is unavailable during replay.",
+            );
         }
         if !state.devices.iter().any(|d| d.descriptor.id == id) {
             return failure(ApiErrorCode::NotFound, "Unknown device.");
