@@ -90,7 +90,8 @@ export function motionSummary(gyro?: Channel, accel?: Channel) {
   const end = Math.min(gyro.points.at(-1)!.t_us, accel.points.at(-1)!.t_us);
   const recent = (c: Channel) => c.points.filter(p => p.t_us >= end - 1_000_000 && p.t_us <= end);
   const g = recent(gyro), a = recent(accel);
-  if (g.length < 2 || a.length < 2 ||
+  const continuous=(p:Point[])=>p.every((v,i)=>i===0||v.t_us-p[i-1]!.t_us<=150_000);
+  if (!continuous(g)||!continuous(a)||g.length < 2 || a.length < 2 ||
       g.at(-1)!.t_us-g[0]!.t_us < 750_000 ||
       a.at(-1)!.t_us-a[0]!.t_us < 750_000) return null;
   const peak = Math.max(...g.map(p => Math.hypot(...p.values)));

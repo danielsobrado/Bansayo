@@ -1,4 +1,4 @@
-import type { Channel, Point } from "./trace";
+import { rotate, type Channel, type Point } from "./trace";
 
 export const GRAVITY = 9.80665;
 export const FACE_TOLERANCE = 0.08 * GRAVITY;
@@ -28,7 +28,7 @@ export function nearestPairs(a: Point[], b: Point[], skew = MAX_PAIR_SKEW_US) {
   for (const p of a) {
     while (j+1<b.length && Math.abs(b[j+1]!.t_us-p.t_us)<Math.abs(b[j]!.t_us-p.t_us)) j++;
     const q = b[j];
-    if (q && Math.abs(q.t_us-p.t_us)<=skew) pairs.push([p,q]);
+    if (q && Math.abs(q.t_us-p.t_us)<=skew) { pairs.push([p,q]); j++; }
   }
   return pairs;
 }
@@ -51,4 +51,14 @@ export function sixFaceEstimate(faces:Partial<Record<number,{mean:number[]}>>) {
   const bias=[0,1,2].map(i=>(faces[2*i]!.mean[i]!+faces[2*i+1]!.mean[i]!)/2);
   const scale=[0,1,2].map(i=>(faces[2*i]!.mean[i]!-faces[2*i+1]!.mean[i]!)/(2*GRAVITY));
   return {bias,scale};
+}
+
+/** Optical skeleton fit constrains the bone direction, not axial twist. */
+export function segmentAxisAngle(a:readonly number[],b:readonly number[],tail:readonly number[]) {
+  if(quaternionAngle(a,b)===null || tail.length!==3)return null;
+  const x=rotate(tail,a),y=rotate(tail,b);
+  const norm=Math.hypot(...x)*Math.hypot(...y);
+  if(!Number.isFinite(norm)||norm<1e-9)return null;
+  const dot=x.reduce((s,v,i)=>s+v*y[i]!,0)/norm;
+  return Math.acos(Math.max(-1,Math.min(1,dot)))*180/Math.PI;
 }

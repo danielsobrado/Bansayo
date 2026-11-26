@@ -1,5 +1,5 @@
 import { describe,it,expect } from "vitest";
-import { quaternionAngle,faceMeasurement,GRAVITY,nearestPairs,rotationCheck,sixFaceEstimate } from "./benchMath";
+import { quaternionAngle,faceMeasurement,GRAVITY,nearestPairs,rotationCheck,sixFaceEstimate,segmentAxisAngle } from "./benchMath";
 
 describe("bench measurement",()=>{
   it("uses shortest quaternion arc and treats signs equally",()=>{
@@ -17,6 +17,13 @@ describe("bench measurement",()=>{
       return [i,{mean}];
     }));
     expect(sixFaceEstimate(faces)).toEqual({bias:[0,0,0],scale:[1,1,1]});
+  });
+  it("ignores unobservable axial twist and matches samples only once",()=>{
+    const identity=[0,0,0,1],twist=[0,Math.SQRT1_2,0,Math.SQRT1_2];
+    expect(segmentAxisAngle(identity,twist,[0,1,0])).toBeCloseTo(0);
+    expect(segmentAxisAngle(identity,twist,[1,0,0])).toBeCloseTo(90);
+    const point={t_us:0,seq:1,device_time_us:null,values:identity};
+    expect(nearestPairs([point,{...point,t_us:1000}],[point])).toHaveLength(1);
   });
   it("checks face sign and sufficient duration",()=>{
     const points=Array.from({length:51},(_,i)=>({t_us:i*20000,seq:i,device_time_us:null,values:[GRAVITY,0,0]}));
