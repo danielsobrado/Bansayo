@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.16)
+set(BSP_DIR "${CMAKE_CURRENT_LIST_DIR}/third_party/esp-mosaico-bsp")
+if(NOT EXISTS "${BSP_DIR}/components/esp-mosaico-bsp/CMakeLists.txt")
+    message(FATAL_ERROR "Install the pinned Mosaico BSP as described in README.md")
+endif()
+include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+project(bansayo_mosaico)
