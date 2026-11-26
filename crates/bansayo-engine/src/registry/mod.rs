@@ -127,9 +127,12 @@ impl Registry {
                 e.first_us = None;
                 e.recent.clear();
                 e.landmarks.clear();
-                // Never interpolate across link transitions or retain disconnected evidence.
+                // Never interpolate across a link transition. XR replay retains its
+                // last rigid pose as historical evidence, not as a connected device.
                 e.orientations.clear();
-                e.latest.clear();
+                if connected || e.descriptor.kind != DeviceKind::XrTrackedDevice {
+                    e.latest.clear();
+                }
                 self.fusion.heading.remove(&device_id);
                 if self
                     .fusion

@@ -107,7 +107,20 @@ assignments:
         json!({"device_ids": ["MOSAICO"]}),
     )
     .await;
-    assert_eq!(capture[0]["origin"], "live");
+    assert_eq!(capture[0]["kind"], "mounting");
+    let persisted = std::fs::read_to_string(
+        bansayo_engine::registry::persistence::runtime_snapshot_path(dir.path()),
+    )
+    .unwrap();
+    let snapshot: bansayo_engine::registry::persistence::RuntimeSnapshot =
+        serde_saphyr::from_str(&persisted).unwrap();
+    assert!(snapshot.calibration_profiles.iter().any(|p| {
+        p.subject
+            .device_id
+            .as_ref()
+            .is_some_and(|id| id.as_str() == "MOSAICO")
+            && p.origin == bansayo_contracts::Origin::Live
+    }));
     wait_for(addr, |state| mounting_state(state, "valid")).await;
     let trace = ok(addr, "GET", "devices/MOSAICO/inspection", Value::Null).await;
     assert!(trace["channels"]["gyro"]["points"].as_array().unwrap().len() > 2);
