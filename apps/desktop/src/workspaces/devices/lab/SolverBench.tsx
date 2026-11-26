@@ -4,6 +4,7 @@ import { request } from "../../../engine/http";
 import { Reasons } from "../../../ui/Reasons";
 import { rotate } from "./trace";
 import { quaternionAngle, MAX_PAIR_SKEW_US } from "./benchMath";
+import { CaptureHistory } from "./CaptureHistory";
 
 interface Result { pose: SkeletonPose|null; quality: TrackingQuality; t_ref:number|null; }
 interface Preview { t_us:number; selected:string[]; skeleton:SkeletonDefinition; imu:Result; camera:Result; hybrid:Result; }
@@ -29,6 +30,7 @@ function Figure({ skeleton, result, label }: { skeleton:SkeletonDefinition;resul
 export function SolverBench({ devices, live }: { devices:DeviceStatus[];live:boolean }) {
   const [ids,setIds]=useState(()=>devices.map(d=>d.descriptor.id));
   const [running,setRunning]=useState(false);
+  const [segment,setSegment]=useState("");
   const [preview,setPreview]=useState<Preview|null>(null);
   const [error,setError]=useState<string|null>(null);
   const [received,setReceived]=useState(0);
@@ -53,6 +55,13 @@ export function SolverBench({ devices, live }: { devices:DeviceStatus[];live:boo
   },[running,live,key]);
   function choose(next:string[]){setIds(next);setPreview(null);setError(null);}
   const data=live&&preview&&preview.selected.length===selected.length&&preview.selected.every(id=>selected.includes(id))&&(performance.now()-received<2000)?preview:null;
+  const activeSegment=data?.skeleton.segments.findIndex(s=>s.id===segment)??-1;
+  const pick=activeSegment>=0?activeSegment:0;
+  const segmentId=data?.skeleton.segments[pick]?.id??"";
+  const x=data?.imu.pose?.segments[pick], y=data?.camera.pose?.segments[pick];
+  const skew=x?.t_obs_us!=null&&y?.t_obs_us!=null?Math.abs(x.t_obs_us-y.t_obs_us):null;
+  const valid=x&&y&&!["inferred","unavailable"].includes(x.provenance)&&!["inferred","unavailable"].includes(y.provenance);
+  const angle=valid&&skew!==null&&skew<=MAX_PAIR_SKEW_US?quaternionAngle(x.rotation,y.rotation):null;
   return <div className="lab-main">
     <section className="lab-card">
       <h2>Solver ablation and comparison</h2>
@@ -72,6 +81,7 @@ export function SolverBench({ devices, live }: { devices:DeviceStatus[];live:boo
       <section className="lab-card lab-bench-results">
         <h3>Optical vs IMU segment disagreement</h3>
         <p className="subtle">Only non-inferred segment orientations with observation timestamps within 40 ms. Disagreement is not ground-truth error; camera axial twist can be underconstrained.</p>
+        <label>History segment <select value={segmentId} onChange={e=>setSegment(e.target.value)}>{data.skeleton.segments.map(s=><option key={s.id}>{s.id}</option>)}</select></label>
         <table><thead><tr><th>Segment</th><th>IMU method</th><th>Camera method</th><th>Skew</th><th>Angle</th></tr></thead><tbody>
           {data.skeleton.segments.map((s,i)=>{
             const a=data.imu.pose?.segments[i],b=data.camera.pose?.segments[i];
@@ -83,5 +93,6 @@ export function SolverBench({ devices, live }: { devices:DeviceStatus[];live:boo
         </tbody></table>
       </section>
     </>}
+    <CaptureHistory key={key+":"+segment} label={segmentId||segment||"Optical vs IMU"} enabled={running&&live&&selected.length>0} point={data&&angle!==null&&skew!==null?{t_us:data.t_us,value:angle,skew_ms:skew/1000}:null}/>
   </div>;
 }

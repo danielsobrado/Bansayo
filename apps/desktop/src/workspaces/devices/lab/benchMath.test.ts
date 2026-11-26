@@ -1,11 +1,22 @@
 import { describe,it,expect } from "vitest";
-import { quaternionAngle,faceMeasurement,GRAVITY,nearestPairs } from "./benchMath";
+import { quaternionAngle,faceMeasurement,GRAVITY,nearestPairs,rotationCheck,sixFaceEstimate } from "./benchMath";
 
 describe("bench measurement",()=>{
   it("uses shortest quaternion arc and treats signs equally",()=>{
     expect(quaternionAngle([0,0,0,1],[0,0,0,-1])).toBeCloseTo(0);
     expect(quaternionAngle([0,0,0,1],[Math.SQRT1_2,0,0,Math.SQRT1_2])).toBeCloseTo(90);
     expect(quaternionAngle([0,0,0,0],[0,0,0,1])).toBeNull();
+  });
+  it("checks rotation axis independently from angle",()=>{
+    const start=[0,0,0,1],end=[Math.SQRT1_2,0,0,Math.SQRT1_2];
+    expect(rotationCheck(start,end,0)?.axisError).toBeCloseTo(0);
+    expect(rotationCheck(start,end,1)?.axisError).toBeCloseTo(90);
+    expect(sixFaceEstimate({})).toBeNull();
+    const faces=Object.fromEntries(Array.from({length:6},(_,i)=>{
+      const mean=[0,0,0];mean[Math.floor(i/2)]=i%2?-GRAVITY:GRAVITY;
+      return [i,{mean}];
+    }));
+    expect(sixFaceEstimate(faces)).toEqual({bias:[0,0,0],scale:[1,1,1]});
   });
   it("checks face sign and sufficient duration",()=>{
     const points=Array.from({length:51},(_,i)=>({t_us:i*20000,seq:i,device_time_us:null,values:[GRAVITY,0,0]}));

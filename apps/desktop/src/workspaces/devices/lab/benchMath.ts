@@ -32,3 +32,23 @@ export function nearestPairs(a: Point[], b: Point[], skew = MAX_PAIR_SKEW_US) {
   }
   return pairs;
 }
+
+/** Sensor-local rotation from start to end; q and -q describe the same rotation. */
+export function rotationCheck(a:readonly number[],b:readonly number[],axis:number) {
+  const angle=quaternionAngle(a,b);
+  if(angle===null || angle<1e-4 || axis<0 || axis>2)return null;
+  const [x,y,z,w]=a as readonly [number,number,number,number];
+  const [u,v,s,t]=b as readonly [number,number,number,number];
+  const relative=[w*u-x*t-y*s+z*v,w*v-y*t-z*u+x*s,w*s-z*t-x*v+y*u];
+  const norm=Math.hypot(...relative);
+  if(norm<1e-6)return null;
+  const alignment=Math.min(1,Math.abs(relative[axis]!)/norm);
+  return {angle,axisError:Math.acos(alignment)*180/Math.PI};
+}
+
+export function sixFaceEstimate(faces:Partial<Record<number,{mean:number[]}>>) {
+  if(FACES.some((_,i)=>!faces[i]))return null;
+  const bias=[0,1,2].map(i=>(faces[2*i]!.mean[i]!+faces[2*i+1]!.mean[i]!)/2);
+  const scale=[0,1,2].map(i=>(faces[2*i]!.mean[i]!-faces[2*i+1]!.mean[i]!)/(2*GRAVITY));
+  return {bias,scale};
+}

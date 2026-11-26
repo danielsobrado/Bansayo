@@ -4,6 +4,7 @@ import { useInspection } from "./useInspection";
 import { freshChannels } from "./trace";
 import { nearestPairs,quaternionAngle } from "./benchMath";
 import { OrientationView } from "./Plots";
+import { CaptureHistory } from "./CaptureHistory";
 
 export function TrackerComparison({devices,live}:{devices:DeviceStatus[];live:boolean}) {
   const trackers=devices.filter(d=>d.descriptor.kind==="imu_tracker");
@@ -41,5 +42,6 @@ function Pair({a,b,live}:{a:DeviceStatus;b:DeviceStatus;live:boolean}) {
         <svg viewBox="0 0 320 100" className="lab-chart" role="img" aria-label="Synchronized magnitude disagreement"><polyline points={series.map(p=>`${(p.t-min)/span*320},${95-p.delta/max*85}`).join(" ")} fill="none" stroke="var(--accent)" strokeWidth="1.5"/></svg>
         <p className="subtle">Plot scale 0–{max.toFixed(1)}° · {(span/1e6).toFixed(2)} s. This does not measure axis alignment or absolute orientation accuracy.</p></>:<p>Waiting for overlapping fresh orientation measurements.</p>}
     </section>
+    <CaptureHistory label={a.descriptor.id+" vs "+b.descriptor.id} enabled={live} point={last?{t_us:last.t,value:last.delta,skew_ms:last.skew}:null}/>
   </>;
 }

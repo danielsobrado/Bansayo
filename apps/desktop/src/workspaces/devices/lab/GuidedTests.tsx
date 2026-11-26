@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FACES, faceMeasurement, quaternionAngle, ROTATION_TOLERANCE_DEG } from "./benchMath";
+import { FACES, faceMeasurement, quaternionAngle, rotationCheck, sixFaceEstimate, ROTATION_TOLERANCE_DEG } from "./benchMath";
 import { motionSummary, type Snapshot } from "./trace";
 
 export function GuidedTests({ deviceId, channels, enabled }: {
@@ -8,7 +8,7 @@ export function GuidedTests({ deviceId, channels, enabled }: {
   const [faces,setFaces] = useState<Record<number,NonNullable<ReturnType<typeof faceMeasurement>>>>({});
   const [face,setFace] = useState(0);
   const [start,setStart] = useState<{q:number[];t:number}|null>(null);
-  const [turn,setTurn] = useState<number|null>(null);
+  const [turn,setTurn] = useState<ReturnType<typeof rotationCheck>>(null);
   const [drift,setDrift] = useState<{q:number[];t:number}|null>(null);
   const [report,setReport] = useState<{angle:number;seconds:number}|null>(null);
   const [axis,setAxis] = useState("X");
@@ -16,8 +16,9 @@ export function GuidedTests({ deviceId, channels, enabled }: {
   const q = channels.orientation?.points.at(-1);
   const faceSample = channels.accel && faceMeasurement(channels.accel,face);
   const still = enabled && motion?.still === true;
+  const estimate = sixFaceEstimate(faces);
   function download() {
-    const blob = new Blob([JSON.stringify({deviceId,faces,rotation:{axis,angle:turn},drift:report,
+    const blob = new Blob([JSON.stringify({deviceId,faces,accelerationEstimate:estimate,rotation:{axis,result:turn},drift:report,
       thresholds:"Advisory, not metrological calibration",exported_at:new Date().toISOString()},null,2)],{type:"application/json"});
     const url=URL.createObjectURL(blob);
     const a=document.createElement("a"); a.href=url; a.download=deviceId+"-bench.json"; a.click();
@@ -34,6 +35,11 @@ export function GuidedTests({ deviceId, channels, enabled }: {
         <p className="mono">{faceSample ? `Vector error ${faceSample.error.toFixed(3)} m/s²` : "Waiting for samples"}</p>
         <button disabled={!still || !faceSample} onClick={()=>{if(faceSample){setFaces(old=>({...old,[face]:faceSample}));setFace((face+1)%6);}}}>Capture face</button>
         {Object.entries(faces).map(([i,r])=><p key={i} className={r.pass?"lab-result-ok":"lab-result-warn"}>{FACES[Number(i)]}: {r.error.toFixed(3)} m/s² · {r.pass?"Within tolerance":"Check orientation or bias"}</p>)}
+        {estimate&&<div className="mono">
+          <p>Estimated bias: {estimate.bias.map(v=>v.toFixed(3)).join(" / ")} m/s²</p>
+          <p>Measured scale: {estimate.scale.map(v=>v.toFixed(4)).join(" / ")}</p>
+          <p className="subtle">Diagnostic diagonal estimates only; not applied to hardware.</p>
+        </div>}
         <button onClick={()=>{setFaces({});setFace(0);}}>Reset faces</button>
       </div>
       <div className="lab-card">
@@ -41,8 +47,8 @@ export function GuidedTests({ deviceId, channels, enabled }: {
         <label>Physical axis <select value={axis} onChange={e=>{setAxis(e.target.value);setStart(null);setTurn(null);}}>{["X","Y","Z"].map(a=><option key={a}>{a}</option>)}</select></label>
         <p>Hold still, capture start, rotate exactly 90° about {axis} using a physical reference, then stop and capture end.</p>
         <button disabled={!still || !q} onClick={()=>{if(q){setStart({q:q.values,t:q.t_us});setTurn(null);}}}>Capture start</button>
-        <button disabled={!still || !q || !start || q.t_us<=start.t} onClick={()=>{if(q&&start)setTurn(quaternionAngle(start.q,q.values));}}>Capture end</button>
-        {turn!==null&&<p className={Math.abs(turn-90)<=ROTATION_TOLERANCE_DEG?"lab-result-ok":"lab-result-warn"}>Rotation {turn.toFixed(2)}° · error {Math.abs(turn-90).toFixed(2)}° (magnitude only)</p>}
+        <button disabled={!still || !q || !start || q.t_us<=start.t} onClick={()=>{if(q&&start)setTurn(rotationCheck(start.q,q.values,["X","Y","Z"].indexOf(axis)));}}>Capture end</button>
+        {turn!==null&&<p className={Math.abs(turn.angle-90)<=ROTATION_TOLERANCE_DEG&&turn.axisError<=ROTATION_TOLERANCE_DEG?"lab-result-ok":"lab-result-warn"}>Rotation {turn.angle.toFixed(2)}° · angle error {Math.abs(turn.angle-90).toFixed(2)}° · axis error {turn.axisError.toFixed(2)}° (unsigned axis)</p>}
       </div>
       <div className="lab-card">
         <h3>Stationary orientation drift</h3>
