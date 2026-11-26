@@ -123,7 +123,13 @@ assignments:
     }));
     wait_for(addr, |state| mounting_state(state, "valid")).await;
     let trace = ok(addr, "GET", "devices/MOSAICO/inspection", Value::Null).await;
-    assert!(trace["channels"]["gyro"]["points"].as_array().unwrap().len() > 2);
+    assert!(
+        trace["channels"]["gyro"]["points"]
+            .as_array()
+            .unwrap()
+            .len()
+            > 2
+    );
     let preview = ok(
         addr,
         "POST",
