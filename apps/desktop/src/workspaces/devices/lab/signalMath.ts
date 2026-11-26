@@ -7,12 +7,12 @@ export function sharedEnd(channels: Snapshot["channels"]): number {
 export function windowPoints(points: readonly Point[], end: number, seconds:number): Point[] {
   return points.filter(p=>p.t_us>=end-seconds*1_000_000&&p.t_us<=end);
 }
-export function nearestPoint(points:readonly Point[], target:number): Point | undefined {
+export function nearestPoint(points:readonly Point[], target:number,tolerance=CURSOR_TOLERANCE_US): Point | undefined {
   let best:Point|undefined;
   for(const point of points) {
     if(!best||Math.abs(point.t_us-target)<Math.abs(best.t_us-target))best=point;
   }
-  return best&&Math.abs(best.t_us-target)<=CURSOR_TOLERANCE_US?best:undefined;
+  return best&&Math.abs(best.t_us-target)<=tolerance?best:undefined;
 }
 export function stats(values:readonly number[]) {
   if(!values.length)return null;

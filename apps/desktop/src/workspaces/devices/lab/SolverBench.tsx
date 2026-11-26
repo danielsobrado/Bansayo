@@ -1,31 +1,12 @@
 import { useEffect, useState } from "react";
 import type { DeviceStatus, SkeletonDefinition, SkeletonPose, TrackingQuality } from "@contracts";
 import { request } from "../../../engine/http";
-import { Reasons } from "../../../ui/Reasons";
-import { rotate } from "./trace";
+import { ComparisonFigures } from "./ComparisonFigures";
 import { segmentAxisAngle, MAX_PAIR_SKEW_US } from "./benchMath";
 import { CaptureHistory } from "./CaptureHistory";
 
 interface Result { pose: SkeletonPose|null; quality: TrackingQuality; t_ref:number|null; }
 interface Preview { t_us:number; selected:string[]; skeleton:SkeletonDefinition; imu:Result; camera:Result; hybrid:Result; }
-
-function Figure({ skeleton, result, label }: { skeleton:SkeletonDefinition;result:Result;label:string }) {
-  const pose = result.pose;
-  const project = (v:number[]) => [150+75*(v[0]??0),240-110*(v[1]??0)] as const;
-  return <section className="lab-card">
-    <header><h3>{label}</h3><span className="mono">{result.quality.observed_segments}/{result.quality.total_segments}</span></header>
-    {pose ? <svg viewBox="0 0 300 260" className="lab-solver-figure" role="img" aria-label={label+" isolated solver skeleton"}>
-      {skeleton.segments.map((def,i)=>{
-        const s=pose.segments[i]; if(!s)return null;
-        const a=project(s.position_m),delta=rotate(def.tail_m,s.rotation);
-        const b=project(s.position_m.map((v,j)=>v+delta[j]!));
-        const inferred=s.provenance==="inferred"||s.provenance==="unavailable";
-        return <g key={def.id}><line x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke={inferred?"var(--prov-inferred)":"var(--prov-derived)"} strokeWidth="4" strokeDasharray={inferred?"4 3":undefined}/><circle cx={a[0]} cy={a[1]} r="3" fill="var(--ink-2)"/></g>;
-      })}
-    </svg>:<p>No solved pose.</p>}
-    <Reasons reasons={result.quality.reasons}/>
-  </section>;
-}
 
 export function SolverBench({ devices, live }: { devices:DeviceStatus[];live:boolean }) {
   const [ids,setIds]=useState(()=>devices.map(d=>d.descriptor.id));
@@ -86,7 +67,7 @@ export function SolverBench({ devices, live }: { devices:DeviceStatus[];live:boo
       {error&&<p className="error" role="alert">{error}</p>}
     </section>
     {data&&<>
-      <div className="lab-grid"><Figure skeleton={data.skeleton} result={data.imu} label="IMU only"/><Figure skeleton={data.skeleton} result={data.camera} label="Camera only"/><Figure skeleton={data.skeleton} result={data.hybrid} label="Hybrid (cold start)"/></div>
+      <ComparisonFigures skeleton={data.skeleton} results={[data.imu,data.camera,data.hybrid]} selected={segmentId} onSelect={setSegment}/>
       <section className="lab-card lab-bench-results">
         <h3>Optical vs IMU segment disagreement</h3>
         <p className="subtle">Only non-inferred segment axes with observation timestamps within 40 ms. Bone-axis disagreement excludes unobservable axial twist and is not ground-truth error.</p>
@@ -97,7 +78,7 @@ export function SolverBench({ devices, live }: { devices:DeviceStatus[];live:boo
             const skew=a?.t_obs_us!=null&&b?.t_obs_us!=null?Math.abs(a.t_obs_us-b.t_obs_us):null;
             const measured=a&&b&&!["inferred","unavailable"].includes(a.provenance)&&!["inferred","unavailable"].includes(b.provenance);
             const angle=measured&&skew!==null&&skew<=MAX_PAIR_SKEW_US?segmentAxisAngle(a.rotation,b.rotation,s.tail_m):null;
-            return <tr key={s.id}><td>{s.id}</td><td>{a?.method??"—"}</td><td>{b?.method??"—"}</td><td>{skew===null?"—":(skew/1000).toFixed(1)+" ms"}</td><td>{angle===null?"—":angle.toFixed(1)+"°"}</td></tr>;
+            return <tr key={s.id} data-selected={segmentId===s.id}><td><button className="studio-segment-link" aria-pressed={segmentId===s.id} onClick={()=>setSegment(s.id)}>{s.id}</button></td><td>{a?.method??"—"}</td><td>{b?.method??"—"}</td><td>{skew===null?"—":(skew/1000).toFixed(1)+" ms"}</td><td>{angle===null?"—":<span className="studio-angle-cell"><span className="studio-angle-bar" aria-hidden="true"><i style={{width:Math.min(100,angle/30*100)+"%"}}/></span>{angle.toFixed(1)}°</span>}</td></tr>;
           })}
         </tbody></table>
       </section>

@@ -1,6 +1,6 @@
 import { useEffect,useState } from "react";
 import type { DeviceStatus } from "@contracts";
-import { type Channel,type Timing } from "./trace";
+import { AXIS_COLORS, type Channel,type Timing } from "./trace";
 import { GRAVITY } from "./benchMath";
 
 function percentile(values:number[],p:number) {
@@ -32,11 +32,24 @@ function Magnitude({channel,label}:{channel:Channel|undefined;label:string}) {
   const coords=values.map((v,i)=>`${i/Math.max(1,values.length-1)*240},${60-v/max*55}`).join(" ");
   return <div><p className="mono">{label}: {last.toFixed(1)} BSP units</p><svg viewBox="0 0 240 64" className="lab-chart" role="img" aria-label={label+" magnetic magnitude history"}><polyline points={coords} fill="none" stroke="var(--accent)" strokeWidth="1.5"/></svg></div>;
 }
+function MagneticScatter({channel,label}:{channel:Channel|undefined;label:string}) {
+  const points=channel?.points??[];
+  if(!points.length)return null;
+  const limit=Math.max(1,...points.flatMap(p=>p.values.map(Math.abs)));
+  const x=(v:number)=>60+v/limit*49;
+  const y=(v:number)=>60-v/limit*49;
+  return <div><small className="subtle">{label} · ±{limit.toFixed(1)} BSP units</small><div className="studio-scatter-grid">{[[0,1],[0,2],[1,2]].map(([u,v])=><svg key={u+":"+v} viewBox="0 0 120 120" className="lab-chart" role="img" aria-label={label+" "+("XYZ"[u!])+("XYZ"[v!])+" scatter"}>
+    <path d="M11 60H109 M60 11V109" stroke="var(--line)"/><rect x="11" y="11" width="98" height="98" fill="none" stroke="var(--line)"/>
+    <text x="108" y="57" fill={AXIS_COLORS[u!]} fontSize="9" textAnchor="end">{"XYZ"[u!]}</text><text x="64" y="10" fill={AXIS_COLORS[v!]} fontSize="9">{"XYZ"[v!]}</text>
+    {points.map((p,i)=><circle key={i} cx={x(p.values[u!]!)} cy={y(p.values[v!]!)} r="1.8" fill="var(--accent)" opacity=".65"/>)}
+  </svg>)}</div></div>;
+}
 export function MagneticPanel({a,b}:{a:Channel|undefined;b:Channel|undefined}) {
   const x=a?.points.at(-1),y=b?.points.at(-1);
   const delta=x&&y&&Math.abs(x.t_us-y.t_us)<=100000?Math.abs(Math.hypot(...x.values)-Math.hypot(...y.values)):null;
   return <section className="lab-card"><h3>Magnetic field / interference</h3>
     <Magnitude channel={a} label="BMM150 #0"/><Magnitude channel={b} label="BMM150 #1"/>
+    <MagneticScatter channel={a} label="BMM150 #0"/><MagneticScatter channel={b} label="BMM150 #1"/>
     <p className="mono">Magnitude difference: {delta?.toFixed(1)??"—"} BSP units</p>
     <p className="subtle">Observe field changes near metal and magnets. Different placement, offsets and scaling can affect the difference; no calibrated pass/fail threshold.</p>
   </section>;

@@ -53,12 +53,12 @@ const project = (v: number[]) => {
   return [140 + 39*(x+0.45*z), 100 - 39*(y-0.3*z)] as const;
 };
 
-export function OrientationView({ q, accel, magnetic, frozen=false }: { q: number[] | undefined; accel?:number[]|undefined; magnetic?:number[]|undefined; frozen?:boolean }) {
+export function OrientationView({ q, accel, frozen=false }: { q: number[] | undefined; accel?:number[]|undefined;  frozen?:boolean }) {
   const points = q ? vertices.map(v => project(rotate(v,q))) : [];
   const center = project([0,0,0]);
   return <section className="lab-card">
     <header><h3>Isolated orientation</h3><span className="subtle">Sensor reference</span></header>
-    {!q ? <p className="subtle">Waiting for orientation.</p> : <SensorViewport q={q} accel={accel} magnetic={magnetic} frozen={frozen} fallback={<svg viewBox="0 0 280 200" className="lab-orientation" role="img" aria-label="Live quaternion wireframe and sensor axes">
+    {!q ? <p className="subtle">Waiting for orientation.</p> : <SensorViewport q={q} accel={accel} frozen={frozen} fallback={<svg viewBox="0 0 280 200" className="lab-orientation" role="img" aria-label="Live quaternion wireframe and sensor axes">
       {[1,2,3,4,5,6,7].map(i => <line key={i} x1={i*35} y1="0" x2={i*35} y2="200" stroke="var(--line)" opacity=".4"/>)}
       {[1,2,3,4,5].map(i => <line key={i} x1="0" y1={i*35} x2="280" y2={i*35} stroke="var(--line)" opacity=".4"/>)}
       {edges.map(([a,b],i) => <line key={i} x1={points[a!]![0]} y1={points[a!]![1]} x2={points[b!]![0]} y2={points[b!]![1]} stroke="var(--ink-2)" strokeWidth="1.5"/>)}

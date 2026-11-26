@@ -13,7 +13,7 @@ import { MountingPanel } from "./MountingPanel";
 import { SignalWorkspace } from "./SignalWorkspace";
 import { STALE_MS, freshChannels, motionSummary, type Snapshot } from "./trace";
 import { useInspection } from "./useInspection";
-import { downloadText } from "./signalMath";
+import { downloadText, nearestPoint } from "./signalMath";
 import type { SignalFocus, StudioView } from "./studioConfig";
 
 function exportSnapshot(device: DeviceStatus, snapshot: Snapshot) {
@@ -29,7 +29,9 @@ export function DeviceInspector({device,devices,live,skeleton,view,focus,onFocus
   const raw=snapshot?.channels??{};
   const available=live&&device.state!=="disconnected"&&device.state!=="unavailable";
   const channels=frozen?raw:freshChannels(raw,performance.now()-reading.receivedAt,available);
-  const q=(channels.orientation??channels.pose_rotation)?.points.at(-1)?.values;
+  const orientation=(channels.orientation??channels.pose_rotation)?.points.at(-1);
+  const q=orientation?.values;
+  const accel=orientation?nearestPoint(channels.accel?.points??[],orientation.t_us,40_000)?.values:undefined;
   const motion=!frozen?motionSummary(channels.gyro,channels.accel):null;
   const used=useSampledFrame(4,(frame,age)=>frame&&age<=STALE_MS?(frame.pose?.segments??[]).filter(s=>s.sources.includes(device.descriptor.id)).length:null);
   const timing=device.time_sync;
@@ -67,7 +69,7 @@ export function DeviceInspector({device,devices,live,skeleton,view,focus,onFocus
           {camera&&available?<CameraPreview device={device} showAprilTags/>:<p className="studio-empty">Select a connected camera to inspect images, landmarks and optical markers.</p>}
           <p className="subtle">Use Cameras for intrinsic/extrinsic calibration, capture settings and exposure.</p></section>:
           <>
-            {view==="overview"&&<><div className="studio-overview-grid"><OrientationView q={q} accel={channels.accel?.points.at(-1)?.values} magnetic={channels.mag0?.points.at(-1)?.values} frozen={frozen}/>
+            {view==="overview"&&<><div className="studio-overview-grid"><OrientationView q={q} accel={accel} frozen={frozen}/>
               <section className="lab-card studio-attitude"><header><h3>Motion state</h3></header><strong className="studio-motion" data-still={motion?.still===true}>{motion?motion.still?"Stationary":"In motion":"—"}</strong>
               <dl className="studio-properties"><div><dt>Gyro peak</dt><dd>{motion?.peak.toFixed(3)??"—"} rad/s</dd></div><div><dt>Gravity error</dt><dd>{motion?.gravityError.toFixed(3)??"—"} m/s²</dd></div><div><dt>Mounting</dt><dd>{device.calibration.find(c=>c.kind==="mounting")?.state??"Unavailable"}</dd></div></dl><p className="subtle">Advisory, based on recent samples.</p></section></div>
               <SignalWorkspace key="overview" device={device} channels={channels} known={raw} focus="all" onFocus={onFocus} compact frozen={frozen}/></>}
