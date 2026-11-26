@@ -1,5 +1,6 @@
 //! Independent source tasks. Ingest drops newest at capacity; counters remain observable.
 pub mod camera;
+mod diagnostic_stream;
 pub mod esp32;
 pub mod inspection;
 pub mod simulated;

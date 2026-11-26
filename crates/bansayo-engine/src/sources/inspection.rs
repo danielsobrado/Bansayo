@@ -1,5 +1,8 @@
 //! Bounded, decimated inspection of accepted live observations, separate from solver history.
-use super::RuntimeMap;
+use super::{
+    RuntimeMap,
+    diagnostic_stream::{Batch, Stream},
+};
 use bansayo_contracts::{DeviceId, ObservationData, SensorObservation, SourceEvent};
 use serde::Serialize;
 use std::{
@@ -13,7 +16,7 @@ const SAMPLE_INTERVAL_US: u64 = 20_000;
 
 pub type SharedTrace = Arc<Mutex<Trace>>;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
 pub struct Point {
     t_us: u64,
     seq: u64,
@@ -31,6 +34,7 @@ struct Channel {
 pub struct Trace {
     channels: BTreeMap<&'static str, Channel>,
     timing: Timing,
+    full_rate: Stream,
 }
 
 #[derive(Debug, Default)]
@@ -95,6 +99,7 @@ impl Trace {
     }
 
     fn push_point(&mut self, kind: &'static str, point: Point) {
+        self.full_rate.push(kind, &point);
         let c = self.channels.entry(kind).or_default();
         c.last_seen = Some(Instant::now());
         if let Some(last) = c.points.back() {
@@ -242,6 +247,19 @@ pub fn snapshot(runtime: &RuntimeMap, id: &DeviceId) -> Snapshot {
         .and_then(|all| all.get(id)?.inspection.clone());
     trace
         .and_then(|trace| trace.lock().ok().map(|t| t.snapshot()))
+        .unwrap_or_default()
+}
+
+pub fn batch(runtime: &RuntimeMap, id: &DeviceId, epoch: Option<u64>, after: u64) -> Batch {
+    let trace = runtime.write().ok().map(|mut all| {
+        all.entry(id.clone())
+            .or_default()
+            .inspection
+            .get_or_insert_default()
+            .clone()
+    });
+    trace
+        .and_then(|trace| trace.lock().ok().map(|mut t| t.full_rate.read(epoch, after)))
         .unwrap_or_default()
 }
 
