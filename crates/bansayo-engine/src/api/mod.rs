@@ -51,6 +51,7 @@ pub fn router(api: Api) -> Router {
         .route("/api/v1/health", get(health))
         .route("/api/v1/state", get(state))
         .route("/api/v1/devices/{id}/inspection", get(inspection::snapshot))
+        .route("/api/v1/inspection/solver", post(inspection::solver))
         .route("/api/v1/skeleton", get(skeleton))
         .route("/api/v1/simulation", put(simulation))
         .route("/api/v1/calibration/reference-pose", post(capture))

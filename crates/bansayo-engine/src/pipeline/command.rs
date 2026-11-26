@@ -16,6 +16,7 @@ impl ControlError {
 }
 pub type Reply = oneshot::Sender<Result<serde_json::Value, ControlError>>;
 pub enum ControlRequest {
+    InspectSolver(Vec<DeviceId>),
     Assignment(DeviceId, Option<SegmentId>),
     Fault(DeviceId, FaultRequest),
     Delete(ProfileId),

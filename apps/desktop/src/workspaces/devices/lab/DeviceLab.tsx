@@ -8,20 +8,25 @@ import { CameraPreview } from "../../cameras/CameraPreview";
 import { OrientationView, TracePlot } from "./Plots";
 import { CHANNEL_IDS, CHANNELS, STALE_MS, freshChannels, motionSummary, type ChannelId, type Snapshot } from "./trace";
 import { useInspection } from "./useInspection";
+import { SolverBench } from "./SolverBench";
+import { GuidedTests } from "./GuidedTests";
 import "./lab.css";
 
 export function DeviceLab({ devices, live }: { devices: DeviceStatus[]; live: boolean }) {
   const [selected, setSelected] = useState("");
+  const [solver, setSolver] = useState(false);
   const device = devices.find(d => d.descriptor.id === selected) ?? devices[0];
   if (!device) return <p className="subtle">Configure a source to inspect it.</p>;
   return <div className="lab-layout">
     <nav className="lab-devices" aria-label="Isolate device">
       <h3 className="eyebrow">ISOLATE DEVICE</h3>
-      {devices.map(d => <button key={d.descriptor.id} aria-pressed={device.descriptor.id === d.descriptor.id} onClick={() => setSelected(d.descriptor.id)}>
+      <button aria-pressed={solver} onClick={() => setSolver(!solver)}>Solver comparison</button>
+      {devices.map(d => <button key={d.descriptor.id} aria-pressed={!solver && device.descriptor.id === d.descriptor.id} onClick={() => { setSelected(d.descriptor.id); setSolver(false); }}>
         <span className="mono">{d.descriptor.id}</span><StatePill state={d.state}/><small>{d.descriptor.kind} · {d.descriptor.origin}</small>
       </button>)}
     </nav>
-    <Inspector key={device.descriptor.id + (live ? ":live" : ":offline")} device={device} live={live}/>
+    {solver ? <SolverBench devices={devices} live={live}/> :
+      <Inspector key={device.descriptor.id + (live ? ":live" : ":offline")} device={device} live={live}/>} 
   </div>;
 }
 
@@ -112,6 +117,7 @@ function Inspector({ device, live }: { device: DeviceStatus; live: boolean }) {
           <p className="subtle">{device.calibration.map(c => `${c.kind}: ${c.state}`).join(" · ") || "No calibration status reported."}</p>
         </section>
       </div>
+      <GuidedTests deviceId={device.descriptor.id} channels={channels} enabled={available && !frozen}/>
       <div className="lab-tools">
         <label>Component <select value={focus} onChange={e => {setFocus(e.target.value as ChannelId | "all");setAxis("all");}}>
           <option value="all">All available</option>

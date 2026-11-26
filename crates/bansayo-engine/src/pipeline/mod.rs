@@ -2,6 +2,7 @@ pub mod align;
 mod capture;
 pub mod command;
 mod control;
+mod inspection;
 pub mod encoded;
 pub mod features;
 pub mod fusion;

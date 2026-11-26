@@ -45,6 +45,10 @@ impl Runtime {
     ) -> Result<(), (ControlError, Reply)> {
         let dir = engine.config.config.engine.data_dir.clone();
         match request {
+            ControlRequest::InspectSolver(ids) => {
+                let result = super::inspection::preview(engine, &ids);
+                let _ = reply.send(result);
+            }
             ControlRequest::Assignment(id, segment) => {
                 if !engine
                     .registry

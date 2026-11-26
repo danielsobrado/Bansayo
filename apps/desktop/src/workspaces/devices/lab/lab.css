@@ -19,3 +19,13 @@
 .lab-chart,.lab-orientation{width:100%;display:block;background:var(--surface-0)}
 .lab-orientation{max-height:220px}
 @media(max-width:700px){.lab-layout{grid-template-columns:1fr}.lab-devices{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}.lab-devices h3{grid-column:1/-1}}
+
+.lab-bench-controls{display:flex;flex-wrap:wrap;gap:var(--space-8);align-items:center}
+.lab-bench-controls label{display:flex;align-items:center;gap:var(--space-4)}
+.lab-bench-results{overflow:auto}
+.lab-bench-results table{width:100%;border-collapse:collapse;font-size:var(--text-small)}
+.lab-bench-results th,.lab-bench-results td{text-align:left;padding:var(--space-4);border-bottom:1px solid var(--line)}
+.lab-bench-results th{color:var(--ink-3)}
+.lab-solver-figure{width:100%;max-height:280px;background:var(--surface-0)}
+.lab-result-ok{color:var(--state-tracking)}
+.lab-result-warn{color:var(--state-degraded)}
