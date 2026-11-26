@@ -30,9 +30,10 @@ pub async fn start(State(api): State<Api>, Json(body): Json<Request>) -> Respons
             || body.device_ids.len() > 4
             || !(1..=3600).contains(&body.duration_s)
             || body.device_ids.iter().any(|id| {
-                !state.devices.iter().any(|d| {
-                    d.descriptor.id == *id && d.descriptor.kind != DeviceKind::Camera
-                })
+                !state
+                    .devices
+                    .iter()
+                    .any(|d| d.descriptor.id == *id && d.descriptor.kind != DeviceKind::Camera)
             })
         {
             return failure(
@@ -41,7 +42,10 @@ pub async fn start(State(api): State<Api>, Json(body): Json<Request>) -> Respons
             );
         }
     }
-    match api.diagnostic_recorder.start(body.device_ids, body.duration_s) {
+    match api
+        .diagnostic_recorder
+        .start(body.device_ids, body.duration_s)
+    {
         Ok(status) => Json(ApiResponse::ok(status)).into_response(),
         Err(message) => failure(ApiErrorCode::Conflict, message),
     }

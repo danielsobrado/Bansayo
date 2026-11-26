@@ -32,7 +32,7 @@ Open Devices → Sensor Studio using a simulated or physical rig. Verify filteri
 5. With calibrated cameras, move a ChArUco board or known rigid target through the capture volume; inspect reprojection RMS and rejected views. Compare against surveyed dimensions, not visual agreement alone.
 6. Test draggable instruments, export, browser memory, phone layout and GPU cleanup. Keep screenshots and test reports under a dated local acceptance directory.
 
-TODO: physical acceptance, persistent diagnostic files independent of the browser, arbitrary cross-workspace dock trees, exact solver-input residual trace, validated metrological calibration and hardware performance baselines.
+TODO: physical acceptance, unrestricted floating-window docking, exact solver-input residual trace, validated metrological calibration and hardware performance baselines.
 
 The independent browser test uses deterministic synthetic telemetry, not real hardware: `cd apps/desktop && npx playwright install chromium && npx playwright test -c playwright.sensor-studio.config.ts`. CI uploads screenshots for desktop dark/light and phone views. Narrow-screen overrides are scoped to Sensor Studio; the other workspaces retain their desktop minimum width. This is a UI acceptance test, not a measurement-accuracy test or pixel-baseline regression suite.
 
@@ -40,3 +40,13 @@ The independent browser test uses deterministic synthetic telemetry, not real ha
 Capture → Persistent engine recording is separate from browser capture. One engine-owned job, up to four non-camera devices, 1–3600 seconds (UI presets 1–60 min), 256 MiB per file and 32 directory entries maximum. Files are under `engine.data_dir/diagnostics`. The worker renews journal leases, writes incremental JSONL batches off the tracking thread, flushes periodically, synchronizes on clean completion and renames the partial file. A crash or write error can leave a recoverable partial file; never interpret a missing footer as a complete capture. Stop or engine shutdown closes the file; a reference reset terminates capture. Archive files manually to free capacity. The API reports the latest job in memory; previous files remain on disk. No automatic file upload or deletion.
 
 The pinned instrument shelf supports up to three independent device/channel or room views, remains visible across Studio tabs and persists panel choices/order. Drag or use the reorder buttons; unpin to release resources. On narrow screens it stacks below the active workspace. This is constrained docking, not a general floating-window manager.
+
+## Repeatable performance baseline
+Enable `diagnostics: { timing: true }` in the engine YAML. Start the engine with the actual hardware configuration (or use `config/sim-six-trackers.yaml` for a clearly labelled simulation). With no active capture, run:
+
+```sh
+node scripts/bench-sensor-studio.mjs --devices MOSAICO-01 --seconds 30 --label mosaico-200hz --out mosaico-200hz.json
+node scripts/analyze-diagnostic-recording.mjs data/diagnostics/capture-REPLACE.jsonl mosaico-capture-report.json
+```
+
+The benchmark compares a warm baseline against engine recording, collects received frame FPS/intervals, stage timing windows, device drops and clock status, then finalizes its recording. Do not change the rig or run another recorder concurrently. For simulated testing use the configured SIM-T01 etc. IDs and a simulation label. The analyzer reads JSONL incrementally and checks the footer, counts and per-channel rates. It does not infer physical accuracy, CPU/GPU utilization or one-way latency. For those use external process/GPU sampling and a synchronized physical reference. Repeat each condition at least three times (one and four trackers, cameras on/off), retaining each report, revision and configuration.

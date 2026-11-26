@@ -48,7 +48,10 @@ pub struct Recorder {
 
 impl Recorder {
     pub fn status(&self) -> Status {
-        self.shared.lock().map(|s| s.status.clone()).unwrap_or_default()
+        self.shared
+            .lock()
+            .map(|s| s.status.clone())
+            .unwrap_or_default()
     }
 
     pub fn start(&self, ids: Vec<DeviceId>, seconds: u64) -> Result<Status, &'static str> {
@@ -101,7 +104,10 @@ pub fn spawn(
     epoch: String,
     dir: PathBuf,
     cancel: CancellationToken,
-) -> (Recorder, tokio::task::JoinHandle<Result<(), crate::app::EngineError>>) {
+) -> (
+    Recorder,
+    tokio::task::JoinHandle<Result<(), crate::app::EngineError>>,
+) {
     let (tx, mut rx) = mpsc::channel(1);
     let shared = Arc::new(Mutex::new(Shared::default()));
     let recorder = Recorder {
@@ -156,7 +162,9 @@ fn open(dir: &Path) -> io::Result<(BufWriter<fs::File>, String)> {
     fs::create_dir_all(dir)?;
     let count = fs::read_dir(dir)?.count();
     if count >= MAX_FILES {
-        return Err(io::Error::other("Diagnostic directory limit reached; archive old files."));
+        return Err(io::Error::other(
+            "Diagnostic directory limit reached; archive old files.",
+        ));
     }
     let mut random = [0_u8; 8];
     getrandom::fill(&mut random).map_err(|e| io::Error::other(e.to_string()))?;
@@ -189,11 +197,15 @@ fn run(env: &Environment, job: Job) -> io::Result<()> {
         ..Default::default()
     };
     publish(env, &status);
-    line(&mut writer, &mut status, &json!({
-        "type": "header", "format": "bansayo-diagnostic-journal-v1",
-        "session_epoch_utc": env.epoch, "started_utc": crate::clock::utc_now_rfc3339(),
-        "devices": job.ids, "duration_s": job.duration.as_secs()
-    }))?;
+    line(
+        &mut writer,
+        &mut status,
+        &json!({
+            "type": "header", "format": "bansayo-diagnostic-journal-v1",
+            "session_epoch_utc": env.epoch, "started_utc": crate::clock::utc_now_rfc3339(),
+            "devices": job.ids, "duration_s": job.duration.as_secs()
+        }),
+    )?;
     let mut cursors: Vec<_> = job
         .ids
         .iter()
