@@ -1,5 +1,9 @@
 use super::{Api, failure};
-use axum::{Json, extract::State, response::{IntoResponse, Response}};
+use axum::{
+    Json,
+    extract::State,
+    response::{IntoResponse, Response},
+};
 use bansayo_contracts::{ApiErrorCode, ApiResponse, DeviceId, DeviceKind, EngineMode};
 use std::collections::BTreeSet;
 
@@ -31,7 +35,10 @@ pub async fn start(State(api): State<Api>, Json(body): Json<Request>) -> Respons
                 })
             })
         {
-            return failure(ApiErrorCode::InvalidRequest, "Select 1–4 distinct non-camera devices and 1–3600 seconds.");
+            return failure(
+                ApiErrorCode::InvalidRequest,
+                "Select 1–4 distinct non-camera devices and 1–3600 seconds.",
+            );
         }
     }
     match api.diagnostic_recorder.start(body.device_ids, body.duration_s) {

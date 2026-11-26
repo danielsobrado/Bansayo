@@ -168,7 +168,11 @@ fn open(dir: &Path) -> io::Result<(BufWriter<fs::File>, String)> {
     Ok((BufWriter::new(file), name))
 }
 
-fn line(writer: &mut BufWriter<fs::File>, status: &mut Status, value: &impl Serialize) -> io::Result<()> {
+fn line(
+    writer: &mut BufWriter<fs::File>,
+    status: &mut Status,
+    value: &impl Serialize,
+) -> io::Result<()> {
     let bytes = serde_json::to_vec(value).map_err(io::Error::other)?;
     writer.write_all(&bytes)?;
     writer.write_all(b"\n")?;
@@ -190,10 +194,14 @@ fn run(env: &Environment, job: Job) -> io::Result<()> {
         "session_epoch_utc": env.epoch, "started_utc": crate::clock::utc_now_rfc3339(),
         "devices": job.ids, "duration_s": job.duration.as_secs()
     }))?;
-    let mut cursors: Vec<_> = job.ids.iter().map(|id| {
-        let b = inspection::batch(&env.runtime, id, None, 0);
-        (b.epoch, b.next)
-    }).collect();
+    let mut cursors: Vec<_> = job
+        .ids
+        .iter()
+        .map(|id| {
+            let b = inspection::batch(&env.runtime, id, None, 0);
+            (b.epoch, b.next)
+        })
+        .collect();
     let started = Instant::now();
     let reason = 'record: loop {
         if env.cancel.is_cancelled() {

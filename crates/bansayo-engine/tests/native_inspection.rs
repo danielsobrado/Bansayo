@@ -147,6 +147,35 @@ assignments:
             .count()
             > 15
     );
+    let recording = ok(
+        addr,
+        "POST",
+        "inspection/recording",
+        json!({"device_ids":["MOSAICO"],"duration_s":30}),
+    )
+    .await;
+    assert_eq!(recording["running"], true);
+    tokio::time::sleep(Duration::from_millis(350)).await;
+    ok(addr, "POST", "inspection/recording/stop", Value::Null).await;
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let finished = loop {
+        let s = ok(addr, "GET", "inspection/recording", Value::Null).await;
+        if s["running"] == false {
+            break s;
+        }
+        assert!(Instant::now() < deadline);
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    };
+    assert!(finished["observations"].as_u64().unwrap() > 0);
+    let file = dir.path().join(finished["file"].as_str().unwrap());
+    assert_eq!(file.extension().unwrap(), "jsonl");
+    let contents = std::fs::read_to_string(file).unwrap();
+    let rows: Vec<Value> = contents
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(rows.first().unwrap()["type"], "header");
+    assert_eq!(rows.last().unwrap()["type"], "footer");
     let preview = ok(
         addr,
         "POST",
