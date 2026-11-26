@@ -46,8 +46,7 @@ impl Runtime {
         let dir = engine.config.config.engine.data_dir.clone();
         match request {
             ControlRequest::InspectSolver(ids) => {
-                let result = super::inspection::preview(engine, &ids);
-                let _ = reply.send(result);
+                super::inspection::start(engine, &ids, &self.inspection_permit, reply);
             }
             ControlRequest::Assignment(id, segment) => {
                 if !engine
@@ -441,7 +440,7 @@ impl Runtime {
                 Completion::Assignment(assignments, stale, id) => {
                     engine.placements.send_replace(assignments.clone());
                     engine.registry.assignments = assignments;
-                    engine.store.stale = stale;
+                    engine.store.stale.extend(stale);
                     if engine.store.stale.is_empty() {
                         engine.store.warnings.clear();
                     }

@@ -56,7 +56,7 @@ For headless operation disable the diagnostic display in menuconfig.
 - BMI270 uses ±16 g and ±2000 degrees/s, combined sensor register read and
   actual host-side sample-read time (not BMI270 hardware FIFO timestamps).
 - Packet format exactly matches
-  `crates/bansayo-engine/src/sources/esp32.rs`: little-endian 64 bytes,
+  `crates/bansayo-engine/src/sources/esp32.rs`: little-endian 72 bytes (v1 prefix + reference ID),
   XYZW quaternion, 32-bit wrapping device time and sequence. No magnetometer
   fields exist in BIMU v1. Optional BMAG v1 auxiliary packets carry compensated
   integer readings from both magnetometers, not AHRS inputs. Each sensor is
@@ -100,4 +100,4 @@ magnetometer calibration/interference rejection. Add runtime provisioning and ac
 
 Upstream: https://github.com/esp-mosaico/esp-mosaico-bsp (pinned above).
 
-After a board reboot or local AHRS recalibration, repeat the Bansayo mounting reference pose before relying on the fused skeleton. BIMU v1 has no persistent reference-frame generation identifier; the engine cannot prove that an old mounting profile is valid for a new board reference. The receiver recognizes a backwards clock/sequence after a quiet interval and reports clock resets, but this is heuristic for legacy devices.
+The firmware sends BIMU v2 (72 bytes): the v1 fields followed by a nonzero 64-bit reference identifier. On startup, local AHRS recalibration or recovery from a long sampling gap, the identifier changes. The engine invalidates old mounting profiles before accepting samples in the new reference. It conservatively requires a new mounting capture after engine restart when the first v2 sample arrives. Legacy BIMU v1 (64 bytes) remains supported, but reboot detection is heuristic and cannot prove reference continuity. Upgrade the backend before flashing the v2 firmware.

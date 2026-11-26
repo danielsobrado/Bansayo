@@ -26,3 +26,7 @@ Freeze traces to examine a moment, and export the bounded snapshot as JSON. Heal
 - **Battery:** short browser-local history of reported charge; not a power measurement.
 
 TODO: hardware acceptance, authenticated bidirectional firmware control (including bias recalibration), full-rate long-duration synchronized capture, full magnetic calibration and quantitative optical reference validation. Live source ablation is deliberately a separate preview, not a mutation of training or recording state.
+
+## Reference changes and solver resource isolation
+
+BIMU v2 adds a reference identifier; existing v1 clients remain supported. The first v2 sample in a new engine process and subsequent reference changes invalidate mounting. Capture must be repeated, and a change during a pending capture or save is refused. Retired reference IDs are rejected within a bounded recent history. Solver inspection now takes a read-only input snapshot and solves it off the live pipeline, with one concurrent preview allowed. This protects recording and tracking from expensive preview requests.

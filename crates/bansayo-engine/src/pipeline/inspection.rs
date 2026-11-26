@@ -1,13 +1,13 @@
 //! Read-only source ablation. Each preview starts from the same live input snapshot.
 use super::{
     Runner,
-    command::ControlError,
+    command::{ControlError, Reply},
     solve::{Solved, solve},
 };
-use crate::{config::TrackingMode, registry::Registry};
+use crate::{calibration::Store, config::{Config, TrackingMode}, registry::Registry, skeleton::Skeleton};
 use bansayo_contracts::*;
 use serde_json::{Value, json};
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, sync::Arc};
 
 fn filtered(registry: &Registry, selected: &BTreeSet<DeviceId>) -> Registry {
     let mut result = registry.clone();
@@ -26,7 +26,16 @@ fn wire(solved: Solved) -> Value {
     })
 }
 
-pub(super) fn preview(engine: &Runner, ids: &[DeviceId]) -> Result<Value, ControlError> {
+struct Preview {
+    selected: BTreeSet<DeviceId>,
+    registry: Registry,
+    store: Store,
+    skeleton: Skeleton,
+    config: Config,
+    now: u64,
+}
+
+fn prepare(engine: &Runner, ids: &[DeviceId]) -> Result<Preview, ControlError> {
     let selected: BTreeSet<_> = ids.iter().cloned().collect();
     if selected.is_empty()
         || selected.len() > 32
@@ -39,19 +48,58 @@ pub(super) fn preview(engine: &Runner, ids: &[DeviceId]) -> Result<Value, Contro
             "Select one to 32 known devices.",
         ));
     }
-    let registry = filtered(&engine.registry, &selected);
-    let now = engine.clock.now_us();
-    let run = |mode| {
-        let mut config = engine.config.config.clone();
-        config.tracking.mode = mode;
-        solve(&engine.skeleton, &registry, &engine.store, now, &config)
+    Ok(Preview {
+        registry: filtered(&engine.registry, &selected),
+        selected,
+        store: engine.store.clone(),
+        skeleton: engine.skeleton.clone(),
+        config: engine.config.config.clone(),
+        now: engine.clock.now_us(),
+    })
+}
+
+impl Preview {
+    fn solve(&self) -> Value {
+        let run = |mode| {
+            let mut config = self.config.clone();
+            config.tracking.mode = mode;
+            solve(&self.skeleton, &self.registry, &self.store, self.now, &config)
+        };
+        json!({
+            "t_us": self.now,
+            "selected": self.selected,
+            "skeleton": self.skeleton.definition,
+            "imu": wire(run(TrackingMode::ImuOnly)),
+            "camera": wire(run(TrackingMode::CameraOnly)),
+            "hybrid": wire(run(TrackingMode::HybridAuto)),
+        })
+    }
+}
+
+pub(super) fn start(
+    engine: &Runner,
+    ids: &[DeviceId],
+    permit: &Arc<tokio::sync::Semaphore>,
+    reply: Reply,
+) {
+    let Ok(permit) = permit.clone().try_acquire_owned() else {
+        let _ = reply.send(Err(ControlError::new(
+            ApiErrorCode::Conflict,
+            "A solver inspection is already running.",
+        )));
+        return;
     };
-    Ok(json!({
-        "t_us": now,
-        "selected": selected,
-        "skeleton": engine.skeleton.definition,
-        "imu": wire(run(TrackingMode::ImuOnly)),
-        "camera": wire(run(TrackingMode::CameraOnly)),
-        "hybrid": wire(run(TrackingMode::HybridAuto)),
-    }))
+    match prepare(engine, ids) {
+        Ok(input) => {
+            tokio::task::spawn_blocking(move || {
+                let _permit = permit;
+                if !reply.is_closed() {
+                    let _ = reply.send(Ok(input.solve()));
+                }
+            });
+        }
+        Err(e) => {
+            let _ = reply.send(Err(e));
+        }
+    }
 }

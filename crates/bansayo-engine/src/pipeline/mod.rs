@@ -16,5 +16,6 @@ pub use runner::*;
 
 mod capability;
 pub mod motion;
+mod native_reference;
 pub mod planar;
 pub mod schema_map;

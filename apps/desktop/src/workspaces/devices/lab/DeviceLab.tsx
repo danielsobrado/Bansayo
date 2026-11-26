@@ -109,7 +109,7 @@ function Inspector({ device, live }: { device: DeviceStatus; live: boolean }) {
             <span>Gravity error: {motion ? motion.gravityError.toFixed(3) : "—"} m/s²</span>
           </div>
           <p role="status">{frozen ? "Resume traces to check stillness." : motion ? (motion.still ? "Stationary in sampled window" : "Motion detected") : "Need fresh gyro and accelerometer samples for stillness check."}</p>
-          <p className="subtle">Advisory only. Board-level bias recalibration uses the Mosaico touchscreen. Mounting calibration requires a body reference pose.</p>
+          <p className="subtle">Advisory only. Board-level bias recalibration uses the Mosaico touchscreen. BIMU v2 reference changes invalidate mounting; repeat a body reference pose afterwards.</p>
           <label><input type="checkbox" checked={ready} onChange={e => {setReady(e.target.checked);setCaptured(false);}}/> Tracker mounted; upright T-pose ready</label>
           <button disabled={!canCapture} onClick={async () => {
             setCaptured(false);

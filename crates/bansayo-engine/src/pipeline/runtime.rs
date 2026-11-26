@@ -29,6 +29,8 @@ pub(super) struct Runtime {
     pub landmarks: broadcast::Sender<Arc<Encoded>>,
     pub capture: Option<Capture>,
     pub busy: bool,
+    pub(super) mounting_changed_while_saving: std::collections::BTreeSet<DeviceId>,
+    pub(super) inspection_permit: Arc<tokio::sync::Semaphore>,
     pub recorder: Option<Recorder>,
     pub replay: Option<Replay>,
     pub rev: u64,
@@ -66,6 +68,8 @@ impl Runtime {
             landmarks,
             capture: None,
             busy: false,
+            mounting_changed_while_saving: Default::default(),
+            inspection_permit: Arc::new(tokio::sync::Semaphore::new(1)),
             recorder: None,
             replay: None,
             rev: 1,
@@ -281,7 +285,10 @@ impl Runtime {
                     ));
                 }
                 Event::Input(Some(crate::sources::Ingest::Event(event))) => {
-                    if self.replay.is_some() {
+                    if self.replay.is_some()
+                        && !matches!(&event, SourceEvent::DeviceLink { device_id, .. }
+                            if super::native_reference::is_native(&engine, device_id))
+                    {
                         continue;
                     }
                     self.accept(&mut engine, event);
@@ -360,10 +367,24 @@ impl Runtime {
                             let summaries = profiles.iter().map(calibration::summary).collect();
                             let invalidated = engine.store.invalidated_by(&profiles);
                             engine.store.stale.extend(invalidated);
+                            let changed = super::native_reference::changed_profiles(
+                                &profiles,
+                                &self.mounting_changed_while_saving,
+                            );
                             engine.store.insert(profiles);
+                            engine.store.stale.extend(changed.iter().cloned());
+                            self.mounting_changed_while_saving.clear();
                             self.record_context(&engine);
                             self.publish_state(&engine);
-                            let _ = reply.send(Ok(summaries));
+                            let result = if changed.is_empty() {
+                                Ok(summaries)
+                            } else {
+                                Err(ControlError::new(
+                                    ApiErrorCode::Conflict,
+                                    "Orientation reference changed while saving; recapture mounting.",
+                                ))
+                            };
+                            let _ = reply.send(result);
                         }
                         Err(_) => {
                             let _ = reply.send(Err(ControlError::new(
@@ -521,9 +542,22 @@ impl Runtime {
                     match result {
                         Ok(()) => {
                             let summaries = profiles.iter().map(calibration::summary).collect();
+                            let changed = super::native_reference::changed_profiles(
+                                &profiles,
+                                &self.mounting_changed_while_saving,
+                            );
                             engine.store.insert(profiles);
+                            engine.store.stale.extend(changed.iter().cloned());
                             self.record_context(&engine);
-                            let _ = reply.send(Ok(summaries));
+                            let result = if changed.is_empty() {
+                                Ok(summaries)
+                            } else {
+                                Err(ControlError::new(
+                                    ApiErrorCode::Conflict,
+                                    "Orientation reference changed while saving; recapture mounting.",
+                                ))
+                            };
+                            let _ = reply.send(result);
                         }
                         Err(_) => {
                             let _ = reply.send(Err(ControlError::new(
@@ -599,6 +633,19 @@ impl Runtime {
             return;
         }
         crate::sources::inspection::record(&engine.registry.runtime, &event);
+        let mut reference_changed = false;
+        if let SourceEvent::DeviceLink {
+            device_id,
+            connected: true,
+            ..
+        } = &event
+            && super::native_reference::is_native(engine, device_id)
+        {
+            if self.busy {
+                self.mounting_changed_while_saving.insert(device_id.clone());
+            }
+            reference_changed = super::native_reference::invalidate(engine, device_id);
+        }
         if let SourceEvent::DeviceLink { device_id, .. } = &event
             && self
                 .capture
@@ -626,6 +673,10 @@ impl Runtime {
         }
         if let Some(recorder) = self.recorder.as_mut() {
             recorder.push(Item::Event { accepted_us, event });
+        }
+        if reference_changed {
+            self.record_context(engine);
+            self.publish_state(engine);
         }
     }
     fn finish_capture(&mut self, engine: &Runner) {
@@ -666,6 +717,7 @@ impl Runtime {
         reply: tokio::sync::oneshot::Sender<Result<Vec<CalibrationProfileSummary>, ControlError>>,
     ) {
         self.busy = true;
+        self.mounting_changed_while_saving.clear();
         let dir = engine.config.config.engine.data_dir.clone();
         let mut stale = engine.store.stale.clone();
         stale.extend(engine.store.invalidated_by(&profiles));
