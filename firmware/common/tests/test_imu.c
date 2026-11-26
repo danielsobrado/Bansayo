@@ -69,6 +69,11 @@ static void test_magnetic_packet(void)
 int main(void)
 {
     test_magnetic_packet();
+    bimu_sample_t sample = {.reference_id=UINT64_C(0x1234567890abcdef),.q={0,0,0,1}};
+    uint8_t v2[BIMU_V2_PACKET_SIZE];
+    bimu_encode_v2(v2,&sample);
+    const uint8_t reference[8]={0xef,0xcd,0xab,0x90,0x78,0x56,0x34,0x12};
+    assert(v2[4]==2 && memcmp(v2+64,reference,sizeof(reference))==0);
     test_packet();
     test_filter();
     puts("BIMU protocol and AHRS tests passed");

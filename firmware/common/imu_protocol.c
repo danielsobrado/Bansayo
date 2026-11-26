@@ -38,6 +38,14 @@ void bimu_encode(uint8_t out[BIMU_PACKET_SIZE], const bimu_sample_t *s)
     if (s->accel_valid) put_floats(out + 52, s->accel, 3);
 }
 
+void bimu_encode_v2(uint8_t out[BIMU_V2_PACKET_SIZE], const bimu_sample_t *s)
+{
+    bimu_encode(out, s);
+    out[4] = BIMU_VERSION_V2;
+    put_u32(out + 64, (uint32_t)s->reference_id);
+    put_u32(out + 68, (uint32_t)(s->reference_id >> 32));
+}
+
 void bmag_encode(uint8_t out[BMAG_PACKET_SIZE], const uint8_t mac[6],
                  uint8_t sensor, uint8_t index, uint32_t seq,
                  uint32_t time_us, const int16_t values[3])

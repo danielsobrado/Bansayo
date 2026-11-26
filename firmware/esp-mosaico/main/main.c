@@ -5,6 +5,7 @@
 #include "tracker_config.h"
 #include "bsp/battery.h"
 #include "esp_log.h"
+#include "esp_random.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -84,7 +85,15 @@ void app_main(void)
             sample.time_us = (uint32_t)now;
             if (!calibrated) {
                 calibrated = calibrate(&calibration, &filter, &sample);
-                if (calibrated) ESP_LOGI(TAG, "Initial gyro bias and tilt calibrated");
+                if (calibrated) {
+                    if (sample.reference_id == 0) {
+                        sample.reference_id = ((uint64_t)esp_random() << 32) | esp_random();
+                    } else {
+                        ++sample.reference_id;
+                    }
+                    if (sample.reference_id == 0) sample.reference_id = 1;
+                    ESP_LOGI(TAG, "New orientation reference; capture mounting again in Bansayo");
+                }
             } else if (!ahrs_update(&filter, sample.gyro, sample.accel, dt)) {
                 calibrated = false;
                 memset(&calibration, 0, sizeof(calibration));

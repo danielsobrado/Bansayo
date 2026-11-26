@@ -1,7 +1,8 @@
 //! Direct ESP32 IMU trackers over UDP (`esp32_udp`, ADR-022 item 5): for rates, device sample
 //! times, gyro and accelerometer data that SolarXR does not carry.
 //!
-//! Wire format `bansayo.imu.v1`: one 64-byte little-endian datagram per sample.
+//! BIMU v1 is 64 bytes. V2 appends a nonzero u64 orientation-reference id at offset 64.
+//! The original v1 layout is otherwise unchanged. A new reference invalidates mounting.
 //!
 //! | Offset | Type | Field |
 //! |---|---|---|
@@ -31,6 +32,8 @@ use std::collections::BTreeMap;
 pub const PACKET_LEN: usize = 64;
 pub const MAGIC: &[u8; 4] = b"BIMU";
 pub const VERSION: u8 = 1;
+pub const PACKET_V2_LEN: usize = 72;
+pub const VERSION_V2: u8 = 2;
 mod magnetic;
 /// Beyond the ±2000 °/s range of common MEMS gyros, with margin: a corrupt value.
 const MAX_RAD_S: f32 = 70.0;
@@ -73,6 +76,10 @@ pub fn parse(b: &[u8]) -> Result<Packet, &'static str> {
     if b[4] != VERSION {
         return Err("unsupported version");
     }
+    parse_fields(b)
+}
+
+fn parse_fields(b: &[u8]) -> Result<Packet, &'static str> {
     let flags = b[5];
     let q: [f32; 4] = f32s(b, 24);
     let norm = q.iter().map(|v| v * v).sum::<f32>().sqrt();
@@ -102,6 +109,18 @@ pub fn parse(b: &[u8]) -> Result<Packet, &'static str> {
         battery_pct: (flags & 4 != 0).then_some(b[14].min(100)),
         rssi_dbm: (b[15] != 0).then_some(b[15] as i8),
     })
+}
+
+/// Accept legacy BIMU and the reference-aware extension.
+fn parse_datagram(b: &[u8]) -> Result<(Packet, Option<u64>), &'static str> {
+    if b.len() == PACKET_V2_LEN && &b[..4] == MAGIC && b[4] == VERSION_V2 {
+        let reference = u64::from_le_bytes(b[64..72].try_into().map_err(|_| "reference")?);
+        if reference == 0 {
+            return Err("zero reference id");
+        }
+        return Ok((parse_fields(b)?, Some(reference)));
+    }
+    parse(b).map(|p| (p, None))
 }
 
 /// Encodes a packet; firmware reference and tests.
@@ -169,6 +188,8 @@ struct Track {
     wrap: Unwrap32,
     time: SourceTime,
     sequence: Sequence,
+    reference: Option<u64>,
+    retired_references: std::collections::VecDeque<u64>,
     diag_seq: u64,
     last_mapped_us: Option<u64>,
     last_diag_us: Option<u64>,
@@ -202,10 +223,37 @@ impl Sequence {
                 self.logical += u64::from(delta);
             }
         } else {
-            self.logical = 1;
+            self.logical += 1;
         }
         self.last = Some((seq, clock, now));
         Some((self.logical, reset))
+    }
+}
+
+impl Track {
+    /// Do not let a delayed packet from a previous AHRS reference revive it.
+    fn observe(&mut self, p: &Packet, reference: Option<u64>, now: u64) -> Option<(u64, bool)> {
+        let mut changed = false;
+        if let Some(reference) = reference {
+            if self.reference != Some(reference) {
+                if self.retired_references.contains(&reference) {
+                    return None;
+                }
+                if let Some(old) = self.reference.replace(reference) {
+                    if self.retired_references.len() == 16 {
+                        self.retired_references.pop_front();
+                    }
+                    self.retired_references.push_back(old);
+                }
+                self.sequence.last = None;
+                changed = true;
+            }
+        } else if self.reference.is_some() {
+            // A reference-aware tracker must not silently downgrade.
+            return None;
+        }
+        let (seq, reset) = self.sequence.observe(p.seq, p.device_time_us, now)?;
+        Some((seq, changed || reset))
     }
 }
 
@@ -247,7 +295,7 @@ impl Source for Esp32Source {
                 }
                 continue;
             }
-            let p = match parse(&buf[..n]) {
+            let (p, reference) = match parse_datagram(&buf[..n]) {
                 Ok(p) => p,
                 Err(why) => {
                     tracing::debug!(source=%self.spec.id, why, "ESP32 datagram rejected");
@@ -262,16 +310,17 @@ impl Source for Esp32Source {
                 continue;
             };
             let track = tracks.entry(id.clone()).or_default();
-            let Some((seq, reset)) = track.sequence.observe(p.seq, p.device_time_us, now) else {
+            let Some((seq, reset)) = track.observe(&p, reference, now) else {
                 continue;
             };
             if reset {
                 track.wrap = Default::default();
-                track.last_mapped_us = None;
-                track.time.reset();
+                if track.last_mapped_us.take().is_some() {
+                    track.time.reset();
+                }
                 track.last_diag_us = None;
                 track.status_us = None;
-                tracing::warn!(device=%id, "Tracker clock/sequence reset; repeat mounting calibration");
+                tracing::warn!(device=%id, "Tracker orientation reference changed; repeat mounting calibration");
                 let event = Ingest::Event(SourceEvent::DeviceLink {
                     device_id: id.clone(),
                     connected: true,
@@ -393,6 +442,29 @@ mod tests {
             battery_pct: Some(80),
             rssi_dbm: Some(-60),
         }
+    }
+
+    #[test]
+    fn reference_change_rejects_retired_packets_and_downgrade() {
+        let mut track = Track::default();
+        assert_eq!(track.observe(&packet(7, 100), Some(10), 100), Some((1, true)));
+        assert_eq!(track.observe(&packet(8, 200), Some(10), 200), Some((2, false)));
+        assert_eq!(track.observe(&packet(9, 300), Some(11), 300), Some((3, true)));
+        assert_eq!(track.observe(&packet(10, 400), Some(10), 400), None);
+        assert_eq!(track.observe(&packet(10, 400), None, 400), None);
+        assert_eq!(track.observe(&packet(1, 100), Some(12), 500), Some((4, true)));
+    }
+
+    #[test]
+    fn v2_wire_reference() {
+        let p = packet(7, 123);
+        let mut b = [0_u8; PACKET_V2_LEN];
+        b[..PACKET_LEN].copy_from_slice(&encode(&p));
+        b[4] = VERSION_V2;
+        b[64..].copy_from_slice(&0x1234_5678_90ab_cdef_u64.to_le_bytes());
+        assert_eq!(parse_datagram(&b), Ok((p, Some(0x1234_5678_90ab_cdef))));
+        b[64..].fill(0);
+        assert!(parse_datagram(&b).is_err());
     }
 
     #[test]

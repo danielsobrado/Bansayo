@@ -103,8 +103,8 @@ static bool send_packet(const uint8_t *packet, size_t size)
 
 bool tracker_network_send(const bimu_sample_t *sample)
 {
-    uint8_t packet[BIMU_PACKET_SIZE];
-    bimu_encode(packet, sample);
+    uint8_t packet[BIMU_V2_PACKET_SIZE];
+    bimu_encode_v2(packet, sample);
     return send_packet(packet, sizeof(packet));
 }
 
