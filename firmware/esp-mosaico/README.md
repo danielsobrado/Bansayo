@@ -22,7 +22,7 @@ idf.py -p PORT flash monitor
 
 Under **Bansayo tracker** enter the 2.4 GHz Wi-Fi SSID/password and PC LAN
 IPv4 address. Select 100 or 200 Hz (default 200), port 7710, optionally enable
-both BMM150 serial diagnostics. Use a WPA2/WPA3 personal network. Credentials
+both BMM150 live diagnostics. Use a WPA2/WPA3 personal network. Credentials
 are in the ignored local sdkconfig and are compiled into the firmware: do not
 share binaries or sdkconfig containing real credentials. No over-the-air
 provisioning yet. Use USB power for long bench tests.
@@ -58,8 +58,10 @@ For headless operation disable the diagnostic display in menuconfig.
 - Packet format exactly matches
   `crates/bansayo-engine/src/sources/esp32.rs`: little-endian 64 bytes,
   XYZW quaternion, 32-bit wrapping device time and sequence. No magnetometer
-  fields exist in v1. Dual magnetic readings are optional serial diagnostics,
-  not AHRS inputs. Yaw drifts; camera heading correction can be tested later.
+  fields exist in BIMU v1. Optional BMAG v1 auxiliary packets carry compensated
+  integer readings from both magnetometers, not AHRS inputs. Each sensor is
+  polled at approximately 10 Hz; BMAG is diagnostic-only, using receive time
+  on the backend. See docs/device-inspection.md. Yaw drifts; camera heading correction can be tested later.
 - Sampling uses a periodic RTOS task, with diagnostics at lower rate and
   measured rate reporting; a blocked I2C or UI operation can cause skipped
   intervals. The current firmware is not a hard real-time or FIFO implementation.
@@ -94,7 +96,6 @@ Hardware acceptance remains pending:
 
 TODO: validate build and hardware on both revisions, add FIFO/data-ready
 sampling if rate/jitter warrant it, address measured reboot handling issues,
-magnetometer calibration/interference rejection and a versioned raw magnetic
-protocol if needed. Add runtime provisioning and acknowledged telemetry later.
+magnetometer calibration/interference rejection. Add runtime provisioning and acknowledged telemetry later.
 
 Upstream: https://github.com/esp-mosaico/esp-mosaico-bsp (pinned above).

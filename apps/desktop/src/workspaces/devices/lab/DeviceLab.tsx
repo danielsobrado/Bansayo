@@ -10,22 +10,26 @@ import { CHANNEL_IDS, CHANNELS, STALE_MS, freshChannels, motionSummary, type Cha
 import { useInspection } from "./useInspection";
 import { SolverBench } from "./SolverBench";
 import { GuidedTests } from "./GuidedTests";
+import { TimingPanel, MagneticPanel, SaturationPanel, BatteryHistory } from "./SignalPanels";
+import { TrackerComparison } from "./TrackerComparison";
 import "./lab.css";
 
 export function DeviceLab({ devices, live }: { devices: DeviceStatus[]; live: boolean }) {
   const [selected, setSelected] = useState("");
   const [solver, setSolver] = useState(false);
+  const [compare, setCompare] = useState(false);
   const device = devices.find(d => d.descriptor.id === selected) ?? devices[0];
   if (!device) return <p className="subtle">Configure a source to inspect it.</p>;
   return <div className="lab-layout">
     <nav className="lab-devices" aria-label="Isolate device">
       <h3 className="eyebrow">ISOLATE DEVICE</h3>
-      <button aria-pressed={solver} onClick={() => setSolver(!solver)}>Solver comparison</button>
-      {devices.map(d => <button key={d.descriptor.id} aria-pressed={!solver && device.descriptor.id === d.descriptor.id} onClick={() => { setSelected(d.descriptor.id); setSolver(false); }}>
+      <button aria-pressed={solver} onClick={() => {setSolver(!solver);setCompare(false);}}>Solver comparison</button>
+      <button aria-pressed={compare} onClick={()=>{setCompare(!compare);setSolver(false);}}>Tracker comparison</button>
+      {devices.map(d => <button key={d.descriptor.id} aria-pressed={!solver && !compare && device.descriptor.id === d.descriptor.id} onClick={() => { setSelected(d.descriptor.id); setSolver(false); setCompare(false); }}>
         <span className="mono">{d.descriptor.id}</span><StatePill state={d.state}/><small>{d.descriptor.kind} · {d.descriptor.origin}</small>
       </button>)}
     </nav>
-    {solver ? <SolverBench devices={devices} live={live}/> :
+    {solver ? <SolverBench devices={devices} live={live}/> : compare ? <TrackerComparison devices={devices} live={live}/> :
       <Inspector key={device.descriptor.id + (live ? ":live" : ":offline")} device={device} live={live}/>} 
   </div>;
 }
@@ -117,6 +121,12 @@ function Inspector({ device, live }: { device: DeviceStatus; live: boolean }) {
           <p className="subtle">{device.calibration.map(c => `${c.kind}: ${c.state}`).join(" · ") || "No calibration status reported."}</p>
         </section>
       </div>
+      <div className="lab-grid">
+        <TimingPanel timing={(frozen || channels.orientation) ? snapshot?.timing : undefined}/>
+        <MagneticPanel a={channels.mag0} b={channels.mag1}/>
+        <SaturationPanel gyro={channels.gyro} accel={channels.accel} native={device.descriptor.model?.includes("bansayo.imu.v1")===true}/>
+        <BatteryHistory device={device} enabled={available}/>
+      </div>
       <GuidedTests deviceId={device.descriptor.id} channels={channels} enabled={available && !frozen}/>
       <div className="lab-tools">
         <label>Component <select value={focus} onChange={e => {setFocus(e.target.value as ChannelId | "all");setAxis("all");}}>
@@ -128,7 +138,7 @@ function Inspector({ device, live }: { device: DeviceStatus; live: boolean }) {
         </select></label>
         <span className="subtle">Up to 50 Hz display history · five seconds · not a full-rate recording</span>
       </div>
-      {visible.length === 0 && <p className="subtle">No supported component data yet. Raw magnetometers are not transported by BIMU v1.</p>}
+      {visible.length === 0 && <p className="subtle">No supported component data yet. Enable BMAG diagnostics in compatible firmware to see magnetometers.</p>}
       <div className="lab-grid">{visible.map(id => {
         const channel = channels[id];
         const indices = CHANNELS[id].axes.map((_,i) => i).filter(i => axis === "all" || i === axis);

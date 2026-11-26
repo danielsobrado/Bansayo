@@ -6,6 +6,10 @@ describe("device inspection", () => {
     expect(parseSnapshot({channels:{gyro:{age_ms:0,points:[{t_us:1,seq:1,device_time_us:null,values:[1,2]}]}}})).toBeNull();
     expect(parseSnapshot({channels:{}})).toEqual({channels:{}});
   });
+  it("validates full-rate timing metadata", () => {
+    expect(parseSnapshot({channels:{},timing:{intervals_ms:[[5,6]],sequence_gaps:2}})?.timing?.sequence_gaps).toBe(2);
+    expect(parseSnapshot({channels:{},timing:{intervals_ms:[[5,-6]],sequence_gaps:2}})).toBeNull();
+  });
   it("expires samples if the HTTP poll stalls or the device disconnects", () => {
     const channels = {gyro: {age_ms: 30, points: []}};
     expect(freshChannels(channels, 50, true).gyro?.age_ms).toBe(80);

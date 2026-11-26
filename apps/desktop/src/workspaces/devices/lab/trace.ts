@@ -9,6 +9,8 @@ export const CHANNELS = {
   pose_position: { title: "Tracked position", unit: "m", axes: ["X", "Y", "Z"] },
   distance: { title: "Distance", unit: "m", axes: ["Range"] },
   contact: { title: "Contact", unit: "0/1", axes: ["Contact"] },
+  mag0: { title: "BMM150 #0", unit: "BSP compensated units", axes: ["X", "Y", "Z"] },
+  mag1: { title: "BMM150 #1", unit: "BSP compensated units", axes: ["X", "Y", "Z"] },
 } as const;
 export type ChannelId = keyof typeof CHANNELS;
 export const CHANNEL_IDS = Object.keys(CHANNELS) as ChannelId[];
@@ -26,8 +28,13 @@ export interface Channel {
   age_ms: number;
   points: Point[];
 }
+export interface Timing {
+  intervals_ms: [number,number][];
+  sequence_gaps: number;
+}
 export interface Snapshot {
   channels: Partial<Record<ChannelId, Channel>>;
+  timing?: Timing;
 }
 
 export function parseSnapshot(value: unknown): Snapshot | null {
@@ -47,7 +54,12 @@ export function parseSnapshot(value: unknown): Snapshot | null {
     }
     channels[id] = { age_ms: c.age_ms, points };
   }
-  return { channels };
+  const timing = value.timing;
+  if (timing == null) return { channels };
+  if (!isObj(timing) || !isNum(timing.sequence_gaps) || timing.sequence_gaps < 0 ||
+      !Array.isArray(timing.intervals_ms) || timing.intervals_ms.length > 256 ||
+      !timing.intervals_ms.every(v => tuple(v,2) && v.every(n => n>=0))) return null;
+  return { channels, timing: { intervals_ms: timing.intervals_ms as [number,number][], sequence_gaps: timing.sequence_gaps } };
 }
 
 /** Never show a historical observation as live after the HTTP stream stalls. */

@@ -53,8 +53,22 @@ static void test_filter(void)
     assert(!ahrs_stationary(yaw,up));
 }
 
+static void test_magnetic_packet(void)
+{
+    const uint8_t mac[6] = {1,2,3,4,5,6};
+    const int16_t values[3] = {-100,0,32767};
+    uint8_t b[BMAG_PACKET_SIZE];
+    bmag_encode(b,mac,0,1,42,0x12345678,values);
+    const uint8_t expected[32] = {
+        0x42,0x4d,0x41,0x47,1,0,1,0,1,2,3,4,5,6,0,0,
+        42,0,0,0,0x78,0x56,0x34,0x12,0x9c,0xff,0,0,0xff,0x7f,0,0
+    };
+    assert(memcmp(b,expected,sizeof(b))==0);
+}
+
 int main(void)
 {
+    test_magnetic_packet();
     test_packet();
     test_filter();
     puts("BIMU protocol and AHRS tests passed");
