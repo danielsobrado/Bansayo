@@ -5,6 +5,7 @@ pub mod calibration;
 pub mod clock;
 pub mod config;
 pub mod content_store;
+mod diagnostic_recording;
 pub mod diagnostics;
 pub mod lan;
 pub mod math;

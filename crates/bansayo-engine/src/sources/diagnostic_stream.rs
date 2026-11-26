@@ -21,11 +21,11 @@ pub struct Entry {
 
 #[derive(Debug, Default, Serialize)]
 pub struct Batch {
-    epoch: u64,
-    next: u64,
-    lost: u64,
-    reset: bool,
-    entries: Vec<Entry>,
+    pub(crate) epoch: u64,
+    pub(crate) next: u64,
+    pub(crate) lost: u64,
+    pub(crate) reset: bool,
+    pub(crate) entries: Vec<Entry>,
 }
 
 #[derive(Debug, Default)]

@@ -1,5 +1,6 @@
 //! HTTP boundary: only pipeline commands and shared contracts cross into the engine.
 mod control;
+mod diagnostic_recording;
 mod inspection;
 mod training;
 mod ws;
@@ -30,6 +31,7 @@ pub struct Api {
     pub fiducials: crate::sources::camera::FiducialPreviews,
     pub camera_settings: crate::sources::camera::CameraSettings,
     pub runtime: crate::sources::RuntimeMap,
+    pub diagnostic_recorder: crate::diagnostic_recording::Recorder,
     /// Frames of network cameras (phones), by camera id (ADR-042).
     pub feeds: crate::sources::camera::capture::NetworkFeeds,
     /// LAN mode token; `None` when LAN mode is off (loopback only).
@@ -56,6 +58,14 @@ pub fn router(api: Api) -> Router {
             get(inspection::batch),
         )
         .route("/api/v1/inspection/solver", post(inspection::solver))
+        .route(
+            "/api/v1/inspection/recording",
+            get(diagnostic_recording::status).post(diagnostic_recording::start),
+        )
+        .route(
+            "/api/v1/inspection/recording/stop",
+            post(diagnostic_recording::stop),
+        )
         .route("/api/v1/skeleton", get(skeleton))
         .route("/api/v1/simulation", put(simulation))
         .route("/api/v1/calibration/reference-pose", post(capture))
