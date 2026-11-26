@@ -168,9 +168,46 @@ impl Esp32Source {
 struct Track {
     wrap: Unwrap32,
     time: SourceTime,
-    last_seq: Option<u32>,
+    sequence: Sequence,
+    diag_seq: u64,
     last_diag_us: Option<u64>,
     status_us: Option<u64>,
+}
+
+// Accept forward modular sequences, including wrap. A backwards sequence is a
+// reset only after a quiet interval and a backwards device clock.
+const RESET_QUIET_US: u64 = 500_000;
+
+#[derive(Default)]
+struct Sequence {
+    last: Option<(u32, u32, u64)>,
+    logical: u64,
+}
+
+impl Sequence {
+    fn observe(&mut self, seq: u32, clock: u32, now: u64) -> Option<(u64, bool)> {
+        let mut reset = false;
+        if let Some((previous, device, arrival)) = self.last {
+            let delta = seq.wrapping_sub(previous);
+            let clock_delta = clock.wrapping_sub(device);
+            if delta == 0 || delta >= (1 << 31) || clock_delta >= (1 << 31) {
+                if now.saturating_sub(arrival) < RESET_QUIET_US
+                    || clock >= device
+                    || seq > previous
+                {
+                    return None;
+                }
+                reset = true;
+                self.logical += 1;
+            } else {
+                self.logical += u64::from(delta);
+            }
+        } else {
+            self.logical = 1;
+        }
+        self.last = Some((seq, clock, now));
+        Some((self.logical, reset))
+    }
 }
 
 impl Source for Esp32Source {
@@ -226,18 +263,32 @@ impl Source for Esp32Source {
                 continue;
             };
             let track = tracks.entry(id.clone()).or_default();
-            // Out of order or duplicate (a small step back); a large step back is a reboot.
-            if track
-                .last_seq
-                .is_some_and(|l| p.seq <= l && l - p.seq < 1_000)
-            {
+            let Some((seq, reset)) = track.sequence.observe(p.seq, p.device_time_us, now) else {
                 continue;
+            };
+            if reset {
+                track.wrap = Default::default();
+                track.time.reset();
+                track.last_diag_us = None;
+                track.status_us = None;
+                tracing::warn!(device=%id, "Tracker clock/sequence reset; repeat mounting calibration");
+                let event = Ingest::Event(SourceEvent::DeviceLink {
+                    device_id: id.clone(),
+                    connected: true,
+                    t_us: now,
+                });
+                tokio::select! {
+                    _ = context.cancel.cancelled() => return Ok(()),
+                    result = context.events.send(event) => {
+                        if result.is_err() {
+                            return Ok(());
+                        }
+                    }
+                }
             }
-            track.last_seq = Some(p.seq);
             let device = track.wrap.extend(p.device_time_us);
             let (t_us, quality) = track.time.map(Some(device), now, self.spec.latency_us);
-            let seq = u64::from(p.seq) + 1;
-            let emit = |data: ObservationData, confidence: Option<f32>| {
+            let emit = |seq: u64, data: ObservationData, confidence: Option<f32>| {
                 let observation = SensorObservation {
                     device_id: id.clone(),
                     source_id: self.spec.id.clone(),
@@ -264,6 +315,7 @@ impl Source for Esp32Source {
             }
             let confidence = if p.status == 0 { 1.0 } else { 0.4 };
             emit(
+                seq,
                 ObservationData::Orientation {
                     frame: FrameRef::SensorReference { id: id.clone() },
                     q: p.q,
@@ -272,6 +324,7 @@ impl Source for Esp32Source {
             );
             if let Some(rad_s) = p.gyro {
                 emit(
+                    seq,
                     ObservationData::AngularVelocity {
                         frame: FrameRef::Sensor { id: id.clone() },
                         rad_s,
@@ -281,6 +334,7 @@ impl Source for Esp32Source {
             }
             if let Some(m_s2) = p.accel {
                 emit(
+                    seq,
                     ObservationData::Acceleration {
                         frame: FrameRef::Sensor { id: id.clone() },
                         m_s2,
@@ -293,7 +347,9 @@ impl Source for Esp32Source {
                 .is_none_or(|l| now.saturating_sub(l) >= 1_000_000)
             {
                 track.last_diag_us = Some(now);
+                track.diag_seq += 1;
                 emit(
+                    track.diag_seq,
                     ObservationData::Diagnostics {
                         battery_level: p.battery_pct.map(|b| b as f32 / 100.0),
                         charging: None,
@@ -333,6 +389,18 @@ mod tests {
             battery_pct: Some(80),
             rssi_dbm: Some(-60),
         }
+    }
+
+    #[test]
+    fn sequence_wrap_reorder_and_reboot() {
+        let mut s = Sequence::default();
+        assert_eq!(s.observe(u32::MAX - 1, 100, 0), Some((1, false)));
+        assert_eq!(s.observe(0, 200, 100), Some((3, false)));
+        assert_eq!(s.observe(u32::MAX, 150, 200), None);
+        assert_eq!(s.observe(10, 50_000, 50_000), Some((13, false)));
+        assert_eq!(s.observe(1, 1_000, 51_000), None);
+        assert_eq!(s.observe(1, 1_000, 600_000), Some((14, true)));
+        assert_eq!(s.observe(2, 6_000, 605_000), Some((15, false)));
     }
 
     #[test]

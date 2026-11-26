@@ -115,7 +115,12 @@ impl Runtime {
                 });
             }
             ControlRequest::Fault(id, request) => {
-                if !engine.registry.entries.contains_key(&id) {
+                if !engine
+                    .registry
+                    .entries
+                    .get(&id)
+                    .is_some_and(|e| e.descriptor.origin == Origin::Simulated)
+                {
                     return Err((
                         error(ApiErrorCode::NotFound, "Simulated device was not found."),
                         reply,
@@ -399,6 +404,7 @@ impl Runtime {
                     ));
                 }
                 self.last_landmarks_3d_us = None;
+                crate::sources::inspection::clear(&engine.registry.runtime);
                 for control in &engine.controls {
                     control.send_modify(|c| c.suspended = false);
                 }

@@ -263,6 +263,7 @@ impl Runtime {
                             entry.latest.clear();
                             entry.recent.clear();
                             entry.landmarks.clear();
+                            entry.orientations.clear();
                             entry.first_us = None;
                         }
                     }
@@ -598,6 +599,18 @@ impl Runtime {
             return;
         }
         crate::sources::inspection::record(&engine.registry.runtime, &event);
+        if let SourceEvent::DeviceLink { device_id, .. } = &event
+            && self
+                .capture
+                .as_ref()
+                .is_some_and(|c| c.targets.contains_key(device_id))
+            && let Some(c) = self.capture.take()
+        {
+            let _ = c.reply.send(Err(ControlError::new(
+                ApiErrorCode::Conflict,
+                "Tracker link changed during calibration; retry.",
+            )));
+        }
         if let SourceEvent::Observation { observation } = &event {
             if let Some(c) = self.capture.as_mut() {
                 c.observe(observation);
@@ -630,7 +643,19 @@ impl Runtime {
             Err(e) => {
                 let _ = c.reply.send(Err(e));
             }
-            Ok(profiles) => self.save_profiles(engine, profiles, c.reply),
+            Ok(mut profiles) => {
+                for profile in &mut profiles {
+                    if let Some(entry) = profile
+                        .subject
+                        .device_id
+                        .as_ref()
+                        .and_then(|id| engine.registry.entries.get(id))
+                    {
+                        profile.origin = entry.descriptor.origin;
+                    }
+                }
+                self.save_profiles(engine, profiles, c.reply);
+            }
         }
     }
     /// Commits profiles to the runtime snapshot off the loop; `Command::Saved` applies them.

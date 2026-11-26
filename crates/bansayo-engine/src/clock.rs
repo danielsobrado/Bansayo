@@ -183,6 +183,13 @@ pub struct SourceTime {
     offset: OffsetEstimator,
 }
 impl SourceTime {
+    pub fn reset(&mut self) {
+        self.offset = OffsetEstimator {
+            resets: self.offset.resets.saturating_add(1),
+            ..Default::default()
+        };
+    }
+
     pub fn status(&self) -> bansayo_contracts::TimeSyncStatus {
         self.offset.status()
     }

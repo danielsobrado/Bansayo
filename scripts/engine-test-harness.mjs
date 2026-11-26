@@ -43,11 +43,12 @@ async function stop(child) {
   }
 }
 
-async function start(name, dataName = name) {
+async function start(name, dataName = name, transform = yaml => yaml) {
   const port = await freePort();
   let yaml = name === 'empty'
     ? 'schema_version: 1\nengine:\n  data_dir: ./data\napi:\n  bind: 127.0.0.1:7700\n'
     : await readFile(join(root, 'config', `${name}.yaml`), 'utf8');
+  yaml = transform(yaml);
   assert.match(yaml, /^\s+data_dir:/m, 'sample must expose data_dir');
   assert.match(yaml, /^\s+bind:/m, 'sample must expose bind');
   yaml = yaml.replace(/^\s+data_dir:.*$/m, `\n  data_dir: ${JSON.stringify(join(scratch, dataName))}`)

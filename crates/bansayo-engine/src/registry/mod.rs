@@ -124,13 +124,20 @@ impl Registry {
                     return false;
                 };
                 e.connected = connected;
-                if connected {
-                    e.first_us = None;
-                    e.recent.clear();
-                    e.landmarks.clear();
-                    // A reconnected device may have restarted its clock: never interpolate across.
-                    e.orientations.clear();
-                    e.latest.clear();
+                e.first_us = None;
+                e.recent.clear();
+                e.landmarks.clear();
+                // Never interpolate across link transitions or retain disconnected evidence.
+                e.orientations.clear();
+                e.latest.clear();
+                self.fusion.heading.remove(&device_id);
+                if self
+                    .fusion
+                    .anchor
+                    .as_ref()
+                    .is_some_and(|a| a.sources.contains(&device_id))
+                {
+                    self.fusion.anchor = None;
                 }
                 true
             }

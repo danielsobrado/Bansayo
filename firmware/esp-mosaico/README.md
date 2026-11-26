@@ -99,3 +99,5 @@ sampling if rate/jitter warrant it, address measured reboot handling issues,
 magnetometer calibration/interference rejection. Add runtime provisioning and acknowledged telemetry later.
 
 Upstream: https://github.com/esp-mosaico/esp-mosaico-bsp (pinned above).
+
+After a board reboot or local AHRS recalibration, repeat the Bansayo mounting reference pose before relying on the fused skeleton. BIMU v1 has no persistent reference-frame generation identifier; the engine cannot prove that an old mounting profile is valid for a new board reference. The receiver recognizes a backwards clock/sequence after a quiet interval and reports clock resets, but this is heuristic for legacy devices.

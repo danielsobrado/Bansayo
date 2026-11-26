@@ -8,10 +8,14 @@ const results = [];
 const passed = message => { results.push(message); console.log(`PASS ${message}`); };
 const ok = response => { assert.equal(response.status, 200, JSON.stringify(response.body)); return response.body.data; };
 const device = (state, id) => state.devices.find(d => d.descriptor.id === id);
+// These assertions intentionally test the IMU-only dependency path. In hybrid mode
+// camera evidence can legitimately replace an absent tracker, including its joints.
+const startImu = () => start('sim-full-body', 'sim-full-body',
+  yaml => yaml + '\ntracking:\n  mode: imu_only\n');
 
 try {
   await command(['build', '-p', 'bansayo-engine']);
-  let engine = await start('sim-full-body');
+  let engine = await startImu();
   let live = await stream(engine.base, 'topics=frame,state,landmarks_2d&max_rate_hz=60');
   const skeleton = live.messages[0].skeleton;
   const shinIndex = skeleton.segments.findIndex(s => s.id === 'left_shin');
@@ -25,7 +29,7 @@ try {
   assert(state.calibration.some(p => p.device_id === 'SIM-T04' && p.segment_id === 'left_shin' && p.state === 'stale'));
   live.ws.close();
   await stop(engine.child);
-  engine = await start('sim-full-body');
+  engine = await startImu();
   state = ok(await engine.api('/state'));
   assert.equal(device(state, 'SIM-T04').assignment, 'head');
   assert(state.calibration.some(p => p.device_id === 'SIM-T04' && p.state === 'stale'));
@@ -97,7 +101,7 @@ try {
   // Leave the WebSocket open: shutdown must close it and finalise the recorder.
   await stop(engine.child);
   live.ws.close();
-  engine = await start('sim-full-body');
+  engine = await startImu();
   assert(ok(await engine.api('/sessions')).some(s => s.id === shutdownRecording.session_id));
   await stop(engine.child);
   passed('Ctrl-C with recording and a connected stream leaves a readable indexed session');

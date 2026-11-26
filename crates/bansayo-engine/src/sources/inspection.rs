@@ -50,7 +50,7 @@ impl Timing {
     fn record(&mut self, o: &SensorObservation) {
         let now = Instant::now();
         if let Some((t, arrival, seq)) = self.last
-            && o.t_us > t
+            && o.t_us >= t
             && o.seq > seq
         {
             if self.intervals.len() == CAPACITY {
@@ -60,7 +60,7 @@ impl Timing {
                 (o.t_us - t) as f32 / 1000.0,
                 now.duration_since(arrival).as_secs_f32() * 1000.0,
             ]);
-            self.gaps += o.seq.saturating_sub(seq + 1);
+            self.gaps = self.gaps.saturating_add(o.seq.saturating_sub(seq + 1));
         }
         self.last = Some((o.t_us, now, o.seq));
     }
@@ -212,6 +212,17 @@ pub fn magnetic(
             .clone()
     };
     if let Ok(mut trace) = trace.lock() {
+        if let Some(last) = trace.channels.get(kind).and_then(|c| c.points.back()) {
+            let delta = seq.wrapping_sub(last.seq as u32);
+            if delta == 0 || delta >= (1 << 31) {
+                // A reboot may restart the auxiliary stream. Reject reordered packets
+                // unless the channel has been silent long enough to be a new stream.
+                if t_us.saturating_sub(last.t_us) < 500_000 {
+                    return;
+                }
+                trace.channels.remove(kind);
+            }
+        }
         trace.push_point(
             kind,
             Point {
