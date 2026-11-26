@@ -44,7 +44,7 @@ export function Devices({
     if (response.ok) setChange(null);
   }
   return (
-    <div className="workspace-page">
+    <div className={lab ? "workspace-page sensor-studio-page" : "workspace-page"}>
       <header className="workspace-heading">
         <div>
           <span className="eyebrow">Workspace / Devices</span>
@@ -55,7 +55,7 @@ export function Devices({
         <div className="workspace-tools">
           <div className="view-presets">
             <button aria-pressed={lab} onClick={() => setLab(!lab)}>
-              Live diagnostics
+              Sensor Studio
             </button>
             <button
               aria-pressed={!lab && view === "cards"}
@@ -76,7 +76,7 @@ export function Devices({
         </div>
       </header>
       {lab ? (
-        <DeviceLab devices={devices} live={state?.engine.mode === "live"} />
+        <DeviceLab devices={devices} live={state?.engine.mode === "live"} skeleton={skeleton} />
       ) : (
         <div className="devices-layout">
           <section className={`device-collection ${view}`} aria-label="Devices">
