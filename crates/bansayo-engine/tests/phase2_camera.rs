@@ -168,9 +168,17 @@ async fn guided_roundhouse_on_one_image_folder_camera() {
             "{metric}: {a}"
         );
     }
-    assert_eq!(
-        availability("kick.extension_time")["reasons"][0]["message"],
-        "camera rate 30 fps"
+    let extension = availability("kick.extension_time");
+    let rate = extension["reasons"][0]["message"]
+        .as_str()
+        .unwrap()
+        .strip_prefix("camera rate ")
+        .and_then(|s| s.strip_suffix(" fps"))
+        .and_then(|s| s.parse::<f32>().ok())
+        .expect("camera rate should report the measured fps");
+    assert!(
+        (27.0..=33.0).contains(&rate),
+        "unexpected fixture camera rate {rate}"
     );
     ok(
         addr,

@@ -113,7 +113,7 @@ void app_main(void)
             sample.battery_valid = battery_ready &&
                 bsp_battery_read(&battery) == ESP_OK && battery.state_of_charge <= 100;
             sample.battery_pct = sample.battery_valid ? battery.state_of_charge : 0;
-             ESP_LOGI(TAG, "%s rate=%u sent=%lu failed=%lu imu_errors=%u rssi=%d",
+            ESP_LOGI(TAG, "%s rate=%u sent=%lu failed=%lu imu_errors=%u rssi=%d",
                 status, actual_rate, (unsigned long)sent, (unsigned long)failed,
                 read_errors, (int)sample.rssi_dbm);
         }

@@ -170,6 +170,7 @@ struct Track {
     time: SourceTime,
     sequence: Sequence,
     diag_seq: u64,
+    last_mapped_us: Option<u64>,
     last_diag_us: Option<u64>,
     status_us: Option<u64>,
 }
@@ -191,9 +192,7 @@ impl Sequence {
             let delta = seq.wrapping_sub(previous);
             let clock_delta = clock.wrapping_sub(device);
             if delta == 0 || delta >= (1 << 31) || clock_delta >= (1 << 31) {
-                if now.saturating_sub(arrival) < RESET_QUIET_US
-                    || clock >= device
-                    || seq > previous
+                if now.saturating_sub(arrival) < RESET_QUIET_US || clock >= device || seq > previous
                 {
                     return None;
                 }
@@ -268,6 +267,7 @@ impl Source for Esp32Source {
             };
             if reset {
                 track.wrap = Default::default();
+                track.last_mapped_us = None;
                 track.time.reset();
                 track.last_diag_us = None;
                 track.status_us = None;
@@ -287,7 +287,11 @@ impl Source for Esp32Source {
                 }
             }
             let device = track.wrap.extend(p.device_time_us);
-            let (t_us, quality) = track.time.map(Some(device), now, self.spec.latency_us);
+            let (mapped, quality) = track.time.map(Some(device), now, self.spec.latency_us);
+            // A newly observed minimum offset can move the estimate backwards.
+            // Keep accepted capture times nondecreasing within this stream.
+            let t_us = mapped.max(track.last_mapped_us.unwrap_or(0)).min(now);
+            track.last_mapped_us = Some(t_us);
             let emit = |seq: u64, data: ObservationData, confidence: Option<f32>| {
                 let observation = SensorObservation {
                     device_id: id.clone(),
