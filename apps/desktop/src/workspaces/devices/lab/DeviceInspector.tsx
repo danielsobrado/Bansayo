@@ -83,7 +83,7 @@ export function DeviceInspector({device,devices,live,skeleton,view,focus,onFocus
         <div className="studio-panel-title"><Icon name="sliders"/><strong>INSPECTOR</strong></div>
         <dl className="studio-properties">{fields.map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
         <div className="studio-panel-title"><strong>CALIBRATION</strong></div>
-        <dl className="studio-properties">{device.calibration.length?device.calibration.map(c=><div key={c.id}><dt>{c.kind}</dt><dd>{c.state}</dd></div>):<div><dt>Profiles</dt><dd>None</dd></div>}</dl>
+        <dl className="studio-properties">{device.calibration.length?device.calibration.map(c=><div key={c.kind+":"+c.profile_id}><dt>{c.kind}</dt><dd>{c.state}</dd></div>):<div><dt>Profiles</dt><dd>None</dd></div>}</dl>
         {device.assignment&&skeleton&&<><div className="studio-panel-title"><strong>BODY ASSIGNMENT</strong></div><BodyMap skeleton={skeleton} values={[]} highlight={device.assignment}/><p className="subtle studio-no-match">Reference assignment, not live pose.</p></>}
         <Reasons reasons={device.reasons}/>
       </aside>}

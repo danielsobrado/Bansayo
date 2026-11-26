@@ -80,6 +80,6 @@ export class SensorScene {
     this.scene.traverse(object=>{if(object instanceof Mesh){object.geometry.dispose();const materials=Array.isArray(object.material)?object.material:[object.material];materials.forEach(m=>m.dispose());}});
     this.grid.dispose();
     for(const arrow of [this.force,this.magnetic,this.gravity,...this.body.children.filter((o):o is ArrowHelper=>o instanceof ArrowHelper)])arrow.dispose();
-    this.renderer.dispose();this.renderer.domElement.remove();
+    this.renderer.dispose();this.renderer.forceContextLoss();this.renderer.domElement.remove();
   }
 }

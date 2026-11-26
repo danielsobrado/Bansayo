@@ -87,3 +87,26 @@
 .studio-sensor-canvas{height:clamp(160px,22vh,260px);background:var(--surface-0);min-width:0;overflow:hidden}
 .studio-sensor-canvas canvas{display:block;width:100%;height:100%;touch-action:none}
 .studio-vector-legend{font-family:var(--font-mono);font-size:var(--text-label);gap:8px;color:var(--ink-3)}
+
+/* The app shell owns the outer height; all overflow stays inside the studio. */
+.sensor-studio-page>.workspace-heading{flex-shrink:0;padding:8px 16px}
+.sensor-studio{height:auto;min-height:0;overflow:hidden}
+.studio-top,.studio-footer{flex-shrink:0}
+.studio-body{min-height:0;overflow:hidden}
+.studio-explorer,.studio-workspace{height:auto;min-height:0;overflow:auto}
+.studio-tree-device .studio-device-name{overflow:hidden}
+.studio-device-name>span:last-child{flex-shrink:0;font-size:10px}
+.studio-device-name>span:first-child{flex:1;min-width:0}
+.studio-test-panel:not([hidden]),.studio-test-instructions{display:grid;gap:8px;align-content:start}
+.studio-test-head,.studio-face-steps{display:flex;align-items:center;justify-content:space-between;gap:4px;flex-wrap:wrap}
+.studio-test-head h3{margin:0}
+.studio-test-panel progress{width:100%;height:6px;accent-color:var(--accent)}
+.studio-face-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(180px,1fr);gap:8px;align-items:center}
+.studio-face-reference{width:100%;max-height:220px;background:var(--surface-0)}
+.studio-face-steps button{display:flex;align-items:center;gap:4px;flex:1}
+.studio-face-steps button[data-result=pass]{color:var(--state-tracking)}
+.studio-face-steps button[data-result=warn]{color:var(--state-degraded)}
+.studio-face-steps button[aria-pressed=true]{outline:1px solid var(--accent);background:var(--surface-3)}
+.studio-scope-grid .studio-stats{font-size:11px}
+.studio-inspector .body-map{margin:4px auto}
+@media(max-width:800px){.studio-body[data-explorer=true]{grid-template-rows:auto minmax(0,1fr)}.studio-explorer{max-height:160px}.studio-face-layout{grid-template-columns:minmax(0,1fr)}.studio-top{gap:4px}.studio-footer{flex-direction:row;flex-wrap:wrap}.studio-footer span:nth-child(2){display:none}.studio-scope-controls input[type=checkbox]{min-width:16px;min-height:16px}.studio-stats{display:block;overflow:auto}}

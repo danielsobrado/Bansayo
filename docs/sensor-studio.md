@@ -3,8 +3,8 @@ Devices → Sensor Studio replaces the long diagnostic card dashboard with task-
 
 ## Views
 - Overview: selected device health, live reference orientation and the main inertial signals.
-- Signals: capability-aware component selection, individual axis visibility, synchronized time base and shared cursor, 1/2/5-second windows, auto or fixed symmetric ranges, maximized chart statistics and CSV export. Freeze the input before measuring a fixed instant. Missing cursor samples stay unavailable.
-- Calibration: existing mounting and advisory bench tools, grouped in one workspace.
+- Signals: capability-aware component selection, individual axis visibility, synchronized time base and shared cursor, 1/2/5-second windows, history offset, auto or fixed symmetric ranges, maximized chart statistics and CSV export. Freeze the input before measuring a fixed instant. Missing cursor samples stay unavailable.
+- Calibration: existing mounting and advisory bench tools, a six-face visual stepper with progress and per-face results, separate rotation and drift tests.
 - Timing: packet interval histograms, magnetic magnitude, range warnings and battery history.
 - Compare: existing independent solver and two-tracker comparison, including bounded capture reports.
 - Optical: selected camera preview and marker overlays. Camera calibration remains in Cameras.

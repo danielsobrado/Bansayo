@@ -39,12 +39,12 @@ export function DeviceLab({ devices, live, skeleton }: {
     </header>
     <div className="studio-body" data-explorer={layout.explorer}>
       {layout.explorer && <DeviceExplorer devices={devices} selected={device?.descriptor.id ?? ""} focus={focus} view={view} onSelect={select}/>}
-      <main className="studio-workspace" aria-label="Sensor workspace">
+      <section className="studio-workspace" aria-label="Sensor workspace">
         {!device ? <div className="studio-empty"><Icon name="usb" size={28}/><h3>No configured devices</h3><p>Connect or configure a sensor source to begin inspection.</p></div> :
           view === "compare" ? <><div className="studio-subbar"><button aria-pressed={comparison==="solver"} onClick={()=>setComparison("solver")}>Solver comparison</button><button aria-pressed={comparison==="tracker"} onClick={()=>setComparison("tracker")}>Tracker comparison</button></div>
           {comparison==="solver"?<SolverBench devices={devices} live={live}/>:<TrackerComparison devices={devices} live={live}/>}</> :
           <DeviceInspector key={device.descriptor.id + ":" + live} device={device} devices={devices} live={live} skeleton={skeleton} view={view} focus={focus} onFocus={setFocus} showInspector={layout.inspector} onSelectCamera={id=>{setSelected(id);setFocus("all");}}/>}
-      </main>
+      </section>
     </div>
     <footer className="studio-footer"><span>{devices.length} configured · {devices.filter(d=>d.state==="tracking").length} tracking</span><span>View isolation does not mute live solver inputs</span><span>Diagnostic history · up to 50 Hz</span></footer>
   </section>;

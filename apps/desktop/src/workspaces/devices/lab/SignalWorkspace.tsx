@@ -27,8 +27,9 @@ function Instrument({id,channel,end,seconds,cursor,onCursor,expanded,onExpand}:{
     <header><div><h3>{meta.title}</h3><small className="subtle">{meta.unit} · {channel?"Sampled history":"Unavailable"}</small></div><button aria-label={expanded?"Restore "+meta.title:"Maximize "+meta.title} onClick={onExpand}><Icon name={expanded?"grid":"expand"}/></button></header>
     <div className="studio-scope-controls">{meta.axes.map((axis,i)=><label key={axis} style={{color:AXIS_COLORS[i]}}><input type="checkbox" checked={axes.includes(i)} onChange={e=>setAxes(v=>e.target.checked?[...v,i]:v.filter(n=>n!==i))}/>{axis}</label>)}<label className="studio-range">± range <input type="number" min="0" step="any" aria-label={meta.title+" fixed range"} placeholder="Auto" value={range} onChange={e=>setRange(e.target.value)}/></label></div>
     <svg viewBox="0 0 362 142" className="lab-chart studio-chart" role="img" aria-label={meta.title+" synchronized signal plot"} onPointerDown={e=>{
-      const rect=e.currentTarget.getBoundingClientRect();
-      const px=(e.clientX-rect.left)/rect.width*362;
+      const matrix=e.currentTarget.getScreenCTM();
+      if(!matrix)return;
+      const px=new DOMPoint(e.clientX,e.clientY).matrixTransform(matrix.inverse()).x;
       onCursor(Math.max(0,Math.min(seconds,(RIGHT-px)/(RIGHT-LEFT)*seconds)));
     }}>
       <defs><clipPath id={clipId}><rect x={LEFT} y={TOP} width={RIGHT-LEFT} height={BOTTOM-TOP}/></clipPath></defs>
@@ -51,22 +52,26 @@ export function SignalWorkspace({device,channels,known,focus,onFocus,compact=fal
 }) {
   const [seconds,setSeconds]=useState<number>(HISTORY_SECONDS);
   const [cursor,setCursor]=useState(0);
+  const [offset,setOffset]=useState(0);
   const [maximized,setMaximized]=useState<ChannelId|null>(null);
   const knownIds=CHANNEL_IDS.filter(id=>known[id]!==undefined||deviceChannels(device).includes(id));
-  const base=compact?knownIds.filter(id=>id==="gyro"||id==="accel"||id==="orientation").slice(0,2):focus==="all"?knownIds:[focus];
+  const primary=(["gyro","accel","orientation","pose_rotation","position","distance","contact"] as const).filter(id=>knownIds.includes(id));
+  const base=compact?primary.slice(0,2):focus==="all"?knownIds:[focus];
   const ids=maximized&&base.includes(maximized)?[maximized]:base;
-  const end=sharedEnd(channels);
+  const latest=sharedEnd(channels);
+  const end=latest-Math.min(offset,HISTORY_SECONDS-seconds)*1e6;
   const selected=Math.min(cursor,seconds);
   return <section className="studio-signals" aria-label="Signal analyzer">
     <div className="studio-subbar">
       <strong>{compact?"Live signals":"Signal analyzer"}</strong>
       {!compact&&<select aria-label="Signal component" value={focus} onChange={e=>{onFocus(e.target.value as SignalFocus);setMaximized(null);}}><option value="all">All components</option>{knownIds.map(id=><option key={id} value={id}>{CHANNELS[id].title}</option>)}</select>}
-      <label>Window <select aria-label="Signal time window" value={seconds} onChange={e=>{setSeconds(Number(e.target.value));setCursor(0);}}>{TIME_WINDOWS.map(v=><option key={v} value={v}>{v} s</option>)}</select></label>
-      <button disabled={!end||!ids.length} onClick={()=>downloadText(device.descriptor.id+"-signals.csv",signalCsv(channels,ids,end,seconds),"text/csv")}>Export CSV</button>
+      <label>Window <select aria-label="Signal time window" value={seconds} onChange={e=>{setSeconds(Number(e.target.value));setCursor(0);setOffset(0);}}>{TIME_WINDOWS.map(v=><option key={v} value={v}>{v} s</option>)}</select></label>
+      {seconds<HISTORY_SECONDS&&<label>History offset <input aria-label="Signal history offset" type="range" min={0} max={HISTORY_SECONDS-seconds} step={0.1} value={offset} onChange={e=>setOffset(Number(e.target.value))}/><span className="mono">{offset.toFixed(1)} s</span></label>}
+      <button disabled={!latest||!ids.length} onClick={()=>downloadText(device.descriptor.id+"-signals.csv",signalCsv(channels,ids,end,seconds),"text/csv")}>Export CSV</button>
       <small className="subtle">{frozen?"Frozen":"Live"} · sampled, not full-rate</small>
     </div>
     <div className="studio-scope-grid" data-maximized={!!maximized}>{ids.map(id=><Instrument key={id} id={id} channel={channels[id]} end={end} seconds={seconds} cursor={selected} onCursor={setCursor} expanded={maximized===id} onExpand={()=>setMaximized(v=>v===id?null:id)}/>)}</div>
     {!ids.length&&<p className="studio-empty">No supported signals announced by this device.</p>}
-    <div className="studio-timeline"><Icon name="crosshair"/><label htmlFor={compact?"overview-cursor":"signal-cursor"}>Shared cursor</label><input id={compact?"overview-cursor":"signal-cursor"} aria-label="Shared signal cursor" type="range" min={0} max={seconds} step={0.01} value={seconds-selected} onChange={e=>setCursor(seconds-Number(e.target.value))}/><span className="mono">−{selected.toFixed(2)} s</span><button onClick={()=>setCursor(0)}>Latest</button></div>
+    <div className="studio-timeline"><Icon name="crosshair"/><label htmlFor={compact?"overview-cursor":"signal-cursor"}>Shared cursor</label><input id={compact?"overview-cursor":"signal-cursor"} aria-label="Shared signal cursor" type="range" min={0} max={seconds} step={0.01} value={seconds-selected} onChange={e=>setCursor(seconds-Number(e.target.value))}/><span className="mono">−{selected.toFixed(2)} s</span><button onClick={()=>{setCursor(0);setOffset(0);}}>Latest</button></div>
   </section>;
 }

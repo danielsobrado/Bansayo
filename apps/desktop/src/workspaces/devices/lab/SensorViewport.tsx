@@ -18,7 +18,7 @@ export function SensorViewport({q,accel,magnetic,frozen,fallback}:{q:number[];ac
     <div className="studio-sensor-controls">{(["3D","Front","Side","Top"] as const).map(v=><button key={v} disabled={failed} aria-pressed={v===view} onClick={()=>select(v)}>{v}</button>)}<button disabled={failed} title="Toggle measured vectors" aria-pressed={vectors} onClick={()=>setVectors(v=>!v)}><Icon name="layers"/> Vectors</button><small className="subtle">{frozen?"Frozen":"Sampled"}</small></div>
     <div ref={host} className="studio-sensor-canvas" hidden={failed}/>
     {failed&&<><p className="subtle">WebGL unavailable — wireframe fallback.</p>{fallback}</>}
-    <div className="studio-vector-legend"><span style={{color:"#ee7878"}}>X</span><span style={{color:"#58bd91"}}>Y</span><span style={{color:"#68a6f1"}}>Z</span>{vectors&&<><span>Gravity reference ↑</span><span style={{color:"#d6aa63"}}>Specific force</span><span style={{color:"#d4a8f1"}}>Magnetic #0</span></>}</div>
+    <div className="studio-vector-legend"><span style={{color:"#ee7878"}}>X</span><span style={{color:"#58bd91"}}>Y</span><span style={{color:"#68a6f1"}}>Z</span>{vectors&&<><span>Reference up ↑</span><span style={{color:"#d6aa63"}}>Specific force</span><span style={{color:"#d4a8f1"}}>Magnetic #0</span></>}</div>
     <p className="mono subtle">Q XYZW · {q.map(v=>v.toFixed(3)).join(" / ")}</p>
   </div>;
 }
