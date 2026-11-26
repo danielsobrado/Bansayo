@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type { DeviceStatus } from "@contracts";
 import { Icon } from "../../../ui/Icon";
 import { CHANNEL_IDS, CHANNELS, type ChannelId, type Snapshot } from "./trace";
@@ -54,10 +54,16 @@ export function SignalWorkspace({device,channels,known,focus,onFocus,compact=fal
   const [cursor,setCursor]=useState(0);
   const [offset,setOffset]=useState(0);
   const [maximized,setMaximized]=useState<ChannelId|null>(null);
+  const [order,setOrder]=useState<ChannelId[]>(()=>{try{const v:unknown=JSON.parse(localStorage.getItem("bansayo.scope.order")??"null");return Array.isArray(v)?[...new Set(v.filter((id):id is ChannelId=>CHANNEL_IDS.includes(id)))]:[];}catch{return [];}});
+  const [wide,setWide]=useState<ChannelId[]>([]);
+  const [drag,setDrag]=useState<ChannelId|null>(null);
+  useEffect(()=>{try{localStorage.setItem("bansayo.scope.order",JSON.stringify(order));}catch{/* storage unavailable */}},[order]);
   const knownIds=CHANNEL_IDS.filter(id=>known[id]!==undefined||deviceChannels(device).includes(id));
   const primary=(["gyro","accel","orientation","pose_rotation","position","distance","contact"] as const).filter(id=>knownIds.includes(id));
   const base=compact?primary.slice(0,2):focus==="all"?knownIds:[focus];
-  const ids=maximized&&base.includes(maximized)?[maximized]:base;
+  const ordered=[...order.filter(id=>base.includes(id)),...base.filter(id=>!order.includes(id))];
+  const ids=maximized&&base.includes(maximized)?[maximized]:ordered;
+  function move(id:ChannelId,target:ChannelId){if(id===target)return;const next=ordered.filter(v=>v!==id);next.splice(next.indexOf(target),0,id);setOrder([...next,...order.filter(v=>!next.includes(v))]);}
   const latest=sharedEnd(channels);
   const end=latest-Math.min(offset,HISTORY_SECONDS-seconds)*1e6;
   const selected=Math.min(cursor,seconds);
@@ -70,7 +76,9 @@ export function SignalWorkspace({device,channels,known,focus,onFocus,compact=fal
       <button disabled={!latest||!ids.length} onClick={()=>downloadText(device.descriptor.id+"-signals.csv",signalCsv(channels,ids,end,seconds),"text/csv")}>Export CSV</button>
       <small className="subtle">{frozen?"Frozen":"Live"} · sampled, not full-rate</small>
     </div>
-    <div className="studio-scope-grid" data-maximized={!!maximized}>{ids.map(id=><Instrument key={id} id={id} channel={channels[id]} end={end} seconds={seconds} cursor={selected} onCursor={setCursor} expanded={maximized===id} onExpand={()=>setMaximized(v=>v===id?null:id)}/>)}</div>
+    <div className="studio-scope-grid" data-maximized={!!maximized}>{ids.map((id,i)=><div key={id} className="studio-dock-item" data-wide={wide.includes(id)} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();if(drag)move(drag,id);setDrag(null);}}>
+      {!compact&&!maximized&&<div className="studio-dock-tools"><span draggable onDragStart={e=>{setDrag(id);e.dataTransfer.setData("text/plain",id);}} onDragEnd={()=>setDrag(null)} title="Drag to reorder">⠿</span><button aria-label={"Move "+CHANNELS[id].title+" earlier"} disabled={i===0} onClick={()=>move(id,ids[i-1]!)}>←</button><button aria-label={"Move "+CHANNELS[id].title+" later"} disabled={i===ids.length-1} onClick={()=>move(id,ids[i+1]!)}>→</button><button aria-pressed={wide.includes(id)} onClick={()=>setWide(v=>v.includes(id)?v.filter(x=>x!==id):[...v,id])}>Wide</button></div>}
+      <Instrument id={id} channel={channels[id]} end={end} seconds={seconds} cursor={selected} onCursor={setCursor} expanded={maximized===id} onExpand={()=>setMaximized(v=>v===id?null:id)}/></div>)}</div>
     {!ids.length&&<p className="studio-empty">No supported signals announced by this device.</p>}
     <div className="studio-timeline"><Icon name="crosshair"/><label htmlFor={compact?"overview-cursor":"signal-cursor"}>Shared cursor</label><input id={compact?"overview-cursor":"signal-cursor"} aria-label="Shared signal cursor" type="range" min={0} max={seconds} step={0.01} value={seconds-selected} onChange={e=>setCursor(seconds-Number(e.target.value))}/><span className="mono" title="Offset from newest sample">−{(selected+offset).toFixed(2)} s</span><button onClick={()=>{setCursor(0);setOffset(0);}}>Latest</button></div>
   </section>;

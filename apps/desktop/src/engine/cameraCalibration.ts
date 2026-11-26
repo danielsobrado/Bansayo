@@ -22,7 +22,7 @@ export interface CameraPose {
   aspect: number;
 }
 
-function intrinsics(data: unknown): CameraIntrinsicsData | null {
+export function intrinsics(data: unknown): CameraIntrinsicsData | null {
   if (!isObj(data)) return null;
   const size = data.image_size_px;
   return tuple(size, 2) &&

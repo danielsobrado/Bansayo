@@ -5,6 +5,7 @@ import { StatePill } from "../../../ui/StatePill";
 import { Reasons } from "../../../ui/Reasons";
 import { Icon } from "../../../ui/Icon";
 import { BodyMap } from "../../../ui/BodyMap";
+import { OpticalLab } from "./OpticalLab";
 import { CameraPreview } from "../../cameras/CameraPreview";
 import { OrientationView } from "./Plots";
 import { GuidedTests } from "./GuidedTests";
@@ -67,7 +68,7 @@ export function DeviceInspector({device,devices,live,skeleton,view,focus,onFocus
       <div className="studio-instruments">
         {optical?<section className="lab-card"><header><h3>Optical inspection</h3><select aria-label="Optical camera" value={camera?device.descriptor.id:""} onChange={e=>onSelectCamera(e.target.value)}><option value="" disabled>Select camera</option>{cameras.map(c=><option key={c.descriptor.id}>{c.descriptor.id}</option>)}</select></header>
           {camera&&available?<CameraPreview device={device} showAprilTags/>:<p className="studio-empty">Select a connected camera to inspect images, landmarks and optical markers.</p>}
-          <p className="subtle">Use Cameras for intrinsic/extrinsic calibration, capture settings and exposure.</p></section>:
+          <p className="subtle">Use Cameras for intrinsic/extrinsic calibration, capture settings and exposure.</p><OpticalLab live={live}/></section>:
           <>
             {view==="overview"&&<><div className="studio-overview-grid"><OrientationView q={q} accel={accel} frozen={frozen}/>
               <section className="lab-card studio-attitude"><header><h3>Motion state</h3></header><strong className="studio-motion" data-still={motion?.still===true}>{motion?motion.still?"Stationary":"In motion":"—"}</strong>

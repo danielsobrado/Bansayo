@@ -25,6 +25,7 @@ export function useCapture(live:boolean) {
     };
     stopRef.current=finish;
     async function poll(){
+      if(ctl.signal.aborted)return;
       const results=await Promise.all(ids.map(async id=>{
         const cursor=cursors.get(id);
         const suffix=cursor?`?epoch=${cursor.epoch}&after=${cursor.next}`:"";

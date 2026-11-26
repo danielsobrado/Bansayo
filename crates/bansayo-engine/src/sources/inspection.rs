@@ -259,7 +259,12 @@ pub fn batch(runtime: &RuntimeMap, id: &DeviceId, epoch: Option<u64>, after: u64
             .clone()
     });
     trace
-        .and_then(|trace| trace.lock().ok().map(|mut t| t.full_rate.read(epoch, after)))
+        .and_then(|trace| {
+            trace
+                .lock()
+                .ok()
+                .map(|mut t| t.full_rate.read(epoch, after))
+        })
         .unwrap_or_default()
 }
 
