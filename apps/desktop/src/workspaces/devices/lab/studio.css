@@ -124,3 +124,33 @@
 .studio-angle-bar{display:inline-block;width:48px;height:5px;background:var(--surface-3)}
 .studio-angle-bar i{display:block;height:100%;background:var(--accent)}
 .studio-scatter-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}.studio-scatter-grid svg{max-height:140px}
+
+/* Preserve the desktop minimum size outside Sensor Studio. */
+@media(max-width:800px){
+  body:has(.sensor-studio){min-width:0;min-height:0}
+  .app-shell:has(.sensor-studio){grid-template-columns:44px minmax(0,1fr)}
+  .app-shell:has(.sensor-studio) .navigation .nav-text,.app-shell:has(.sensor-studio) .navigation kbd{display:none}
+  .app-shell:has(.sensor-studio) .navigation>a{justify-content:center;padding:8px 0;margin:2px}
+  .app-shell:has(.sensor-studio)>.transport{min-width:0;overflow-x:auto;padding:0 8px}
+  .app-shell:has(.sensor-studio)>.transport>*{flex-shrink:0}
+  .app-shell:has(.sensor-studio) .workbench-menubar{min-width:0;overflow-x:auto}
+  .sensor-studio-page>.workspace-heading{padding:6px 8px;flex-wrap:wrap;gap:4px}
+  .sensor-studio-page .workspace-tools{flex-wrap:wrap;min-width:0;gap:4px}
+  .studio-top .studio-title h2{font-size:14px}
+  .studio-top .studio-title small{display:none}
+  .studio-title{gap:4px}
+  .studio-top .studio-controls{gap:4px}
+  .studio-device-toolbar,.studio-subbar{padding:4px;gap:4px}
+  .studio-device-title .subtle{overflow-wrap:anywhere}
+  .studio-metrics>div{padding:6px}
+  .studio-metrics strong{font-size:15px}
+  .studio-inspector .studio-properties{grid-template-columns:minmax(0,1fr)}
+  .studio-footer{font-size:10px;padding:4px}
+  .studio-timeline{gap:4px}
+  .studio-top .studio-connection{font-size:10px}
+  .studio-subbar input[type=range]{width:90px}
+  .studio-signals,.studio-subbar,.studio-timeline,.studio-scope{min-width:0}
+  .studio-tree-heading,.studio-tree-channel,.studio-tree-device button{min-height:36px}
+}
+:root{--studio-axis-x:#ee7878;--studio-axis-y:#58bd91;--studio-axis-z:#68a6f1;--studio-axis-w:#d4a8f1;--studio-force:#d6aa63}
+:root[data-theme=silver]{--studio-axis-x:#a32a35;--studio-axis-y:#176c4b;--studio-axis-z:#205da6;--studio-axis-w:#793b99;--studio-force:#81590d}

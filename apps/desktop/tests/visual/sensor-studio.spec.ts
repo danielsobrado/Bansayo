@@ -16,6 +16,7 @@ test("sensor studio instrumentation and responsive layouts",async({page},info)=>
   const studio=page.getByRole("region",{name:"Sensor Studio"});
   const views=studio.getByRole("navigation",{name:"Sensor Studio views"});
   await expect(studio.getByRole("img",{name:"Gyroscope synchronized signal plot"})).toBeVisible();
+  await expect(studio.getByRole("button",{name:"Freeze traces"})).toBeEnabled();
   await page.screenshot({path:info.outputPath("overview-dark.png")});
   await studio.getByRole("button",{name:"Freeze traces"}).click();
   await views.getByRole("button",{name:"Signals",exact:true}).click();

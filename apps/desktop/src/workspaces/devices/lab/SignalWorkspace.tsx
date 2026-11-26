@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { DeviceStatus } from "@contracts";
 import { Icon } from "../../../ui/Icon";
-import { AXIS_COLORS, CHANNEL_IDS, CHANNELS, type ChannelId, type Snapshot } from "./trace";
+import { CHANNEL_IDS, CHANNELS, type ChannelId, type Snapshot } from "./trace";
 import { deviceChannels } from "./DeviceExplorer";
 import { downloadText, nearestPoint, sharedEnd, signalCsv, stats, windowPoints } from "./signalMath";
-import { HISTORY_SECONDS, TIME_WINDOWS, type SignalFocus } from "./studioConfig";
+import { AXIS_CSS, HISTORY_SECONDS, TIME_WINDOWS, type SignalFocus } from "./studioConfig";
 
 const LEFT=42,RIGHT=352,TOP=10,BOTTOM=118;
 const INITIAL_AXES=[0,1,2,3];
@@ -22,10 +22,10 @@ function Instrument({id,channel,end,seconds,cursor,onCursor,expanded,onExpand}:{
   const x=(t:number)=>LEFT+(t-(end-seconds*1e6))/(seconds*1e6)*(RIGHT-LEFT);
   const y=(v:number)=>BOTTOM-(v+limit)/(2*limit)*(BOTTOM-TOP);
   const cursorX=x(end-cursor*1e6);
-  const clipId="scope-"+id;
+  const clipId=useId();
   return <section className="lab-card studio-scope">
     <header><div><h3>{meta.title}</h3><small className="subtle">{meta.unit} · {channel?"Sampled history":"Unavailable"}</small></div><button aria-label={expanded?"Restore "+meta.title:"Maximize "+meta.title} onClick={onExpand}><Icon name={expanded?"grid":"expand"}/></button></header>
-    <div className="studio-scope-controls">{meta.axes.map((axis,i)=><label key={axis} style={{color:AXIS_COLORS[i]}}><input type="checkbox" checked={axes.includes(i)} onChange={e=>setAxes(v=>e.target.checked?[...v,i]:v.filter(n=>n!==i))}/>{axis}</label>)}<label className="studio-range">± range <input type="number" min="0" step="any" aria-label={meta.title+" fixed range"} placeholder="Auto" value={range} onChange={e=>setRange(e.target.value)}/></label></div>
+    <div className="studio-scope-controls">{meta.axes.map((axis,i)=><label key={axis} style={{color:AXIS_CSS[i]}}><input type="checkbox" checked={axes.includes(i)} onChange={e=>setAxes(v=>e.target.checked?[...v,i]:v.filter(n=>n!==i))}/>{axis}</label>)}<label className="studio-range">± range <input type="number" min="0" step="any" aria-label={meta.title+" fixed range"} placeholder="Auto" value={range} onChange={e=>setRange(e.target.value)}/></label></div>
     <svg viewBox="0 0 362 142" className="lab-chart studio-chart" role="img" aria-label={meta.title+" synchronized signal plot"} onPointerDown={e=>{
       const matrix=e.currentTarget.getScreenCTM();
       if(!matrix)return;
@@ -38,11 +38,11 @@ function Instrument({id,channel,end,seconds,cursor,onCursor,expanded,onExpand}:{
       <g clipPath={`url(#${clipId})`}>{active.map(i=>{
         let path="",previous=-Infinity;
         for(const p of points){path+=`${p.t_us-previous>150000?"M":"L"}${x(p.t_us).toFixed(2)},${y(p.values[i]!).toFixed(2)} `;previous=p.t_us;}
-        return <path key={i} d={path} stroke={AXIS_COLORS[i]} fill="none" strokeWidth="1.4" vectorEffect="non-scaling-stroke"/>;
+        return <path key={i} d={path} stroke={AXIS_CSS[i]} fill="none" strokeWidth="1.4" vectorEffect="non-scaling-stroke"/>;
       })}<line x1={cursorX} x2={cursorX} y1={TOP} y2={BOTTOM} stroke="var(--ink-2)" strokeDasharray="3 3"/></g>
       {!points.length&&<text x="195" y="68" textAnchor="middle" fill="var(--ink-3)" fontSize="12">No samples in this window</text>}
     </svg>
-    <div className="studio-scope-values">{active.map(i=><span key={i} style={{color:AXIS_COLORS[i]}}>{meta.axes[i]} <strong>{sample?.values[i]?.toFixed(3)??"—"}</strong></span>)}</div>
+    <div className="studio-scope-values">{active.map(i=><span key={i} style={{color:AXIS_CSS[i]}}>{meta.axes[i]} <strong>{sample?.values[i]?.toFixed(3)??"—"}</strong></span>)}</div>
     {expanded&&<table className="studio-stats"><thead><tr><th>Axis</th><th>Min</th><th>Max</th><th>Mean</th><th>RMS</th><th>σ</th></tr></thead><tbody>{active.map(i=>{const s=stats(points.map(p=>p.values[i]!));return <tr key={i}><th>{meta.axes[i]}</th>{[s?.min,s?.max,s?.mean,s?.rms,s?.std].map((v,j)=><td key={j}>{v?.toFixed(3)??"—"}</td>)}</tr>;})}</tbody></table>}
     <small className="subtle mono">{points.length} samples · {sample?`seq ${sample.seq} · cursor sample`:"No nearby cursor sample"}</small>
   </section>;
@@ -72,6 +72,6 @@ export function SignalWorkspace({device,channels,known,focus,onFocus,compact=fal
     </div>
     <div className="studio-scope-grid" data-maximized={!!maximized}>{ids.map(id=><Instrument key={id} id={id} channel={channels[id]} end={end} seconds={seconds} cursor={selected} onCursor={setCursor} expanded={maximized===id} onExpand={()=>setMaximized(v=>v===id?null:id)}/>)}</div>
     {!ids.length&&<p className="studio-empty">No supported signals announced by this device.</p>}
-    <div className="studio-timeline"><Icon name="crosshair"/><label htmlFor={compact?"overview-cursor":"signal-cursor"}>Shared cursor</label><input id={compact?"overview-cursor":"signal-cursor"} aria-label="Shared signal cursor" type="range" min={0} max={seconds} step={0.01} value={seconds-selected} onChange={e=>setCursor(seconds-Number(e.target.value))}/><span className="mono">−{selected.toFixed(2)} s</span><button onClick={()=>{setCursor(0);setOffset(0);}}>Latest</button></div>
+    <div className="studio-timeline"><Icon name="crosshair"/><label htmlFor={compact?"overview-cursor":"signal-cursor"}>Shared cursor</label><input id={compact?"overview-cursor":"signal-cursor"} aria-label="Shared signal cursor" type="range" min={0} max={seconds} step={0.01} value={seconds-selected} onChange={e=>setCursor(seconds-Number(e.target.value))}/><span className="mono" title="Offset from newest sample">−{(selected+offset).toFixed(2)} s</span><button onClick={()=>{setCursor(0);setOffset(0);}}>Latest</button></div>
   </section>;
 }

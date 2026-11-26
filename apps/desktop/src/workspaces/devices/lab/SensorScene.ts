@@ -21,7 +21,7 @@ export class SensorScene {
   private readonly chipMaterial:MeshStandardMaterial;
   private readonly rotation=new Quaternion();
   private readonly direction=new Vector3();
-  private readonly draw=()=>this.renderer.render(this.scene,this.camera);
+  private readonly draw=()=>{if(!document.hidden)this.renderer.render(this.scene,this.camera);};
 
   constructor(host:HTMLElement) {
     const palette=readPalette();

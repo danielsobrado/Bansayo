@@ -16,3 +16,5 @@ export function loadLayout(): StudioLayout {
 export function saveLayout(value: StudioLayout) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(value)); } catch { /* Storage may be disabled. */ }
 }
+
+export const AXIS_CSS = ["var(--studio-axis-x)","var(--studio-axis-y)","var(--studio-axis-z)","var(--studio-axis-w)"] as const;
