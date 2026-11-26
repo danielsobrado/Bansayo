@@ -133,10 +133,8 @@ assignments:
         .unwrap();
     assert_eq!(sync.resets, 0);
     let id = DeviceId::new("ESP-SHIN-R").unwrap();
-    let snapshot = serde_json::to_value(bansayo_engine::sources::inspection::snapshot(
-        &runtime, &id,
-    ))
-    .unwrap();
+    let snapshot =
+        serde_json::to_value(bansayo_engine::sources::inspection::snapshot(&runtime, &id)).unwrap();
     assert_eq!(
         snapshot["channels"]["mag1"]["points"][0]["values"],
         serde_json::json!([-100.0, 0.0, 0.0])
