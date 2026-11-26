@@ -31,6 +31,7 @@ use std::collections::BTreeMap;
 pub const PACKET_LEN: usize = 64;
 pub const MAGIC: &[u8; 4] = b"BIMU";
 pub const VERSION: u8 = 1;
+mod magnetic;
 /// Beyond the ±2000 °/s range of common MEMS gyros, with margin: a corrupt value.
 const MAX_RAD_S: f32 = 70.0;
 const MAX_M_S2: f32 = 2_000.0;
@@ -194,6 +195,22 @@ impl Source for Esp32Source {
                 r = socket.recv_from(&mut buf) => r.map_err(|e| SourceError(e.to_string()))?.0,
             };
             let now = context.clock.now_us();
+            if buf[..n].starts_with(b"BMAG") {
+                if let Ok(packet) = magnetic::parse(&buf[..n])
+                    && let Some(id) = by_key.get(key(&packet.mac, packet.sensor).as_str())
+                {
+                    crate::sources::inspection::magnetic(
+                        &self.runtime,
+                        id,
+                        packet.channel,
+                        now,
+                        packet.seq,
+                        packet.time_us,
+                        packet.values,
+                    );
+                }
+                continue;
+            }
             let p = match parse(&buf[..n]) {
                 Ok(p) => p,
                 Err(why) => {

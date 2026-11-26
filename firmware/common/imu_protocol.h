@@ -12,3 +12,8 @@ typedef struct {
 } bimu_sample_t;
 
 void bimu_encode(uint8_t out[BIMU_PACKET_SIZE], const bimu_sample_t *sample);
+
+enum { BMAG_PACKET_SIZE = 32 };
+void bmag_encode(uint8_t out[BMAG_PACKET_SIZE], const uint8_t mac[6],
+                 uint8_t sensor, uint8_t index, uint32_t seq,
+                 uint32_t time_us, const int16_t values[3]);

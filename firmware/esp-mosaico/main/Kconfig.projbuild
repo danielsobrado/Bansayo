@@ -32,6 +32,6 @@ menu "Bansayo tracker"
         bool "Enable local diagnostic screen"
         default y
     config BANSAYO_MAG_DIAGNOSTICS
-        bool "Read both magnetometers for serial diagnostics only"
-        default n
+        bool "Stream both magnetometers for live diagnostics"
+        default y
 endmenu

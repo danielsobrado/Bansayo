@@ -37,3 +37,22 @@ void bimu_encode(uint8_t out[BIMU_PACKET_SIZE], const bimu_sample_t *s)
     if (s->gyro_valid) put_floats(out + 40, s->gyro, 3);
     if (s->accel_valid) put_floats(out + 52, s->accel, 3);
 }
+
+void bmag_encode(uint8_t out[BMAG_PACKET_SIZE], const uint8_t mac[6],
+                 uint8_t sensor, uint8_t index, uint32_t seq,
+                 uint32_t time_us, const int16_t values[3])
+{
+    memset(out, 0, BMAG_PACKET_SIZE);
+    memcpy(out, "BMAG", 4);
+    out[4] = 1;
+    out[5] = sensor;
+    out[6] = index;
+    memcpy(out + 8, mac, 6);
+    put_u32(out + 16, seq);
+    put_u32(out + 20, time_us);
+    for (unsigned i = 0; i < 3; ++i) {
+        const uint16_t bits = (uint16_t)values[i];
+        out[24 + 2*i] = (uint8_t)bits;
+        out[25 + 2*i] = (uint8_t)(bits >> 8);
+    }
+}

@@ -57,6 +57,11 @@ void app_main(void)
     unsigned count = 0, actual_rate = 0, read_errors = 0;
     int64_t previous = 0, last_diag = esp_timer_get_time(), last_ui = 0;
     TickType_t wake = xTaskGetTickCount();
+#ifdef CONFIG_BANSAYO_MAG_DIAGNOSTICS
+    int64_t last_mag = 0;
+    uint32_t mag_seq[2] = {0};
+    unsigned mag_index = 0;
+#endif
     for (;;) {
         vTaskDelayUntil(&wake, pdMS_TO_TICKS(TRACKER_PERIOD_MS));
         if (tracker_display_recalibrate()) {
@@ -108,11 +113,23 @@ void app_main(void)
             sample.battery_valid = battery_ready &&
                 bsp_battery_read(&battery) == ESP_OK && battery.state_of_charge <= 100;
             sample.battery_pct = sample.battery_valid ? battery.state_of_charge : 0;
-            tracker_mag_log();
-            ESP_LOGI(TAG, "%s rate=%u sent=%lu failed=%lu imu_errors=%u rssi=%d",
+             ESP_LOGI(TAG, "%s rate=%u sent=%lu failed=%lu imu_errors=%u rssi=%d",
                 status, actual_rate, (unsigned long)sent, (unsigned long)failed,
                 read_errors, (int)sample.rssi_dbm);
         }
+#ifdef CONFIG_BANSAYO_MAG_DIAGNOSTICS
+        if (now - last_mag >= TRACKER_MAG_INTERVAL_US) {
+            last_mag = now;
+            int16_t values[3];
+            const unsigned index = mag_index;
+            mag_index = (mag_index + 1) % 2;
+            if (tracker_mag_read(index, values)) {
+                const uint32_t sample_time = (uint32_t)esp_timer_get_time();
+                ++mag_seq[index];
+                (void)tracker_network_mag(sample.mac, index, mag_seq[index], sample_time, values);
+            }
+        }
+#endif
         if (now-last_ui >= TRACKER_DISPLAY_US) {
             last_ui = now;
             tracker_display_update(status, &sample, actual_rate, sent, failed);

@@ -81,7 +81,7 @@ int8_t tracker_network_rssi(void)
     return tracker_network_ready() && esp_wifi_sta_get_ap_info(&ap) == ESP_OK ? ap.rssi : 0;
 }
 
-bool tracker_network_send(const bimu_sample_t *sample)
+static bool send_packet(const uint8_t *packet, size_t size)
 {
     if (!tracker_network_ready()) {
         if (udp >= 0) { close(udp); udp = -1; }
@@ -91,14 +91,27 @@ bool tracker_network_send(const bimu_sample_t *sample)
         udp = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
         if (udp < 0) return false;
     }
-    uint8_t packet[BIMU_PACKET_SIZE];
-    bimu_encode(packet, sample);
-    const int n = sendto(udp, packet, sizeof(packet), MSG_DONTWAIT,
+    const int n = sendto(udp, packet, size, MSG_DONTWAIT,
                         (const struct sockaddr *)&destination, sizeof(destination));
-    if (n == (int)sizeof(packet)) return true;
+    if (n == (int)size) return true;
     if (errno != EAGAIN && errno != EWOULDBLOCK && errno != ENOBUFS) {
         close(udp);
         udp = -1;
     }
     return false;
+}
+
+bool tracker_network_send(const bimu_sample_t *sample)
+{
+    uint8_t packet[BIMU_PACKET_SIZE];
+    bimu_encode(packet, sample);
+    return send_packet(packet, sizeof(packet));
+}
+
+bool tracker_network_mag(const uint8_t mac[6], uint8_t index, uint32_t seq,
+                         uint32_t time_us, const int16_t values[3])
+{
+    uint8_t packet[BMAG_PACKET_SIZE];
+    bmag_encode(packet, mac, TRACKER_SENSOR_NUMBER, index, seq, time_us, values);
+    return send_packet(packet, sizeof(packet));
 }

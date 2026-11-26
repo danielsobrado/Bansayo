@@ -30,6 +30,40 @@ struct Channel {
 #[derive(Debug, Default)]
 pub struct Trace {
     channels: BTreeMap<&'static str, Channel>,
+    timing: Timing,
+}
+
+#[derive(Debug, Default)]
+struct Timing {
+    last: Option<(u64, Instant, u64)>,
+    intervals: VecDeque<[f32; 2]>,
+    gaps: u64,
+}
+
+#[derive(Serialize)]
+pub struct TimingSnapshot {
+    intervals_ms: Vec<[f32; 2]>,
+    sequence_gaps: u64,
+}
+
+impl Timing {
+    fn record(&mut self, o: &SensorObservation) {
+        let now = Instant::now();
+        if let Some((t, arrival, seq)) = self.last
+            && o.t_us > t
+            && o.seq > seq
+        {
+            if self.intervals.len() == CAPACITY {
+                self.intervals.pop_front();
+            }
+            self.intervals.push_back([
+                (o.t_us - t) as f32 / 1000.0,
+                now.duration_since(arrival).as_secs_f32() * 1000.0,
+            ]);
+            self.gaps += o.seq.saturating_sub(seq + 1);
+        }
+        self.last = Some((o.t_us, now, o.seq));
+    }
 }
 
 #[derive(Serialize)]
@@ -41,32 +75,47 @@ pub struct ChannelSnapshot {
 #[derive(Default, Serialize)]
 pub struct Snapshot {
     channels: BTreeMap<&'static str, ChannelSnapshot>,
+    timing: Option<TimingSnapshot>,
 }
 
 impl Trace {
     fn push(&mut self, kind: &'static str, o: &SensorObservation, values: &[f32]) {
+        if kind == "orientation" {
+            self.timing.record(o);
+        }
+        self.push_point(
+            kind,
+            Point {
+                t_us: o.t_us,
+                seq: o.seq,
+                device_time_us: o.device_time_us,
+                values: values.to_vec(),
+            },
+        );
+    }
+
+    fn push_point(&mut self, kind: &'static str, point: Point) {
         let c = self.channels.entry(kind).or_default();
         c.last_seen = Some(Instant::now());
         if let Some(last) = c.points.back() {
-            if o.t_us < last.t_us {
+            if point.t_us < last.t_us {
                 c.points.clear();
-            } else if o.t_us - last.t_us < SAMPLE_INTERVAL_US {
+            } else if point.t_us - last.t_us < SAMPLE_INTERVAL_US {
                 return;
             }
         }
         if c.points.len() == CAPACITY {
             c.points.pop_front();
         }
-        c.points.push_back(Point {
-            t_us: o.t_us,
-            seq: o.seq,
-            device_time_us: o.device_time_us,
-            values: values.to_vec(),
-        });
+        c.points.push_back(point);
     }
 
     fn snapshot(&self) -> Snapshot {
         Snapshot {
+            timing: self.timing.last.map(|_| TimingSnapshot {
+                intervals_ms: self.timing.intervals.iter().copied().collect(),
+                sequence_gaps: self.timing.gaps,
+            }),
             channels: self
                 .channels
                 .iter()
@@ -139,6 +188,39 @@ pub fn record(runtime: &RuntimeMap, event: &SourceEvent) {
             trace.push("contact", o, &[if *in_contact { 1.0 } else { 0.0 }]);
         }
         _ => {}
+    }
+}
+
+/// Auxiliary board telemetry is diagnostic-only, never fed into the pose solver.
+pub fn magnetic(
+    runtime: &RuntimeMap,
+    id: &DeviceId,
+    kind: &'static str,
+    t_us: u64,
+    seq: u32,
+    device_time_us: u32,
+    values: [i16; 3],
+) {
+    let trace = {
+        let Ok(mut all) = runtime.write() else {
+            return;
+        };
+        all.entry(id.clone())
+            .or_default()
+            .inspection
+            .get_or_insert_default()
+            .clone()
+    };
+    if let Ok(mut trace) = trace.lock() {
+        trace.push_point(
+            kind,
+            Point {
+                t_us,
+                seq: u64::from(seq),
+                device_time_us: Some(u64::from(device_time_us)),
+                values: values.map(f32::from).to_vec(),
+            },
+        );
     }
 }
 

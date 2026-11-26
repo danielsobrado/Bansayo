@@ -46,13 +46,20 @@ void tracker_mag_init(void)
 #endif
 }
 
-void tracker_mag_log(void)
+bool tracker_mag_read(unsigned index, int16_t values[3])
 {
 #ifdef CONFIG_BANSAYO_MAG_DIAGNOSTICS
-    for (unsigned i = 0; i < BSP_MAGNETOMETER_NUM; ++i) {
-        struct bmm150_mag_data m = {0};
-        if (mag_ready[i] && bsp_magnetometer_read(i, &m) == ESP_OK)
-            ESP_LOGI(TAG, "mag[%u] x=%d y=%d z=%d", i, (int)m.x, (int)m.y, (int)m.z);
-    }
+    struct bmm150_mag_data m = {0};
+    if (index >= BSP_MAGNETOMETER_NUM || !mag_ready[index] ||
+        bsp_magnetometer_read(index, &m) != ESP_OK) return false;
+    if (m.x == INT16_MIN || m.y == INT16_MIN || m.z == INT16_MIN) return false;
+    values[0] = (int16_t)m.x;
+    values[1] = (int16_t)m.y;
+    values[2] = (int16_t)m.z;
+    return true;
+#else
+    (void)index;
+    (void)values;
+    return false;
 #endif
 }
