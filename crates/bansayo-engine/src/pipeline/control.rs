@@ -487,6 +487,7 @@ impl Runtime {
                         Replay::new(*recording, speed, looping).map_err(unavailable)?;
                     let data = json!(replay.state());
                     let messages = replay.advance(0).map_err(unavailable)?;
+                    crate::sources::inspection::clear(&engine.registry.runtime);
                     self.replay = Some(replay);
                     self.last_landmarks_3d_us = None;
                     for control in &engine.controls {

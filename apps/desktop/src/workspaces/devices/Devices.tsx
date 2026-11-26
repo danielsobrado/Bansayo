@@ -12,6 +12,7 @@ import { Reasons } from "../../ui/Reasons";
 import { formatConfidence, humanizeId } from "../../lib/format";
 import { PhonePairing } from "./PhonePairing";
 import { SegmentEvidence } from "./SegmentEvidence";
+import { DeviceLab } from "./lab/DeviceLab";
 
 interface Change {
   device: DeviceStatus;
@@ -28,6 +29,7 @@ export function Devices({
   sampled: ReturnType<typeof readouts>;
   onCalibrate: () => void;
 }) {
+  const [lab, setLab] = useState(false);
   const [mode, setMode] = useState<"cards" | "table" | null>(null);
   const [highlight, setHighlight] = useState<string | null>(null);
   const [change, setChange] = useState<Change | null>(null);
@@ -52,6 +54,9 @@ export function Devices({
         </div>
         <div className="workspace-tools">
           <div className="view-presets">
+            <button aria-pressed={lab} onClick={() => setLab(!lab)}>
+              Live diagnostics
+            </button>
             <button
               aria-pressed={view === "cards"}
               onClick={() => setMode("cards")}
@@ -70,6 +75,9 @@ export function Devices({
           </button>
         </div>
       </header>
+      {lab ? (
+        <DeviceLab devices={devices} live={state?.engine.mode === "live"} />
+      ) : (
       <div className="devices-layout">
         <section className={`device-collection ${view}`} aria-label="Devices">
           {devices.length === 0 ? (
@@ -114,6 +122,7 @@ export function Devices({
           <PhonePairing />
         </aside>
       </div>
+      )}
       {change && (
         <AssignmentDialog
           change={change}

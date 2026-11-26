@@ -1,5 +1,6 @@
 //! HTTP boundary: only pipeline commands and shared contracts cross into the engine.
 mod control;
+mod inspection;
 mod training;
 mod ws;
 pub mod xr;
@@ -49,6 +50,7 @@ pub fn router(api: Api) -> Router {
     Router::new()
         .route("/api/v1/health", get(health))
         .route("/api/v1/state", get(state))
+        .route("/api/v1/devices/{id}/inspection", get(inspection::snapshot))
         .route("/api/v1/skeleton", get(skeleton))
         .route("/api/v1/simulation", put(simulation))
         .route("/api/v1/calibration/reference-pose", post(capture))

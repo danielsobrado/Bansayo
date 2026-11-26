@@ -1,6 +1,7 @@
 //! Independent source tasks. Ingest drops newest at capacity; counters remain observable.
 pub mod camera;
 pub mod esp32;
+pub mod inspection;
 pub mod simulated;
 pub mod slimevr;
 pub mod supervision;
@@ -20,6 +21,7 @@ pub struct DeviceRuntime {
     pub camera: Option<bansayo_contracts::CameraRuntimeStatus>,
     pub time_sync: Option<bansayo_contracts::TimeSyncStatus>,
     pub last_inference_us: Option<u64>,
+    pub inspection: Option<inspection::SharedTrace>,
 }
 pub type RuntimeMap = Arc<std::sync::RwLock<BTreeMap<DeviceId, DeviceRuntime>>>;
 #[derive(Debug, thiserror::Error)]

@@ -597,6 +597,7 @@ impl Runtime {
         if !engine.registry.event(event.clone()) {
             return;
         }
+        crate::sources::inspection::record(&engine.registry.runtime, &event);
         if let SourceEvent::Observation { observation } = &event {
             if let Some(c) = self.capture.as_mut() {
                 c.observe(observation);

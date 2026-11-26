@@ -1,0 +1,74 @@
+import { isNum, isObj, tuple } from "../../../engine/messages";
+
+export const CHANNELS = {
+  orientation: { title: "Sensor orientation", unit: "quaternion", axes: ["X", "Y", "Z", "W"] },
+  gyro: { title: "Gyroscope", unit: "rad/s", axes: ["X", "Y", "Z"] },
+  accel: { title: "Accelerometer", unit: "m/s²", axes: ["X", "Y", "Z"] },
+  position: { title: "Position", unit: "m", axes: ["X", "Y", "Z"] },
+  pose_rotation: { title: "Tracked rotation", unit: "quaternion", axes: ["X", "Y", "Z", "W"] },
+  pose_position: { title: "Tracked position", unit: "m", axes: ["X", "Y", "Z"] },
+  distance: { title: "Distance", unit: "m", axes: ["Range"] },
+  contact: { title: "Contact", unit: "0/1", axes: ["Contact"] },
+} as const;
+export type ChannelId = keyof typeof CHANNELS;
+export const CHANNEL_IDS = Object.keys(CHANNELS) as ChannelId[];
+export const STALE_MS = 500;
+export const POLL_MS = 250;
+export const AXIS_COLORS = ["#ee7878", "#58bd91", "#68a6f1", "#d4a8f1"];
+
+export interface Point {
+  t_us: number;
+  seq: number;
+  device_time_us: number | null;
+  values: number[];
+}
+export interface Channel {
+  age_ms: number;
+  points: Point[];
+}
+export interface Snapshot {
+  channels: Partial<Record<ChannelId, Channel>>;
+}
+
+export function parseSnapshot(value: unknown): Snapshot | null {
+  if (!isObj(value) || !isObj(value.channels)) return null;
+  const channels: Snapshot["channels"] = {};
+  for (const id of CHANNEL_IDS) {
+    const c = value.channels[id];
+    if (c === undefined) continue;
+    if (!isObj(c) || !isNum(c.age_ms) || c.age_ms < 0 || !Array.isArray(c.points) || c.points.length > 256) return null;
+    const points: Point[] = [];
+    for (const p of c.points) {
+      if (!isObj(p) || !isNum(p.t_us) || !isNum(p.seq) ||
+          !(p.device_time_us === null || isNum(p.device_time_us)) ||
+          !tuple(p.values, CHANNELS[id].axes.length)) return null;
+      if (points.length && p.t_us < points[points.length - 1]!.t_us) return null;
+      points.push({ t_us: p.t_us, seq: p.seq, device_time_us: p.device_time_us, values: p.values });
+    }
+    channels[id] = { age_ms: c.age_ms, points };
+  }
+  return { channels };
+}
+
+export function rotate(v: readonly number[], q: readonly number[]): number[] {
+  const n = Math.hypot(...q);
+  if (n < 1e-6 || !Number.isFinite(n)) return [...v];
+  const [x, y, z, w] = q.map((p) => p / n) as [number, number, number, number];
+  const [a, b, c] = v as readonly [number, number, number];
+  const u = 2 * (y*c-z*b), t = 2 * (z*a-x*c), s = 2 * (x*b-y*a);
+  return [a+w*u+y*s-z*t, b+w*t+z*u-x*s, c+w*s+x*t-y*u];
+}
+
+export function motionSummary(gyro?: Channel, accel?: Channel) {
+  if (!gyro?.points.length || !accel?.points.length ||
+      gyro.age_ms > STALE_MS || accel.age_ms > STALE_MS) return null;
+  const end = Math.min(gyro.points.at(-1)!.t_us, accel.points.at(-1)!.t_us);
+  const recent = (c: Channel) => c.points.filter(p => p.t_us >= end - 1_000_000 && p.t_us <= end);
+  const g = recent(gyro), a = recent(accel);
+  if (g.length < 2 || a.length < 2 ||
+      g.at(-1)!.t_us-g[0]!.t_us < 750_000 ||
+      a.at(-1)!.t_us-a[0]!.t_us < 750_000) return null;
+  const peak = Math.max(...g.map(p => Math.hypot(...p.values)));
+  const gravityError = Math.max(...a.map(p => Math.abs(Math.hypot(...p.values)-9.80665)));
+  return { peak, gravityError, still: peak < 0.12 && gravityError < 0.08*9.80665 };
+}
