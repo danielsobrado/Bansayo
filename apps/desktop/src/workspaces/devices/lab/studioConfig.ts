@@ -1,5 +1,5 @@
 import type { ChannelId } from "./trace";
-export type StudioView = "overview" | "signals" | "calibration" | "timing" | "compare" | "optical" | "events";
+export type StudioView = "overview" | "signals" | "calibration" | "timing" | "compare" | "optical" | "events" | "capture";
 export type SignalFocus = ChannelId | "all";
 export const TIME_WINDOWS = [1, 2, 5] as const;
 export const HISTORY_SECONDS = 5;
