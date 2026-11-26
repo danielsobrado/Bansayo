@@ -130,13 +130,7 @@ assignments:
             .len()
             > 2
     );
-    let start = ok(
-        addr,
-        "GET",
-        "devices/MOSAICO/inspection/batch",
-        Value::Null,
-    )
-    .await;
+    let start = ok(addr, "GET", "devices/MOSAICO/inspection/batch", Value::Null).await;
     let epoch = start["epoch"].as_u64().unwrap();
     let cursor = start["next"].as_u64().unwrap();
     tokio::time::sleep(Duration::from_millis(300)).await;
