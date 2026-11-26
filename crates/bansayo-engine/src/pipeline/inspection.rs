@@ -30,7 +30,9 @@ pub(super) fn preview(engine: &Runner, ids: &[DeviceId]) -> Result<Value, Contro
     let selected: BTreeSet<_> = ids.iter().cloned().collect();
     if selected.is_empty()
         || selected.len() > 32
-        || selected.iter().any(|id| !engine.registry.entries.contains_key(id))
+        || selected
+            .iter()
+            .any(|id| !engine.registry.entries.contains_key(id))
     {
         return Err(ControlError::new(
             ApiErrorCode::InvalidRequest,

@@ -124,7 +124,7 @@ function Inspector({ device, live }: { device: DeviceStatus; live: boolean }) {
       <div className="lab-grid">
         <TimingPanel timing={(frozen || channels.orientation) ? snapshot?.timing : undefined}/>
         <MagneticPanel a={channels.mag0} b={channels.mag1}/>
-        <SaturationPanel gyro={channels.gyro} accel={channels.accel} native={device.descriptor.model?.includes("bansayo.imu.v1")===true}/>
+        <SaturationPanel gyro={channels.gyro} accel={channels.accel} native={device.descriptor.source_id === "mosaico" && device.descriptor.model?.includes("bansayo.imu.v1")===true}/>
         <BatteryHistory device={device} enabled={available}/>
       </div>
       <GuidedTests deviceId={device.descriptor.id} channels={channels} enabled={available && !frozen}/>

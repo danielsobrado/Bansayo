@@ -268,6 +268,10 @@ mod tests {
         let points = &result.channels["orientation"].points;
         assert_eq!(points.len(), CAPACITY);
         assert_eq!(points.last().unwrap().seq, 598);
+        let timing = result.timing.unwrap();
+        assert_eq!(timing.intervals_ms.len(), CAPACITY);
+        assert_eq!(timing.sequence_gaps, 0);
+        assert!(timing.intervals_ms.iter().all(|p| p[0] == 10.0));
         assert!(
             points
                 .windows(2)

@@ -79,6 +79,17 @@ assignments:
     tx.send_to(&encode(&packet(0, 5, 0)), &to).await.unwrap(); // out of order: dropped
     tx.send_to(&encode(&packet(3, 1, 0)), &to).await.unwrap(); // sensor 3 not listed
     tx.send_to(b"garbage", &to).await.unwrap();
+    let mut mag = [0_u8; 32];
+    mag[..4].copy_from_slice(b"BMAG");
+    mag[4] = 1;
+    mag[6] = 1;
+    mag[8..14].copy_from_slice(&[0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 1]);
+    mag[16..20].copy_from_slice(&42_u32.to_le_bytes());
+    mag[24..26].copy_from_slice(&(-100_i16).to_le_bytes());
+    tx.send_to(&mag, &to).await.unwrap();
+    mag[5] = 3; // Not allowlisted.
+    mag[6] = 0;
+    tx.send_to(&mag, &to).await.unwrap();
     tokio::time::sleep(Duration::from_millis(100)).await;
     cancel.cancel();
     task.await.unwrap().unwrap();
@@ -121,6 +132,16 @@ assignments:
         .clone()
         .unwrap();
     assert_eq!(sync.resets, 0);
+    let id = DeviceId::new("ESP-SHIN-R").unwrap();
+    let snapshot = serde_json::to_value(bansayo_engine::sources::inspection::snapshot(
+        &runtime, &id,
+    ))
+    .unwrap();
+    assert_eq!(
+        snapshot["channels"]["mag1"]["points"][0]["values"],
+        serde_json::json!([-100.0, 0.0, 0.0])
+    );
+    assert!(snapshot["channels"]["mag0"].is_null());
 }
 
 #[test]

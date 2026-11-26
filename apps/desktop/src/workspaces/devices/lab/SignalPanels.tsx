@@ -47,7 +47,7 @@ export function SaturationPanel({gyro,accel,native}:{gyro:Channel|undefined;acce
   const rangeG=2000*Math.PI/180,rangeA=16*GRAVITY;
   return <section className="lab-card"><h3>Range and saturation</h3>
     <p className="mono">Gyro peak axis: {g?.toFixed(2)??"—"} rad/s</p><p className="mono">Accel peak axis: {a?.toFixed(2)??"—"} m/s²</p>
-    {native?<><p className={(g!==null&&g>=rangeG*.95)||(a!==null&&a>=rangeA*.95)?"lab-result-warn":"subtle"}>{(g!==null&&g>=rangeG*.95)||(a!==null&&a>=rangeA*.95)?"Near configured full scale":"No near-range sample observed"}</p><p className="subtle">Assumes Mosaico firmware ranges ±16 g / ±2000°/s; decimated samples may miss clipping.</p></>:<p className="subtle">Hardware range unknown; no saturation classification.</p>}
+    {native?<><p className={(g!==null&&g>=rangeG*.95)||(a!==null&&a>=rangeA*.95)?"lab-result-warn":"subtle"}>{g===null&&a===null?"Waiting for samples":(g!==null&&g>=rangeG*.95)||(a!==null&&a>=rangeA*.95)?"Near configured full scale":"No near-range sample observed"}</p><p className="subtle">Assumes Mosaico firmware ranges ±16 g / ±2000°/s; decimated samples may miss clipping.</p></>:<p className="subtle">Hardware range unknown; no saturation classification.</p>}
   </section>;
 }
 export function BatteryHistory({device,enabled}:{device:DeviceStatus;enabled:boolean}) {
