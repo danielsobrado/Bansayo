@@ -58,3 +58,11 @@ jobs:
       - run: godot --headless --path apps/vr --xr-mode off --script tests/contract_smoke.gd
       - run: godot --headless --path apps/vr --xr-mode off --script tests/spatial_ui_smoke.gd
       - run: godot --headless --path apps/vr --xr-mode off --script tests/xr_observation_smoke.gd
+
+  firmware-host:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cmake -S firmware/common/tests -B firmware/common/tests/build
+      - run: cmake --build firmware/common/tests/build
+      - run: ctest --test-dir firmware/common/tests/build --output-on-failure

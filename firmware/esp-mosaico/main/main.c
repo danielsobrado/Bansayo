@@ -67,13 +67,13 @@ void app_main(void)
         const esp_err_t read = tracker_imu_read(sample.gyro, sample.accel);
         const int64_t now = esp_timer_get_time();
         const float dt = (now - previous) / 1000000.0f;
-        previous = now;
         const char *status = "Keep still: calibrating";
         if (read != ESP_OK) {
             ++read_errors;
             if (!calibrated) memset(&calibration, 0, sizeof(calibration));
             status = "IMU read failed";
         } else {
+            previous = now;
             ++count;
             ++sample.seq;
             sample.time_us = (uint32_t)now;

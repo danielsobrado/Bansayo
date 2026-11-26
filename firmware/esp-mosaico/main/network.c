@@ -8,7 +8,9 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "lwip/sockets.h"
+#include <arpa/inet.h>
 #include <errno.h>
+#include <unistd.h>
 #include <string.h>
 
 static const char *TAG = "tracker_net";
@@ -93,7 +95,7 @@ bool tracker_network_send(const bimu_sample_t *sample)
     bimu_encode(packet, sample);
     const int n = sendto(udp, packet, sizeof(packet), MSG_DONTWAIT,
                         (const struct sockaddr *)&destination, sizeof(destination));
-    if (n == sizeof(packet)) return true;
+    if (n == (int)sizeof(packet)) return true;
     if (errno != EAGAIN && errno != EWOULDBLOCK && errno != ENOBUFS) {
         close(udp);
         udp = -1;
