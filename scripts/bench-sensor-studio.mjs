@@ -27,7 +27,7 @@ const initial=await api('/state');
 for(const id of ids)assert.ok(initial.devices.some(d=>d.descriptor.id===id&&d.descriptor.kind!=='camera'),'Unknown or unsupported device '+id);
 assert.equal((await api('/inspection/recording')).running,false,'Stop existing recording first');
 const descriptor=initial.devices.filter(d=>ids.includes(d.descriptor.id)).map(d=>d.descriptor);
-const ws=new WebSocket(base.replace(/^http/,'ws')+'/stream?topics=frame,state,diagnostics&max_rate_hz=1000');
+const ws=new WebSocket(base.replace(/^http/,'ws')+'/stream?topics=frame,state,diagnostics');
 let active=null,hello=null,closed=false;
 ws.addEventListener('close',()=>closed=true);
 ws.addEventListener('message',event=>{

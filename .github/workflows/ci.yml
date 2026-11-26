@@ -87,3 +87,20 @@ jobs:
         with:
           name: sensor-studio-browser
           path: apps/desktop/test-results/sensor-studio
+
+  sensor-studio-engine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: cargo test -p bansayo-engine --test native_inspection
+      - run: node scripts/bench-sensor-studio-sim.mjs tmp/studio-sim-benchmark
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sensor-studio-sim-benchmark
+          path: tmp/studio-sim-benchmark

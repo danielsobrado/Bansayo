@@ -50,3 +50,5 @@ node scripts/analyze-diagnostic-recording.mjs data/diagnostics/capture-REPLACE.j
 ```
 
 The benchmark compares a warm baseline against engine recording, collects received frame FPS/intervals, stage timing windows, device drops and clock status, then finalizes its recording. Do not change the rig or run another recorder concurrently. For simulated testing use the configured SIM-T01 etc. IDs and a simulation label. The analyzer reads JSONL incrementally and checks the footer, counts and per-channel rates. It does not infer physical accuracy, CPU/GPU utilization or one-way latency. For those use external process/GPU sampling and a synchronized physical reference. Repeat each condition at least three times (one and four trackers, cameras on/off), retaining each report, revision and configuration.
+
+CI runs `node scripts/bench-sensor-studio-sim.mjs tmp/studio-sim-benchmark` with four simulated trackers, an isolated data directory and debug engine. The artifact contains the raw JSONL, benchmark and channel-integrity report. It is a reproducible smoke benchmark, not a performance target or hardware result.

@@ -12,6 +12,14 @@ const snapshot={channels:{
 test("sensor studio instrumentation and responsive layouts",async({page},info)=>{
   const errors:string[]=[];page.on("pageerror",error=>errors.push(error.message));
   await page.route("**/api/v1/devices/*/inspection",route=>route.fulfill({json:{ok:true,data:snapshot}}));
+  let engineRecording={running:false,file:null as string|null,observations:0,lost:0,bytes:0,reason:"Idle"};
+  await page.route("**/inspection/recording*",route=>{
+    if(route.request().method()==="POST"){
+      const stop=route.request().url().endsWith("/stop");
+      engineRecording={running:!stop,file:stop?"diagnostics/capture-test.jsonl":"diagnostics/capture-test.jsonl.partial",observations:stop?128:0,lost:0,bytes:stop?4096:0,reason:stop?"Stopped by operator":"Recording"};
+    }
+    return route.fulfill({json:{ok:true,data:engineRecording}});
+  });
   await page.goto("/tests/fixtures/sensor-studio.html");
   const studio=page.getByRole("region",{name:"Sensor Studio"});
   const views=studio.getByRole("navigation",{name:"Sensor Studio views"});
@@ -41,6 +49,11 @@ test("sensor studio instrumentation and responsive layouts",async({page},info)=>
   await expect(studio.getByText("Observed device events")).toBeVisible();
   await expect(studio.getByRole("cell",{name:"MOSAICO-01",exact:true}).first()).toBeVisible();
   await views.getByRole("button",{name:"Capture",exact:true}).click();
+  await studio.getByRole("checkbox",{name:"Persistent MOSAICO-01",exact:true}).check();
+  await studio.getByRole("button",{name:"Start engine recording"}).click();
+  await expect(studio.getByRole("button",{name:"Stop engine recording"})).toBeEnabled();
+  await studio.getByRole("button",{name:"Stop engine recording"}).click();
+  await expect(studio.getByText("diagnostics/capture-test.jsonl",{exact:true})).toBeVisible();
   let cursor=0;
   await page.route("**/inspection/batch*",route=>{
     const url=new URL(route.request().url());
@@ -59,6 +72,14 @@ test("sensor studio instrumentation and responsive layouts",async({page},info)=>
   const recording=page.waitForEvent("download");
   await studio.getByRole("button",{name:"Export recording"}).click();
   expect((await recording).suggestedFilename()).toBe("bansayo-full-rate.json");
+  const shelf=studio.getByRole("complementary",{name:"Pinned instruments"});
+  await shelf.getByLabel("Dock instrument").selectOption("timing");
+  await shelf.getByRole("button",{name:"Pin",exact:true}).click();
+  await expect(shelf.getByRole("button",{name:"Unpin timing"})).toBeVisible();
+  await views.getByRole("button",{name:"Overview",exact:true}).click();
+  await expect(shelf.getByRole("button",{name:"Unpin timing"})).toBeVisible();
+  await page.screenshot({path:info.outputPath("pinned-instruments.png")});
+  await shelf.getByRole("button",{name:"Unpin timing"}).click();
   await page.setViewportSize({width:390,height:844});
   await views.getByRole("button",{name:"Signals",exact:true}).click();
   await expect(studio.getByLabel("Signal time window")).toBeVisible();
