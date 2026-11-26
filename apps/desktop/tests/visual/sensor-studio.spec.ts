@@ -37,6 +37,9 @@ test("sensor studio instrumentation and responsive layouts",async({page},info)=>
   await page.evaluate(()=>document.documentElement.dataset.theme="silver");
   await views.getByRole("button",{name:"Overview",exact:true}).click();
   await page.screenshot({path:info.outputPath("overview-light.png")});
+  await views.getByRole("button",{name:"Events",exact:true}).click();
+  await expect(studio.getByText("Observed device events")).toBeVisible();
+  await expect(studio.getByRole("cell",{name:"MOSAICO-01",exact:true}).first()).toBeVisible();
   await page.setViewportSize({width:390,height:844});
   await views.getByRole("button",{name:"Signals",exact:true}).click();
   await expect(studio.getByLabel("Signal time window")).toBeVisible();

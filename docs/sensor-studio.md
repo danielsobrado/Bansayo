@@ -1,5 +1,5 @@
 # Sensor Studio
-Devices → Sensor Studio replaces the long diagnostic card dashboard with task-oriented instrumentation views, a searchable component explorer, persistent inspector/explorer visibility, compact health readouts and a common visual language based on the existing themes.
+Devices → Sensor Studio replaces the long diagnostic card dashboard with task-oriented instrumentation views, a searchable component explorer, persistent inspector/explorer visibility and widths, Bench/Wide/Focus presets, compact health readouts and a common visual language based on the existing themes.
 
 ## Views
 - Overview: selected device health, live reference orientation and the main inertial signals.
@@ -8,6 +8,7 @@ Devices → Sensor Studio replaces the long diagnostic card dashboard with task-
 - Timing: packet interval histograms, magnetic magnitude and XY/XZ/YZ scatter plots, range warnings and battery history.
 - Compare: existing independent solver and two-tracker comparison, including bounded capture reports, shared orthographic projections, root-aligned overlay and selectable segment disagreement bars.
 - Optical: selected camera preview and marker overlays. Camera calibration remains in Cameras.
+- Events: bounded browser-observed device state, assignment, calibration and clock status changes; filter and export. This is not the engine log or a synchronized sensor event stream.
 
 The 3D instrument uses existing Three.js and OrbitControls, with a generic board mesh, sensor axes, fixed reference-up arrow and normalized measured specific-force direction, paired within 40 ms of orientation. Magnetometer components remain in their reported frames until sensor-axis alignment is validated. It renders only on data, resize, theme or camera changes. A wireframe remains available if WebGL cannot initialize. Vectors are directions, not magnitude or gravity-subtracted linear acceleration. A reference assignment map is not the fused body pose.
 
@@ -16,6 +17,6 @@ The current backend is intentionally unchanged: up to 256 decimated points per c
 ## Acceptance
 Open Devices → Sensor Studio using a simulated or physical rig. Verify filtering, group expansion, channel selection, freeze/resume, cursor alignment, independent axes, fixed ranges, maximize/restore, CSV/JSON export, inspector toggles, camera selection and comparison. Check Graphite, Onyx and Silver at 1440×900, 1024×768 and a phone-sized viewport. Inspect GPU/context cleanup after repeated device and workspace changes.
 
-TODO: full-rate incremental acquisition/recording, longer timeline with event markers, saved multi-panel layouts and resize handles, calibrated magnetic ellipsoid, FFT/Allan deviation, optical residual instruments, orbitable 3D comparison camera and hardware acceptance. Do not represent these as available until implemented and validated.
+TODO: full-rate incremental acquisition/recording, longer timeline with event markers, arbitrary draggable multi-panel layouts and resize handles, calibrated magnetic ellipsoid, FFT/Allan deviation, optical residual instruments, orbitable 3D comparison camera and hardware acceptance. Do not represent these as available until implemented and validated.
 
 The independent browser test uses deterministic synthetic telemetry, not real hardware: `cd apps/desktop && npx playwright install chromium && npx playwright test -c playwright.sensor-studio.config.ts`. CI uploads screenshots for desktop dark/light and phone views. Narrow-screen overrides are scoped to Sensor Studio; the other workspaces retain their desktop minimum width. This is a UI acceptance test, not a measurement-accuracy test or pixel-baseline regression suite.
