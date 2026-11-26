@@ -4,7 +4,12 @@ use super::{
     command::{ControlError, Reply},
     solve::{Solved, solve},
 };
-use crate::{calibration::Store, config::{Config, TrackingMode}, registry::Registry, skeleton::Skeleton};
+use crate::{
+    calibration::Store,
+    config::{Config, TrackingMode},
+    registry::Registry,
+    skeleton::Skeleton,
+};
 use bansayo_contracts::*;
 use serde_json::{Value, json};
 use std::{collections::BTreeSet, sync::Arc};
@@ -63,7 +68,13 @@ impl Preview {
         let run = |mode| {
             let mut config = self.config.clone();
             config.tracking.mode = mode;
-            solve(&self.skeleton, &self.registry, &self.store, self.now, &config)
+            solve(
+                &self.skeleton,
+                &self.registry,
+                &self.store,
+                self.now,
+                &config,
+            )
         };
         json!({
             "t_us": self.now,

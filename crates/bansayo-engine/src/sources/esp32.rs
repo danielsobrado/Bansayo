@@ -447,12 +447,24 @@ mod tests {
     #[test]
     fn reference_change_rejects_retired_packets_and_downgrade() {
         let mut track = Track::default();
-        assert_eq!(track.observe(&packet(7, 100), Some(10), 100), Some((1, true)));
-        assert_eq!(track.observe(&packet(8, 200), Some(10), 200), Some((2, false)));
-        assert_eq!(track.observe(&packet(9, 300), Some(11), 300), Some((3, true)));
+        assert_eq!(
+            track.observe(&packet(7, 100), Some(10), 100),
+            Some((1, true))
+        );
+        assert_eq!(
+            track.observe(&packet(8, 200), Some(10), 200),
+            Some((2, false))
+        );
+        assert_eq!(
+            track.observe(&packet(9, 300), Some(11), 300),
+            Some((3, true))
+        );
         assert_eq!(track.observe(&packet(10, 400), Some(10), 400), None);
         assert_eq!(track.observe(&packet(10, 400), None, 400), None);
-        assert_eq!(track.observe(&packet(1, 100), Some(12), 500), Some((4, true)));
+        assert_eq!(
+            track.observe(&packet(1, 100), Some(12), 500),
+            Some((4, true))
+        );
     }
 
     #[test]
