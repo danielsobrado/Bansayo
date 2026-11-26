@@ -2,10 +2,11 @@ import { useState } from "react";
 import type { SkeletonDefinition,SkeletonPose,TrackingQuality } from "@contracts";
 import { Reasons } from "../../../ui/Reasons";
 import { rotate } from "./trace";
+import { Comparison3D } from "./Comparison3D";
 import { Icon } from "../../../ui/Icon";
 
 interface Result {pose:SkeletonPose|null;quality:TrackingQuality}
-type View = "Front"|"Side"|"Top";
+type View = "Front"|"Side"|"Top"|"3D";
 const LABELS=["IMU only","Camera only","Hybrid (cold start)"];
 const COLORS=["var(--accent)","var(--prov-inferred)","var(--state-tracking)"];
 
@@ -40,10 +41,10 @@ export function ComparisonFigures({skeleton,results,selected,onSelect}:{
   const [view,setView]=useState<View>("Front"),[overlay,setOverlay]=useState(false);
   return <section className="lab-card">
     <header><h3>Reconstruction comparison</h3><div className="studio-controls">
-      {(["Front","Side","Top"] as const).map(v=><button key={v} aria-pressed={view===v} onClick={()=>setView(v)}>{v}</button>)}
+      {(["Front","Side","Top","3D"] as const).map(v=><button key={v} aria-pressed={view===v} onClick={()=>setView(v)}>{v}</button>)}
       <button aria-pressed={overlay} onClick={()=>setOverlay(v=>!v)}><Icon name="layers"/>Overlay</button>
     </div></header>
-    <div className="studio-comparison-grid" data-overlay={overlay}>
+    {view==="3D"?<Comparison3D skeleton={skeleton} poses={results.map(r=>r.pose)} selected={selected} overlay={overlay}/>:<div className="studio-comparison-grid" data-overlay={overlay}>
       {overlay?<div className="studio-comparison-figure"><svg viewBox="0 0 280 260" className="lab-solver-figure" role="group" aria-label="Root-aligned reconstruction overlay"><Grid/>{results.map((result,i)=><Bones key={i} skeleton={skeleton} result={result} view={view} selected={selected} onSelect={onSelect} color={COLORS[i]} rootRelative/>)}</svg>
         <div className="studio-controls">{LABELS.map((label,i)=><span key={label} style={{color:COLORS[i]}}>{label}</span>)}</div><small className="subtle">Root-aligned overlay; translation differences are intentionally removed.</small>
       </div>:results.map((result,i)=><div className="studio-comparison-figure" key={i}>
@@ -51,7 +52,8 @@ export function ComparisonFigures({skeleton,results,selected,onSelect}:{
         <svg viewBox="0 0 280 260" className="lab-solver-figure" role="group" aria-label={LABELS[i]+" reconstruction"}><Grid/>{result.pose?<Bones skeleton={skeleton} result={result} view={view} selected={selected} onSelect={onSelect}/>:<text x="140" y="130" textAnchor="middle" fill="var(--ink-3)" fontSize="12">No solved pose</text>}</svg>
         <Reasons reasons={result.quality.reasons}/>
       </div>)}
-    </div>
-    <p className="subtle">Shared orthographic view and scale. Dashed segments are inferred; unavailable segments are omitted. Select a segment to inspect disagreement below.</p>
+    </div>}
+    {view==="3D"&&<div className="studio-controls">{LABELS.map((label,i)=><span key={label} style={{color:COLORS[i]}}>{label}</span>)}</div>}
+    <p className="subtle">Shared view and scale. In overlay mode, translation differences are removed. Dashed segments are inferred; unavailable segments are omitted. Select a segment to inspect disagreement below.</p>
   </section>;
 }

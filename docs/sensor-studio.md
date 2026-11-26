@@ -6,7 +6,7 @@ Devices → Sensor Studio replaces the long diagnostic card dashboard with task-
 - Signals: capability-aware component selection, individual axis visibility, synchronized time base and shared cursor, 1/2/5-second windows, history offset, auto or fixed symmetric ranges, maximized chart statistics and CSV export. Freeze the input before measuring a fixed instant. Missing cursor samples stay unavailable.
 - Calibration: existing mounting and advisory bench tools, a six-face visual stepper with progress and per-face results, separate rotation and drift tests.
 - Timing: packet interval histograms, magnetic magnitude and XY/XZ/YZ scatter plots, range warnings and battery history.
-- Compare: existing independent solver and two-tracker comparison, including bounded capture reports, shared orthographic projections, root-aligned overlay and selectable segment disagreement bars.
+- Compare: existing independent solver and two-tracker comparison, including bounded capture reports, shared orthographic projections and orbitable single-scene 3D comparison, root-aligned overlay and selectable segment disagreement bars.
 - Optical: selected camera preview and marker overlays. Camera calibration remains in Cameras.
 - Events: bounded browser-observed device state, assignment, calibration and clock status changes; filter and export. This is not the engine log or a synchronized sensor event stream.
 
