@@ -15,7 +15,7 @@ export function uniformRun(points:readonly Point[],axis:number):Uniform|null {
 }
 function transform(run:Uniform) {
   const n=2**Math.floor(Math.log2(Math.min(run.values.length,4096)));
-  if(n<32||!Number.isFinite(run.hz)||run.hz<=0)return null;
+  if(n<32||!Number.isFinite(run.hz)||run.hz<=0||!run.values.slice(-n).every(Number.isFinite))return null;
   const values=run.values.slice(-n),mean=values.reduce((s,v)=>s+v,0)/n;
   const real=new Float64Array(n),imag=new Float64Array(n);
   let gain=0,energy=0;
@@ -46,6 +46,7 @@ export function spectralAnalysis(run:Uniform) {
 }
 export function spectrum(run:Uniform){return spectralAnalysis(run).amplitude;}
 export function allan(run:Uniform) {
+  if(!Number.isFinite(run.hz)||run.hz<=0||!run.values.every(Number.isFinite))return [];
   const n=run.values.length,prefix=new Float64Array(n+1);
   for(let i=0;i<n;i++)prefix[i+1]=prefix[i]!+run.values[i]!;
   const out:{x:number;y:number}[]=[];

@@ -62,3 +62,5 @@ Capture and import reject duplicate, missing or out-of-order journal cursors unl
 Inspection snapshots expose an opaque reference generation. Guided bench captures and tracker comparison baselines are invalidated on reference changes; a prior orientation must never be compared to a new reference. Triangulation only interpolates frames with matching landmark schema, count and calibrated resolution.
 
 BMAG sequence filtering now follows every accepted sample rather than the decimated chart, extends wrapping counters, and splits diagnostic journals on a detected auxiliary reboot. BMAG v1 still lacks a firmware reference identifier; late datagrams cannot be unambiguously distinguished from every reboot. Optical preview rays require the reconstruction's calibration profile IDs and compatible schema/resolution; they remain preview observations.
+
+The CLI recovery analyzer now applies the same structural checks as the browser (device membership, channel shape, finite samples, contiguous cursor or explicit loss, reference and footer counts). A cleanly closed but truncated-at-limit or reset-terminated capture is not proof of continuous sampling.

@@ -13,6 +13,8 @@ describe("advanced instruments",()=>{
     expect(psd.density.reduce((a,b)=>a.y>b.y?a:b).x).toBe(16);
     expect(allan({values:Array(1024).fill(2),hz:128}).every(p=>p.y===0)).toBe(true);
     expect(uniformRun([],0)).toBeNull();
+    expect(spectrum({values,hz:0})).toEqual([]);
+    expect(allan({values,hz:NaN})).toEqual([]);
   });
   it("recovers a shifted anisotropic sphere and rejects planar measurements",()=>{
     const points=Array.from({length:800},(_,i)=>{const z=1-2*(i+.5)/800,r=Math.sqrt(1-z*z),phi=i*2.3999632297;return [10+3*r*Math.cos(phi)+r*Math.sin(phi),-4+2*r*Math.sin(phi),7+5*z];});
