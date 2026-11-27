@@ -33,12 +33,15 @@ export interface Timing {
   sequence_gaps: number;
 }
 export interface Snapshot {
+  reference?: number;
   channels: Partial<Record<ChannelId, Channel>>;
   timing?: Timing;
 }
 
 export function parseSnapshot(value: unknown): Snapshot | null {
   if (!isObj(value) || !isObj(value.channels)) return null;
+  const reference=value.reference;
+  if(reference!==undefined&&(!isNum(reference)||!Number.isSafeInteger(reference)||reference<0))return null;
   const channels: Snapshot["channels"] = {};
   for (const id of CHANNEL_IDS) {
     const c = value.channels[id];
@@ -55,11 +58,12 @@ export function parseSnapshot(value: unknown): Snapshot | null {
     channels[id] = { age_ms: c.age_ms, points };
   }
   const timing = value.timing;
-  if (timing == null) return { channels };
+  const identity=reference===undefined?{}:{reference};
+  if (timing == null) return { ...identity, channels };
   if (!isObj(timing) || !isNum(timing.sequence_gaps) || timing.sequence_gaps < 0 ||
       !Array.isArray(timing.intervals_ms) || timing.intervals_ms.length > 256 ||
       !timing.intervals_ms.every(v => tuple(v,2) && v.every(n => n>=0))) return null;
-  return { channels, timing: { intervals_ms: timing.intervals_ms as [number,number][], sequence_gaps: timing.sequence_gaps } };
+  return { ...identity, channels, timing: { intervals_ms: timing.intervals_ms as [number,number][], sequence_gaps: timing.sequence_gaps } };
 }
 
 /** Never show a historical observation as live after the HTTP stream stalls. */

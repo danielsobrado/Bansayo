@@ -7,12 +7,16 @@ use bansayo_contracts::{DeviceId, ObservationData, SensorObservation, SourceEven
 use serde::Serialize;
 use std::{
     collections::{BTreeMap, VecDeque},
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicU64, Ordering},
+    },
     time::Instant,
 };
 
 const CAPACITY: usize = 256;
 const SAMPLE_INTERVAL_US: u64 = 20_000;
+static NEXT_REFERENCE: AtomicU64 = AtomicU64::new(1);
 
 pub type SharedTrace = Arc<Mutex<Trace>>;
 
@@ -30,11 +34,23 @@ struct Channel {
     last_seen: Option<Instant>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Trace {
+    reference: u64,
     channels: BTreeMap<&'static str, Channel>,
     timing: Timing,
     full_rate: Stream,
+}
+
+impl Default for Trace {
+    fn default() -> Self {
+        Self {
+            reference: NEXT_REFERENCE.fetch_add(1, Ordering::Relaxed),
+            channels: BTreeMap::new(),
+            timing: Timing::default(),
+            full_rate: Stream::default(),
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -64,7 +80,7 @@ impl Timing {
                 (o.t_us - t) as f32 / 1000.0,
                 now.duration_since(arrival).as_secs_f32() * 1000.0,
             ]);
-            self.gaps = self.gaps.saturating_add(o.seq.saturating_sub(seq + 1));
+            self.gaps = self.gaps.saturating_add(o.seq.saturating_sub(seq.saturating_add(1)));
         }
         self.last = Some((o.t_us, now, o.seq));
     }
@@ -78,6 +94,7 @@ pub struct ChannelSnapshot {
 
 #[derive(Default, Serialize)]
 pub struct Snapshot {
+    reference: u64,
     channels: BTreeMap<&'static str, ChannelSnapshot>,
     timing: Option<TimingSnapshot>,
 }
@@ -87,36 +104,48 @@ impl Trace {
         if kind == "orientation" {
             self.timing.record(o);
         }
-        self.push_point(
-            kind,
-            Point {
-                t_us: o.t_us,
-                seq: o.seq,
-                device_time_us: o.device_time_us,
-                values: values.to_vec(),
-            },
-        );
+        self.push_values(kind, o.t_us, o.seq, o.device_time_us, values);
     }
 
-    fn push_point(&mut self, kind: &'static str, point: Point) {
-        self.full_rate.push(kind, &point);
+    fn push_values(
+        &mut self,
+        kind: &'static str,
+        t_us: u64,
+        seq: u64,
+        device_time_us: Option<u64>,
+        values: &[f32],
+    ) {
         let c = self.channels.entry(kind).or_default();
         c.last_seen = Some(Instant::now());
-        if let Some(last) = c.points.back() {
-            if point.t_us < last.t_us {
+        let retain = match c.points.back() {
+            Some(last) if t_us < last.t_us => {
                 c.points.clear();
-            } else if point.t_us - last.t_us < SAMPLE_INTERVAL_US {
-                return;
+                true
             }
+            Some(last) => t_us - last.t_us >= SAMPLE_INTERVAL_US,
+            None => true,
+        };
+        if !retain && !self.full_rate.active() {
+            return;
         }
-        if c.points.len() == CAPACITY {
-            c.points.pop_front();
+        let point = Point {
+            t_us,
+            seq,
+            device_time_us,
+            values: values.to_vec(),
+        };
+        self.full_rate.push(kind, &point);
+        if retain {
+            if c.points.len() == CAPACITY {
+                c.points.pop_front();
+            }
+            c.points.push_back(point);
         }
-        c.points.push_back(point);
     }
 
     fn snapshot(&self) -> Snapshot {
         Snapshot {
+            reference: self.reference,
             timing: self.timing.last.map(|_| TimingSnapshot {
                 intervals_ms: self.timing.intervals.iter().copied().collect(),
                 sequence_gaps: self.timing.gaps,
@@ -228,14 +257,12 @@ pub fn magnetic(
                 trace.channels.remove(kind);
             }
         }
-        trace.push_point(
+        trace.push_values(
             kind,
-            Point {
-                t_us,
-                seq: u64::from(seq),
-                device_time_us: Some(u64::from(device_time_us)),
-                values: values.map(f32::from).to_vec(),
-            },
+            t_us,
+            u64::from(seq),
+            Some(u64::from(device_time_us)),
+            &values.map(f32::from),
         );
     }
 }
@@ -299,6 +326,7 @@ mod tests {
             );
         }
         let result = snapshot(&runtime, &id);
+        assert_ne!(result.reference, 0);
         let points = &result.channels["orientation"].points;
         assert_eq!(points.len(), CAPACITY);
         assert_eq!(points.last().unwrap().seq, 598);

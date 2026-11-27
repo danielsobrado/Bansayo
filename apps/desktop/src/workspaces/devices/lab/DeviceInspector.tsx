@@ -76,8 +76,8 @@ export function DeviceInspector({device,devices,live,skeleton,view,focus,onFocus
               <SignalWorkspace key="overview" device={device} channels={channels} known={raw} focus="all" onFocus={onFocus} compact frozen={frozen}/></>}
             {view==="signals"&&<SignalWorkspace device={device} channels={channels} known={raw} focus={focus} onFocus={onFocus} frozen={frozen}/>}
             <div hidden={view!=="calibration"} className="studio-calibration">
-              <MountingPanel device={device} live={live} frozen={frozen} channels={channels}/>
-              <GuidedTests deviceId={device.descriptor.id} channels={channels} enabled={available&&!frozen}/>
+              <MountingPanel key={snapshot?.reference??0} device={device} live={live} frozen={frozen} channels={channels}/>
+              <GuidedTests key={snapshot?.reference??0} deviceId={device.descriptor.id} channels={channels} enabled={available&&!frozen}/>
             </div>
             {view==="timing"&&<div className="lab-grid"><TimingPanel timing={(frozen||channels.orientation)?snapshot?.timing:undefined}/><MagneticPanel a={channels.mag0} b={channels.mag1}/><SaturationPanel gyro={channels.gyro} accel={channels.accel} native={native}/><BatteryHistory device={device} enabled={available}/></div>}
           </>}

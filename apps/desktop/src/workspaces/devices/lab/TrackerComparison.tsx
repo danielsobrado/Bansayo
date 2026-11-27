@@ -28,10 +28,11 @@ function Pair({a,b,live}:{a:DeviceStatus;b:DeviceStatus;live:boolean}) {
   const channels=(r:typeof ra,d:DeviceStatus)=>freshChannels(r.snapshot?.channels??{},performance.now()-r.receivedAt,live&&d.state!=="disconnected"&&d.state!=="unavailable");
   const ca=channels(ra,a),cb=channels(rb,b);
   const pairs=nearestPairs(ca.orientation?.points??[],cb.orientation?.points??[]);
-  const [baseline,setBaseline]=useState<typeof pairs[number]|null>(null);
+  const [baseline,setBaseline]=useState<{pair:typeof pairs[number];reference:string}|null>(null);
   const [generation,setGeneration]=useState(0);
   const newest=pairs.at(-1);
-  const start=baseline;
+  const reference=JSON.stringify([ra.snapshot?.reference??null,rb.snapshot?.reference??null,a.time_sync?.resets??null,b.time_sync?.resets??null]);
+  const start=baseline?.reference===reference?baseline.pair:null;
   const series=start?pairs.filter(([p,q])=>p.t_us>=start[0].t_us&&q.t_us>=start[1].t_us).flatMap(([p,q])=>{
     const av=quaternionAngle(start[0].values,p.values),bv=quaternionAngle(start[1].values,q.values);
     return av===null||bv===null?[]:[{t:p.t_us,delta:Math.abs(av-bv),skew:Math.abs(p.t_us-q.t_us)/1000}];
@@ -40,13 +41,13 @@ function Pair({a,b,live}:{a:DeviceStatus;b:DeviceStatus;live:boolean}) {
   return <>
     <div className="lab-grid"><div><h3>{a.descriptor.id}</h3><OrientationView q={ca.orientation?.points.at(-1)?.values}/></div><div><h3>{b.descriptor.id}</h3><OrientationView q={cb.orientation?.points.at(-1)?.values}/></div></div>
     <section className="lab-card"><h3>Relative rotation magnitude disagreement</h3>
-      <button disabled={!newest||!live} onClick={()=>{if(newest){setBaseline(newest);setGeneration(n=>n+1);}}}>Capture common baseline</button>
+      <button disabled={!newest||!live} onClick={()=>{if(newest){setBaseline({pair:newest,reference});setGeneration(n=>n+1);}}}>Capture common baseline</button>
       {baseline&&<button onClick={()=>{setBaseline(null);setGeneration(n=>n+1);}}>Clear baseline</button>}
       {(ra.error||rb.error)&&<p role="alert" className="error">{ra.error||rb.error}</p>}
       {last?<><p className="mono">{last.delta.toFixed(2)}° · skew {last.skew.toFixed(1)} ms · {series.length} paired samples</p>
         <svg viewBox="0 0 320 100" className="lab-chart" role="img" aria-label="Synchronized magnitude disagreement"><polyline points={series.map(p=>`${(p.t-min)/span*320},${95-p.delta/max*85}`).join(" ")} fill="none" stroke="var(--accent)" strokeWidth="1.5"/></svg>
-        <p className="subtle">Plot scale 0–{max.toFixed(1)}° · {(span/1e6).toFixed(2)} s. This does not measure axis alignment or absolute orientation accuracy.</p></>:<p>{baseline?"Waiting for overlapping fresh orientation measurements.":"Capture a common baseline while both trackers are still."}</p>}
+        <p className="subtle">Plot scale 0–{max.toFixed(1)}° · {(span/1e6).toFixed(2)} s. This does not measure axis alignment or absolute orientation accuracy.</p></>:<p>{baseline&&!start?"Reference changed; capture a new common baseline.":start?"Waiting for overlapping fresh orientation measurements.":"Capture a common baseline while both trackers are still."}</p>}
     </section>
-    <CaptureHistory key={generation} label={a.descriptor.id+" vs "+b.descriptor.id} enabled={live&&baseline!==null} point={last?{t_us:last.t,value:last.delta,skew_ms:last.skew}:null}/>
+    <CaptureHistory key={generation+":"+reference} label={a.descriptor.id+" vs "+b.descriptor.id} enabled={live&&start!==null} point={last?{t_us:last.t,value:last.delta,skew_ms:last.skew}:null}/>
   </>;
 }

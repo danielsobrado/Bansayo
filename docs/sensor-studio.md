@@ -58,3 +58,5 @@ Completed persistent JSONL journals can be opened in Capture for timeline, FFT, 
 The recording controls suspend status polling during commands to prevent a stale GET response from overwriting a start/stop response. Stopping is asynchronous: the final filename is published only after the footer, sync and rename complete. The browser test intercepts both the recording resource and its stop subresource.
 
 Capture and import reject duplicate, missing or out-of-order journal cursors unless the missing range is explicitly reported by the server as lost. The browser rejects reference/lease changes rather than merging incompatible samples. Captures and imports with reported losses remain useful for diagnosis but are not evidence of uninterrupted hardware sampling.
+
+Inspection snapshots expose an opaque reference generation. Guided bench captures and tracker comparison baselines are invalidated on reference changes; a prior orientation must never be compared to a new reference. Triangulation only interpolates frames with matching landmark schema, count and calibrated resolution.

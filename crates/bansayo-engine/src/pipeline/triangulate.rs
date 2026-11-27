@@ -274,8 +274,20 @@ pub fn triangulate_with_noise_floor(
     let aligned: Vec<_> = views
         .iter()
         .filter_map(|(id, camera, frames, refs)| {
-            let after = frames.iter().find(|f| f.frame_meta.t_us >= t_us)?;
-            let before = frames.iter().rev().find(|f| f.frame_meta.t_us <= t_us);
+            let compatible = |f: &&&PoseLandmarks2D| {
+                f.schema_id == schema
+                    && f.points.len() == len
+                    && f.frame_meta.image_size_px == camera.k.image_size_px
+            };
+            let after = frames
+                .iter()
+                .filter(compatible)
+                .find(|f| f.frame_meta.t_us >= t_us)?;
+            let before = frames
+                .iter()
+                .rev()
+                .filter(compatible)
+                .find(|f| f.frame_meta.t_us <= t_us);
             let points = match before {
                 Some(b) if b.frame_meta.t_us == t_us => b.points.clone(),
                 Some(b)

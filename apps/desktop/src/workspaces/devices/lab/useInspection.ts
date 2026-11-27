@@ -3,6 +3,7 @@ import { request, seg } from "../../../engine/http";
 import { parseSnapshot, POLL_MS, type Snapshot } from "./trace";
 
 interface Reading {
+  id?: string;
   snapshot: Snapshot | null;
   error: string | null;
   receivedAt: number;
@@ -31,14 +32,14 @@ export function useInspection(id: string, enabled: boolean, frozen: boolean) {
         if (controller.signal.aborted) return;
         if (res.ok) {
           const snapshot = parseSnapshot(res.data);
-          setReading(snapshot ? { snapshot, error: null, receivedAt: requestedAt }
-            : { ...EMPTY, error: "Invalid diagnostic data" });
-        } else setReading({ ...EMPTY, error: res.error.message });
+          setReading(snapshot ? { id, snapshot, error: null, receivedAt: requestedAt }
+            : { ...EMPTY, id, error: "Invalid diagnostic data" });
+        } else setReading({ ...EMPTY, id, error: res.error.message });
       }
       timer = window.setTimeout(poll, POLL_MS);
     }
     void poll();
     return () => { controller.abort(); window.clearTimeout(timer); };
   }, [id, enabled, frozen]);
-  return enabled ? reading : EMPTY;
+  return enabled && reading.id===id ? reading : EMPTY;
 }

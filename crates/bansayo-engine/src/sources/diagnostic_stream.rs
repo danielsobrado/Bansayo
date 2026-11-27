@@ -41,6 +41,14 @@ impl Stream {
         self.lease.is_none_or(|lease| lease.elapsed() >= LEASE)
     }
 
+    pub fn active(&mut self) -> bool {
+        if self.expired() {
+            self.entries.clear();
+            return false;
+        }
+        true
+    }
+
     pub fn push(&mut self, channel: &'static str, point: &Point) {
         if self.expired() {
             self.entries.clear();
@@ -77,7 +85,7 @@ impl Stream {
         let entries: Vec<_> = self
             .entries
             .iter()
-            .filter(|e| e.cursor > after)
+            .skip(after.saturating_add(1).saturating_sub(oldest) as usize)
             .take(BATCH_LIMIT)
             .cloned()
             .collect();

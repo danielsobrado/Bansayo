@@ -5,6 +5,8 @@ describe("device inspection", () => {
   it("rejects malformed measurements", () => {
     expect(parseSnapshot({channels:{gyro:{age_ms:0,points:[{t_us:1,seq:1,device_time_us:null,values:[1,2]}]}}})).toBeNull();
     expect(parseSnapshot({channels:{}})).toEqual({channels:{}});
+    expect(parseSnapshot({reference:4,channels:{}})?.reference).toBe(4);
+    expect(parseSnapshot({reference:-1,channels:{}})).toBeNull();
   });
   it("validates full-rate timing metadata", () => {
     expect(parseSnapshot({channels:{},timing:{intervals_ms:[[5,6]],sequence_gaps:2}})?.timing?.sequence_gaps).toBe(2);
