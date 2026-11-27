@@ -21,7 +21,9 @@ export class JournalReader {
     }
     if(v.type==="footer"){
       if(v.observations!==this.result.samples.length||v.lost!==this.result.lost||typeof v.reason!=="string")throw Error("Journal footer counts do not match.");
-      this.footer=true;this.result.reason="Imported: "+v.reason;return;
+      this.footer=true;this.result.reason="Imported: "+v.reason;
+      if(v.reason==="Stream reference reset")this.result.resets++;
+      return;
     }
     const b=parseBatch(v.batch);
     if(v.type!=="batch"||typeof v.device!=="string"||!this.devices.has(v.device)||!b||b.reset)throw Error("Invalid journal batch.");

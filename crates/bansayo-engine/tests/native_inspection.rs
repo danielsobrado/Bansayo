@@ -123,6 +123,7 @@ assignments:
     }));
     wait_for(addr, |state| mounting_state(state, "valid")).await;
     let trace = ok(addr, "GET", "devices/MOSAICO/inspection", Value::Null).await;
+    assert!(trace["reference"].as_u64().unwrap() > 0);
     assert!(
         trace["channels"]["gyro"]["points"]
             .as_array()
@@ -202,6 +203,8 @@ assignments:
     wait_for(addr, |state| mounting_state(state, "stale")).await;
     let reset = ok(addr, "GET", &path, Value::Null).await;
     assert_eq!(reset["reset"], true);
+    let new_trace = ok(addr, "GET", "devices/MOSAICO/inspection", Value::Null).await;
+    assert_ne!(new_trace["reference"], trace["reference"]);
     let preview = ok(
         addr,
         "POST",

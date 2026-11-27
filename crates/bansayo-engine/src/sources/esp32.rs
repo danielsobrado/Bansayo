@@ -54,8 +54,8 @@ pub struct Packet {
 }
 
 pub fn key(mac: &[u8; 6], sensor: u8) -> String {
-    let hex: Vec<String> = mac.iter().map(|b| format!("{b:02X}")).collect();
-    format!("{}/{sensor}", hex.join(":"))
+    let [a, b, c, d, e, f] = mac;
+    format!("{a:02X}:{b:02X}:{c:02X}:{d:02X}:{e:02X}:{f:02X}/{sensor}")
 }
 
 fn f32s<const N: usize>(b: &[u8], at: usize) -> [f32; N] {
@@ -304,7 +304,7 @@ impl Source for Esp32Source {
             };
             let k = key(&p.mac, p.sensor);
             let Some(id) = by_key.get(k.as_str()).copied() else {
-                if ignored.insert(k.clone()) {
+                if ignored.len() < 128 && ignored.insert(k.clone()) {
                     tracing::info!(source=%self.spec.id, tracker=%k, "ESP32 tracker not configured; ignored");
                 }
                 continue;

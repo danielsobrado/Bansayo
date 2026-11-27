@@ -1,6 +1,6 @@
 import { useEffect,useRef,useState } from "react";
 import { request,seg } from "../../../engine/http";
-import { BATCH_MS,MAX_ROWS,parseBatch,continuesBatch,type Capture,type Sample } from "./captureTypes";
+import { BATCH_MS,MAX_ROWS,MAX_DEVICES,parseBatch,continuesBatch,type Capture,type Sample } from "./captureTypes";
 
 export function useCapture(live:boolean) {
   const [running,setRunning]=useState(false),[elapsed,setElapsed]=useState(0),[revision,setRevision]=useState(0);
@@ -12,13 +12,14 @@ export function useCapture(live:boolean) {
   useEffect(()=>{if(!live)stopRef.current("Engine left live mode");},[live]);
   useEffect(()=>()=>{controller.current?.abort();},[]);
   function start(ids:string[],seconds:number) {
-    if(!live||running||!ids.length||(controller.current&&!controller.current.signal.aborted))return;
+    if(!live||running||!ids.length||ids.length>MAX_DEVICES||new Set(ids).size!==ids.length||(controller.current&&!controller.current.signal.aborted))return;
     const ctl=new AbortController();controller.current=ctl;
     const capture:Capture={samples:[],markers:[],lost:0,resets:0,started:new Date().toISOString(),reason:"Capturing"};
     data.current=capture;latest.current=0;setRunning(true);setElapsed(0);setRevision(v=>v+1);
     const started=performance.now();
     const cursors=new Map<string,{epoch:number;next:number}>();
     let timer=0;
+    ctl.signal.addEventListener("abort",()=>window.clearTimeout(timer),{once:true});
     const finish=(reason:string)=>{
       if(ctl.signal.aborted)return;
       ctl.abort();window.clearTimeout(timer);capture.reason=reason;setRunning(false);setRevision(v=>v+1);

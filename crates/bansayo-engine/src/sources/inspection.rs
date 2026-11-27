@@ -32,6 +32,7 @@ pub struct Point {
 struct Channel {
     points: VecDeque<Point>,
     last_seen: Option<Instant>,
+    magnetic_sequence: Option<(u32, u32, u64, u64)>,
 }
 
 #[derive(Debug)]
@@ -80,7 +81,9 @@ impl Timing {
                 (o.t_us - t) as f32 / 1000.0,
                 now.duration_since(arrival).as_secs_f32() * 1000.0,
             ]);
-            self.gaps = self.gaps.saturating_add(o.seq.saturating_sub(seq.saturating_add(1)));
+            self.gaps = self
+                .gaps
+                .saturating_add(o.seq.saturating_sub(seq.saturating_add(1)));
         }
         self.last = Some((o.t_us, now, o.seq));
     }
@@ -246,21 +249,28 @@ pub fn magnetic(
             .clone()
     };
     if let Ok(mut trace) = trace.lock() {
-        if let Some(last) = trace.channels.get(kind).and_then(|c| c.points.back()) {
-            let delta = seq.wrapping_sub(last.seq as u32);
+        let previous = trace.channels.get(kind).and_then(|c| c.magnetic_sequence);
+        let mut logical = u64::from(seq);
+        if let Some((last_seq, last_clock, last_t, last_logical)) = previous {
+            let delta = seq.wrapping_sub(last_seq);
             if delta == 0 || delta >= (1 << 31) {
-                // A reboot may restart the auxiliary stream. Reject reordered packets
-                // unless the channel has been silent long enough to be a new stream.
-                if t_us.saturating_sub(last.t_us) < 500_000 {
+                if t_us.saturating_sub(last_t) < 500_000 || device_time_us >= last_clock {
                     return;
                 }
+                // BMAG has no reference identifier. Conservatively split the capture.
                 trace.channels.remove(kind);
+                trace.full_rate = Stream::default();
+                trace.reference = NEXT_REFERENCE.fetch_add(1, Ordering::Relaxed);
+            } else {
+                logical = last_logical.saturating_add(u64::from(delta));
             }
         }
+        trace.channels.entry(kind).or_default().magnetic_sequence =
+            Some((seq, device_time_us, t_us, logical));
         trace.push_values(
             kind,
             t_us,
-            u64::from(seq),
+            logical,
             Some(u64::from(device_time_us)),
             &values.map(f32::from),
         );
@@ -348,5 +358,22 @@ mod tests {
             },
         );
         assert!(snapshot(&runtime, &id).channels.is_empty());
+        record(&runtime, &SourceEvent::Observation { observation });
+        assert_ne!(snapshot(&runtime, &id).reference, result.reference);
+    }
+
+    #[test]
+    fn magnetic_sequence_tracks_accepted_not_decimated_samples() {
+        let runtime = RuntimeMap::default();
+        let id = DeviceId::new("mag-test").unwrap();
+        let start = batch(&runtime, &id, None, 0);
+        for (seq, t) in [(1, 100_000), (2, 105_000), (2, 110_000), (3, 120_000)] {
+            magnetic(&runtime, &id, "mag0", t, seq, t as u32, [1, 2, 3]);
+        }
+        let result = batch(&runtime, &id, Some(start.epoch), start.next);
+        assert_eq!(result.entries.len(), 3);
+        assert_eq!(snapshot(&runtime, &id).channels["mag0"].points.len(), 2);
+        magnetic(&runtime, &id, "mag0", 1_000_000, 1, 100, [1, 2, 3]);
+        assert!(batch(&runtime, &id, Some(start.epoch), result.next).reset);
     }
 }
