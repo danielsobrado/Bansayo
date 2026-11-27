@@ -1,6 +1,6 @@
 import { useEffect,useRef,useState } from "react";
 import { request,seg } from "../../../engine/http";
-import { BATCH_MS,MAX_ROWS,parseBatch,type Capture,type Marker,type Sample } from "./captureTypes";
+import { BATCH_MS,MAX_ROWS,parseBatch,continuesBatch,type Capture,type Sample } from "./captureTypes";
 
 export function useCapture(live:boolean) {
   const [running,setRunning]=useState(false),[elapsed,setElapsed]=useState(0),[revision,setRevision]=useState(0);
@@ -36,7 +36,12 @@ export function useCapture(live:boolean) {
       for(const {id,batch,error} of results){
         if(!batch){finish(id+": "+error);return;}
         const previous=cursors.get(id);
-        if(previous&&batch.reset){capture.resets++;capture.markers.push({t_us:latest.current,label:"Stream reference / lease reset",device:id});finish("Stream reset; restart capture for a continuous time base");return;}
+        if(previous&&!continuesBatch(previous,batch)){
+          if(batch.reset||batch.epoch!==previous.epoch){capture.resets++;capture.markers.push({t_us:latest.current,label:"Stream reference / lease reset",device:id});finish("Stream reset; restart capture for a continuous time base");}
+          else finish(id+": inconsistent journal cursor; recording stopped");
+          return;
+        }
+        if(!previous&&(batch.reset||batch.entries.length||batch.lost)){finish(id+": invalid initial journal cursor");return;}
         if(batch.lost){capture.lost+=batch.lost;capture.markers.push({t_us:batch.entries[0]?.point.t_us??latest.current,label:`Journal overrun: ${batch.lost} observations`,device:id});}
         cursors.set(id,{epoch:batch.epoch,next:batch.next});
         for(const entry of batch.entries){

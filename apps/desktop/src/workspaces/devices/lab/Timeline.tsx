@@ -26,7 +26,8 @@ export function Timeline({capture}:{capture:Capture}) {
   const bounds={min:Number.isFinite(indexed.min)?indexed.min:0,max:indexed.max};
   const duration=(bounds.max-bounds.min)/1e6;
   const span=Math.max(.001,Math.min(windowSec,duration));
-  const end=bounds.max-Math.min(offset,Math.max(0,duration-span))*1e6,start=end-span*1e6;
+  const effectiveOffset=Math.min(offset,Math.max(0,duration-span));
+  const end=bounds.max-effectiveOffset*1e6,start=Math.max(bounds.min,end-span*1e6);
   const buckets=Array.from({length:BINS},()=>({min:Infinity,max:-Infinity}));
   let limit=.001;
   for(const p of points){const t=p.point.t_us,v=p.point.values[a]!;if(t<start||t>end)continue;const bin=buckets[Math.min(BINS-1,Math.floor((t-start)/(span*1e6)*BINS))]!;bin.min=Math.min(bin.min,v);bin.max=Math.max(bin.max,v);limit=Math.max(limit,Math.abs(v));}
@@ -35,10 +36,10 @@ export function Timeline({capture}:{capture:Capture}) {
     <div className="studio-subbar"><label>Device <select value={id} onChange={e=>setDevice(e.target.value)}>{[...groups.keys()].map(d=><option key={d}>{d}</option>)}</select></label><label>Channel <select value={selected} onChange={e=>{setChannel(e.target.value as ChannelId);setAxis(0);}}>{[...(channels?.keys()??[])].map(c=><option key={c} value={c}>{CHANNELS[c].title}</option>)}</select></label><label>Axis <select value={a} onChange={e=>setAxis(Number(e.target.value))}>{CHANNELS[selected].axes.map((v,i)=><option key={v} value={i}>{v}</option>)}</select></label><label>Window <select value={windowSec} onChange={e=>setWindowSec(Number(e.target.value))}>{[5,30,60,300,600,1800,3600].map(v=><option key={v} value={v}>{v} s</option>)}</select></label></div>
     <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="studio-capture-chart" role="img" aria-label="Recorded signal and event markers">
       {[.1,.3,.5,.7,.9].map(v=><line key={v} x1="0" x2={WIDTH} y1={v*HEIGHT} y2={v*HEIGHT} stroke="var(--line)"/>)}
-      <path d={buckets.map((b,i)=>Number.isFinite(b.min)?`M${i/BINS*WIDTH},${y(b.min)}V${y(b.max)}`:"").join(" ")} stroke={AXIS_CSS[a]} fill="none" strokeWidth="1.4"/>
+      <path d={buckets.map((b,i)=>Number.isFinite(b.min)?`M${i/BINS*WIDTH},${y(b.min)}V${Math.abs(y(b.max)-y(b.min))<.5?y(b.max)+.5:y(b.max)}`:"").join(" ")} stroke={AXIS_CSS[a]} fill="none" strokeWidth="1.4"/>
       {capture.markers.filter(m=>m.t_us>=start&&m.t_us<=end).map((m,i)=>{const x=(m.t_us-start)/(span*1e6)*WIDTH;return <g key={i}><title>{m.label}</title><line x1={x} x2={x} y1="0" y2={HEIGHT} stroke="var(--state-degraded)" strokeDasharray="4 3"/><circle cx={x} cy="8" r="4" fill="var(--state-degraded)"/></g>;})}
     </svg>
-    <div className="studio-timeline"><span className="mono">±{limit.toPrecision(3)} {CHANNELS[selected].unit}</span><input aria-label="Recorded timeline position" type="range" min={0} max={Math.max(0,duration-span)} step=".1" value={Math.max(0,duration-span-offset)} onChange={e=>setOffset(Math.max(0,duration-span-Number(e.target.value)))}/><button onClick={()=>setOffset(0)}>Latest</button></div>
+    <div className="studio-timeline"><span className="mono">±{limit.toPrecision(3)} {CHANNELS[selected].unit}</span><input aria-label="Recorded timeline position" type="range" min={0} max={Math.max(0,duration-span)} step=".1" value={Math.max(0,duration-span-effectiveOffset)} onChange={e=>setOffset(Math.max(0,duration-span-Number(e.target.value)))}/><button onClick={()=>setOffset(0)}>Latest</button></div>
     <small className="mono subtle">{((start-bounds.min)/1e6).toFixed(2)}–{((end-bounds.min)/1e6).toFixed(2)} s / {duration.toFixed(2)} s · blank bins have no samples</small>
     <div className="studio-marker-list">{capture.markers.map((m,i)=><button key={i} onClick={()=>setOffset(Math.max(0,(bounds.max-m.t_us)/1e6-span/2))}>{((m.t_us-bounds.min)/1e6).toFixed(2)} s · {m.device?m.device+": ":""}{m.label}</button>)}</div>
   </section>;

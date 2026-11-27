@@ -1,7 +1,7 @@
 import {describe,it,expect} from "vitest";
 import {spectrum,allan,uniformRun,spectralAnalysis} from "./analysisMath";
 import {fitMagnetic} from "./magneticFit";
-import {parseBatch} from "./captureTypes";
+import {parseBatch,continuesBatch} from "./captureTypes";
 describe("advanced instruments",()=>{
   it("identifies a known sinusoid and constant Allan deviation",()=>{
     const values=Array.from({length:1024},(_,i)=>2*Math.sin(2*Math.PI*16*i/128));
@@ -25,5 +25,11 @@ describe("advanced instruments",()=>{
   it("rejects invalid incremental responses",()=>{
     expect(parseBatch({epoch:1,next:0,lost:0,reset:false,entries:[]})).not.toBeNull();
     expect(parseBatch({epoch:0,next:0,lost:0,reset:false,entries:[]})).toBeNull();
+    const entry=(cursor:number)=>({cursor,channel:"gyro",point:{t_us:100,seq:cursor,device_time_us:null,values:[0,0,1]}});
+    expect(parseBatch({epoch:1,next:3,lost:0,reset:false,entries:[entry(1),entry(3)]})).toBeNull();
+    expect(parseBatch({epoch:1,next:3,lost:0,reset:false,entries:[entry(1)]})).toBeNull();
+    const batch=parseBatch({epoch:1,next:3,lost:1,reset:false,entries:[entry(3)]})!;
+    expect(continuesBatch({epoch:1,next:1},batch)).toBe(true);
+    expect(continuesBatch({epoch:1,next:0},batch)).toBe(false);
   });
 });

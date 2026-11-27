@@ -1,4 +1,4 @@
-import {MAX_ROWS,parseBatch,type Capture} from "./captureTypes";
+import {MAX_ROWS,parseBatch,continuesBatch,type Capture} from "./captureTypes";
 const MAX_FILE=256*1024*1024;
 const MAX_LINE=8*1024*1024;
 
@@ -15,7 +15,9 @@ export class JournalReader {
     if(!v||typeof v!=="object"||this.footer)throw Error("Unexpected journal record.");
     if(!this.header){
       if(v.type!=="header"||v.format!=="bansayo-diagnostic-journal-v1"||typeof v.started_utc!=="string"||!Array.isArray(v.devices)||v.devices.length<1||v.devices.length>4||!v.devices.every((x:unknown)=>typeof x==="string"))throw Error("Unsupported journal header.");
-      this.header=true;this.result.started=v.started_utc;this.devices=new Set(v.devices);return;
+      this.devices=new Set(v.devices);
+      if(this.devices.size!==v.devices.length)throw Error("Duplicate journal devices.");
+      this.header=true;this.result.started=v.started_utc;return;
     }
     if(v.type==="footer"){
       if(v.observations!==this.result.samples.length||v.lost!==this.result.lost||typeof v.reason!=="string")throw Error("Journal footer counts do not match.");
@@ -24,7 +26,7 @@ export class JournalReader {
     const b=parseBatch(v.batch);
     if(v.type!=="batch"||typeof v.device!=="string"||!this.devices.has(v.device)||!b||b.reset)throw Error("Invalid journal batch.");
     const prev=this.cursors.get(v.device);
-    if(prev&&(prev.epoch!==b.epoch||b.next<prev.next||b.entries.some(e=>e.cursor<=prev.next)))throw Error("Journal cursor or reference is inconsistent.");
+    if(prev&&!continuesBatch(prev,b))throw Error("Journal cursor or reference is inconsistent.");
     if(this.result.samples.length+b.entries.length>MAX_ROWS)throw Error("Recording exceeds browser analysis limit. Use the streaming command-line analyzer.");
     this.cursors.set(v.device,{epoch:b.epoch,next:b.next});
     this.result.lost+=b.lost;

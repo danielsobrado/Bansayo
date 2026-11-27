@@ -14,8 +14,18 @@ export function parseBatch(value:unknown):Batch|null {
   if(!integer(b.epoch)||b.epoch===0||!integer(b.next)||!integer(b.lost)||typeof b.reset!=="boolean"||!Array.isArray(b.entries)||b.entries.length>4096)return null;
   let previous=-1;
   for(const e of b.entries){
-    if(!e||!integer(e.cursor)||e.cursor<=previous||e.cursor>b.next||!CHANNEL_IDS.includes(e.channel)||!e.point||!integer(e.point.t_us)||!integer(e.point.seq)||!(e.point.device_time_us===null||integer(e.point.device_time_us))||!Array.isArray(e.point.values)||e.point.values.length!==CHANNELS[e.channel].axes.length||!e.point.values.every(Number.isFinite))return null;
+    if(!e||!integer(e.cursor)||e.cursor===0||(previous>=0&&e.cursor!==previous+1)||e.cursor>b.next||!CHANNEL_IDS.includes(e.channel)||!e.point||!integer(e.point.t_us)||!integer(e.point.seq)||!(e.point.device_time_us===null||integer(e.point.device_time_us))||!Array.isArray(e.point.values)||e.point.values.length!==CHANNELS[e.channel].axes.length||!e.point.values.every(Number.isFinite))return null;
     previous=e.cursor;
   }
+  if(b.entries.length&&previous!==b.next)return null;
   return b;
+}
+
+export interface JournalCursor {epoch:number;next:number}
+/** Server batches contain contiguous cursors; only an explicitly reported overrun can skip entries. */
+export function continuesBatch(previous:JournalCursor,batch:Batch):boolean {
+  if(batch.reset||batch.epoch!==previous.epoch)return false;
+  const expected=previous.next+batch.lost+batch.entries.length;
+  return Number.isSafeInteger(expected)&&batch.next===expected&&
+    (batch.entries.length===0||batch.entries[0]!.cursor===previous.next+batch.lost+1);
 }
