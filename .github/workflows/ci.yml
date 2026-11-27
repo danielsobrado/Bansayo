@@ -68,7 +68,7 @@ jobs:
       - run: ctest --test-dir firmware/common/tests/build --output-on-failure
 
   sensor-studio-browser:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: apps/desktop
