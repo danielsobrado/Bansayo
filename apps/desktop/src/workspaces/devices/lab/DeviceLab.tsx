@@ -46,7 +46,7 @@ export function DeviceLab({ devices, live, skeleton }: {
     <div className="studio-body" data-explorer={layout.explorer}>
       {layout.explorer && <DeviceExplorer devices={devices} selected={device?.descriptor.id ?? ""} focus={focus} view={view} onSelect={select}/>}
       <section className="studio-workspace" aria-label="Sensor workspace">
-        <DockShelf devices={devices} live={live}><div hidden={view!=="capture"}><CaptureStudio devices={devices} live={live}/></div>
+        <DockShelf devices={devices} live={live}><div hidden={view!=="capture"}><CaptureStudio devices={devices} live={live} active={view==="capture"}/></div>
         {view==="capture"?null:view==="events"?<StudioEvents events={events}/>:!device ? <div className="studio-empty"><Icon name="usb" size={28}/><h3>No configured devices</h3><p>Connect or configure a sensor source to begin inspection.</p></div> :
           view === "compare" ? <><div className="studio-subbar"><button aria-pressed={comparison==="solver"} onClick={()=>setComparison("solver")}>Solver comparison</button><button aria-pressed={comparison==="tracker"} onClick={()=>setComparison("tracker")}>Tracker comparison</button></div>
           {comparison==="solver"?<SolverBench devices={devices} live={live}/>:<TrackerComparison devices={devices} live={live}/>}</> :

@@ -1,4 +1,5 @@
 import { useRef,useState } from "react";
+import { lowerTimeBound } from "./timelineMath";
 import { CHANNELS,type ChannelId } from "./trace";
 import type { Capture,Sample } from "./captureTypes";
 import { AXIS_CSS } from "./studioConfig";
@@ -7,14 +8,16 @@ const WIDTH=720,HEIGHT=180,BINS=600;
 export function Timeline({capture}:{capture:Capture}) {
   const [device,setDevice]=useState(""),[channel,setChannel]=useState<ChannelId>("gyro"),[axis,setAxis]=useState(0);
   const [windowSec,setWindowSec]=useState(30),[offset,setOffset]=useState(0);
-  const index=useRef<{capture:Capture;count:number;groups:Map<string,Map<ChannelId,Sample[]>>;min:number;max:number}|null>(null);
-  if(!index.current||index.current.capture!==capture)index.current={capture,count:0,groups:new Map(),min:Infinity,max:0};
+  const index=useRef<{capture:Capture;count:number;groups:Map<string,Map<ChannelId,Sample[]>>;unordered:Set<Sample[]>;min:number;max:number}|null>(null);
+  if(!index.current||index.current.capture!==capture)index.current={capture,count:0,groups:new Map(),unordered:new Set(),min:Infinity,max:0};
   const indexed=index.current;
   const groups=indexed.groups;
   for(let i=indexed.count;i<capture.samples.length;i++){
     const sample=capture.samples[i]!;
     let channels=groups.get(sample.device);if(!channels){channels=new Map();groups.set(sample.device,channels);}
-    let points=channels.get(sample.channel);if(!points){points=[];channels.set(sample.channel,points);}points.push(sample);
+    let points=channels.get(sample.channel);if(!points){points=[];channels.set(sample.channel,points);}
+    if(points.length&&sample.point.t_us<points.at(-1)!.point.t_us)indexed.unordered.add(points);
+    points.push(sample);
     indexed.min=Math.min(indexed.min,sample.point.t_us);indexed.max=Math.max(indexed.max,sample.point.t_us);
   }
   indexed.count=capture.samples.length;
@@ -30,7 +33,9 @@ export function Timeline({capture}:{capture:Capture}) {
   const end=bounds.max-effectiveOffset*1e6,start=Math.max(bounds.min,end-span*1e6);
   const buckets=Array.from({length:BINS},()=>({min:Infinity,max:-Infinity}));
   let limit=.001;
-  for(const p of points){const t=p.point.t_us,v=p.point.values[a]!;if(t<start||t>end)continue;const bin=buckets[Math.min(BINS-1,Math.floor((t-start)/(span*1e6)*BINS))]!;bin.min=Math.min(bin.min,v);bin.max=Math.max(bin.max,v);limit=Math.max(limit,Math.abs(v));}
+  const ordered=!indexed.unordered.has(points);
+  const first=ordered?lowerTimeBound(points,start):0;
+  for(let i=first;i<points.length;i++){const p=points[i]!,t=p.point.t_us,v=p.point.values[a]!;if(ordered&&t>end)break;if(t<start||t>end)continue;const bin=buckets[Math.min(BINS-1,Math.floor((t-start)/(span*1e6)*BINS))]!;bin.min=Math.min(bin.min,v);bin.max=Math.max(bin.max,v);limit=Math.max(limit,Math.abs(v));}
   const y=(v:number)=>HEIGHT/2-v/limit*(HEIGHT/2-10);
   return <section className="lab-card"><header><h3>Recorded session timeline</h3><small className="subtle">Min/max envelope · shared session timestamps</small></header>
     <div className="studio-subbar"><label>Device <select value={id} onChange={e=>setDevice(e.target.value)}>{[...groups.keys()].map(d=><option key={d}>{d}</option>)}</select></label><label>Channel <select value={selected} onChange={e=>{setChannel(e.target.value as ChannelId);setAxis(0);}}>{[...(channels?.keys()??[])].map(c=><option key={c} value={c}>{CHANNELS[c].title}</option>)}</select></label><label>Axis <select value={a} onChange={e=>setAxis(Number(e.target.value))}>{CHANNELS[selected].axes.map((v,i)=><option key={v} value={i}>{v}</option>)}</select></label><label>Window <select value={windowSec} onChange={e=>setWindowSec(Number(e.target.value))}>{[5,30,60,300,600,1800,3600].map(v=><option key={v} value={v}>{v} s</option>)}</select></label></div>

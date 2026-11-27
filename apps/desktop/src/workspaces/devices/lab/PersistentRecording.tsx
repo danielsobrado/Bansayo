@@ -5,7 +5,7 @@ import {request} from "../../../engine/http";
 interface Status {running:boolean;file:string|null;observations:number;lost:number;bytes:number;reason:string}
 const DURATIONS=[60,300,600,1800,3600];
 const PATH="/inspection/recording";
-export function PersistentRecording({devices,live}:{devices:DeviceStatus[];live:boolean}){
+export function PersistentRecording({devices,live,active}:{devices:DeviceStatus[];live:boolean;active:boolean}){
   const [status,setStatus]=useState<Status|null>(null);
   const [ids,setIds]=useState<string[]>([]);
   const [duration,setDuration]=useState(600);
@@ -13,18 +13,18 @@ export function PersistentRecording({devices,live}:{devices:DeviceStatus[];live:
   const [commandError,setCommandError]=useState("");
   const [pending,setPending]=useState(false);
   useEffect(()=>{
-    if(pending)return;
+    if(pending||!active)return;
     const controller=new AbortController();
     let disposed=false,timer=0;
     async function poll(){
-      const res=await request<Status>("GET",PATH,undefined,(url,init)=>fetch(url,{...init,signal:AbortSignal.any([controller.signal,AbortSignal.timeout(3000)])}));
+      const res=await request<Status>("GET",PATH,undefined,(url,init)=>fetch(url,{...init,cache:"no-store",signal:AbortSignal.any([controller.signal,AbortSignal.timeout(3000)])}));
       if(disposed)return;
       if(res.ok){setStatus(res.data);setError("");}else setError(res.error.message);
       timer=window.setTimeout(()=>void poll(),1000);
     }
     void poll();
     return()=>{disposed=true;controller.abort();clearTimeout(timer);};
-  },[pending]);
+  },[pending,active]);
   async function command(stop:boolean){
     setPending(true);
     setCommandError("");
