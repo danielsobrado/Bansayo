@@ -21,7 +21,7 @@ Open Devices → Sensor Studio using a simulated or physical rig. Verify filteri
 - Capture: up to four non-camera devices, 10/60/300/600 s requested duration, 500,000 total observation limit. Stop on errors or epoch resets; report journal losses. Export JSON before closing.
 - Timeline: session-relative min/max envelope, per-device/channel selection, time-window navigation and operator event markers at the latest received session timestamp (not a hardware trigger).
 - Signals: drag to reorder within the instrument grid, keyboard move buttons and wide docking. Panel order persists. No arbitrary floating windows or cross-workspace docking.
-- Analysis: mean-removed Hann FFT, overlapping Allan deviation from the latest contiguous approximately uniform run, and magnetic ellipsoid fit with positive-definite and coverage checks. Fits are advisory, no automatic firmware write.
+- Analysis: mean-removed Hann FFT, one-sided periodogram power spectral density, overlapping Allan deviation from the latest contiguous approximately uniform run, and magnetic ellipsoid fit with positive-definite and coverage checks plus a held-out radius residual. Fits are advisory, no automatic firmware write.
 - Optical: orbitable calibrated frustums, observed rays, nearest-ray residual and solver-reported RMS; fresh 2D preview within 40 ms is not necessarily the solver's exact observation. Valid profiles and matching image size required.
 
 ## Physical acceptance and performance
@@ -54,3 +54,5 @@ The benchmark compares a warm baseline against engine recording, collects receiv
 CI runs `node scripts/bench-sensor-studio-sim.mjs tmp/studio-sim-benchmark` with four simulated trackers, an isolated data directory and debug engine. The artifact contains the raw JSONL, benchmark and channel-integrity report. It is a reproducible smoke benchmark, not a performance target or hardware result.
 
 Completed persistent JSONL journals can be opened in Capture for timeline, FFT, Allan and magnetic analysis, up to the existing 500,000-observation browser limit. The importer validates the header/footer counts and cursor/reference continuity. Large and interrupted files are handled by the streaming CLI analyzer instead; no silent truncation or incomplete-file success claim.
+
+The recording controls suspend status polling during commands to prevent a stale GET response from overwriting a start/stop response. Stopping is asynchronous: the final filename is published only after the footer, sync and rename complete. The browser test intercepts both the recording resource and its stop subresource.

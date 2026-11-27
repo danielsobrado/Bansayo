@@ -14,8 +14,9 @@ const dot=(a:Vec,b:Vec)=>a.reduce((s,v,i)=>s+v*b[i]!,0);
 /** Fit x'Ax+b'x=1 in centered/scaled coordinates, then Cholesky sphere transform. */
 export function fitMagnetic(input:readonly Vec[]) {
   const stride=Math.max(1,Math.ceil(input.length/4096));
-  const pts=input.filter((p,i)=>i%stride===0&&p.length===3&&p.every(Number.isFinite));
-  if(pts.length<60)return null;
+  const usable=input.filter((p,i)=>i%stride===0&&p.length===3&&p.every(Number.isFinite));
+  if(usable.length<75)return null;
+  const pts=usable.filter((_,i)=>i%5!==0),validation=usable.filter((_,i)=>i%5===0);
   const mean=[0,1,2].map(i=>pts.reduce((s,p)=>s+p[i]!,0)/pts.length);
   const scale=Math.sqrt(pts.reduce((s,p)=>s+p.reduce((v,x,i)=>v+(x-mean[i]!)**2,0),0)/pts.length);
   if(scale<1e-9)return null;
@@ -34,5 +35,9 @@ export function fitMagnetic(input:readonly Vec[]) {
   const octants=new Set(corrected.map(p=>p.reduce((n,x,i)=>n|(x>=0?1<<i:0),0)));
   const rms=Math.sqrt(corrected.reduce((s,p)=>s+(Math.hypot(...p)-1)**2,0)/pts.length);
   if(octants.size<8||!Number.isFinite(rms)||rms>.25)return null;
-  return {center,matrix,rms,count:pts.length,corrected:corrected.filter((_,i)=>i%Math.max(1,Math.ceil(pts.length/600))===0)};
+  const validationErrors=validation.map(p=>Math.abs(Math.hypot(...matrix.map(row=>dot(row,p.map((x,i)=>x-center[i]!))))-1));
+  const validationRms=Math.sqrt(validationErrors.reduce((s,v)=>s+v*v,0)/validationErrors.length);
+  const validationMax=Math.max(...validationErrors);
+  if(!Number.isFinite(validationRms)||!Number.isFinite(validationMax)||validationRms>.25)return null;
+  return {center,matrix,rms,count:pts.length,validationRms,validationMax,validationCount:validation.length,corrected:corrected.filter((_,i)=>i%Math.max(1,Math.ceil(pts.length/600))===0)};
 }

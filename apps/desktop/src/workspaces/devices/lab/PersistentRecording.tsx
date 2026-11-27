@@ -10,22 +10,26 @@ export function PersistentRecording({devices,live}:{devices:DeviceStatus[];live:
   const [ids,setIds]=useState<string[]>([]);
   const [duration,setDuration]=useState(600);
   const [error,setError]=useState("");
+  const [commandError,setCommandError]=useState("");
   const [pending,setPending]=useState(false);
   useEffect(()=>{
+    if(pending)return;
+    const controller=new AbortController();
     let disposed=false,timer=0;
     async function poll(){
-      const res=await request<Status>("GET",PATH,undefined,(url,init)=>fetch(url,{...init,signal:AbortSignal.timeout(3000)}));
+      const res=await request<Status>("GET",PATH,undefined,(url,init)=>fetch(url,{...init,signal:AbortSignal.any([controller.signal,AbortSignal.timeout(3000)])}));
       if(disposed)return;
       if(res.ok){setStatus(res.data);setError("");}else setError(res.error.message);
       timer=window.setTimeout(()=>void poll(),1000);
     }
     void poll();
-    return()=>{disposed=true;clearTimeout(timer);};
-  },[]);
+    return()=>{disposed=true;controller.abort();clearTimeout(timer);};
+  },[pending]);
   async function command(stop:boolean){
     setPending(true);
+    setCommandError("");
     const res=await request<Status>("POST",stop?PATH+"/stop":PATH,stop?undefined:{device_ids:selected,duration_s:duration},(url,init)=>fetch(url,{...init,signal:AbortSignal.timeout(5000)}));
-    if(res.ok){setStatus(res.data);setError("");}else setError(res.error.message);
+    if(res.ok){setStatus(res.data);setError("");}else setCommandError(res.error.message);
     setPending(false);
   }
   const eligible=devices.filter(d=>d.descriptor.kind!=="camera");
@@ -38,6 +42,6 @@ export function PersistentRecording({devices,live}:{devices:DeviceStatus[];live:
     <button disabled={!status?.running||pending} onClick={()=>void command(true)}>Stop engine recording</button></div>
     {status?.file&&<p className="mono" style={{overflowWrap:"anywhere"}}>{status.file}</p>}
     {status&&<p className="mono">{status.observations.toLocaleString()} observations · {status.lost} journal losses · {(status.bytes/1048576).toFixed(2)} MiB</p>}
-    {error&&<p className="lab-result-warn" role="status">{error}</p>}
+    {(commandError||error)&&<p className="lab-result-warn" role="status">{commandError||error}</p>}
   </section>;
 }

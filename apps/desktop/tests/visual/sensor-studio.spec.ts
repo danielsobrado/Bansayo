@@ -13,7 +13,7 @@ test("sensor studio instrumentation and responsive layouts",async({page},info)=>
   const errors:string[]=[];page.on("pageerror",error=>errors.push(error.message));
   await page.route("**/api/v1/devices/*/inspection",route=>route.fulfill({json:{ok:true,data:snapshot}}));
   let engineRecording={running:false,file:null as string|null,observations:0,lost:0,bytes:0,reason:"Idle"};
-  await page.route("**/inspection/recording*",route=>{
+  await page.route(/\/inspection\/recording(?:\/stop)?$/,route=>{
     if(route.request().method()==="POST"){
       const stop=route.request().url().endsWith("/stop");
       engineRecording={running:!stop,file:stop?"diagnostics/capture-test.jsonl":"diagnostics/capture-test.jsonl.partial",observations:stop?128:0,lost:0,bytes:stop?4096:0,reason:stop?"Stopped by operator":"Recording"};
@@ -68,6 +68,7 @@ test("sensor studio instrumentation and responsive layouts",async({page},info)=>
   await studio.getByRole("button",{name:"Stop capture"}).click();
   await expect(studio.getByRole("img",{name:"Recorded signal and event markers"})).toBeVisible();
   await expect(studio.getByRole("img",{name:"FFT amplitude spectrum"})).toBeVisible();
+  await expect(studio.getByRole("img",{name:"Power spectral density"})).toBeVisible();
   await page.screenshot({path:info.outputPath("capture-analysis.png")});
   const recording=page.waitForEvent("download");
   await studio.getByRole("button",{name:"Export recording"}).click();
