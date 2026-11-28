@@ -10,6 +10,6 @@ describe("socket transport timing",()=>{
   });
   it("keeps datagram gaps distinct from interval residuals",()=>{
     const m=transportMetrics({generation:1,received:98,missing:2,rejected_order:5,last_receive_us:1,intervals_ms:[[5,7],[5,4],[5,5]]});
-    expect(m.lossRatio).toBe(.02);expect(m.mean).toBe(1);expect(m.p95).toBe(1);
+    expect(m.lossRatio).toBe(.02);expect(m.mean).toBe(1);expect(m.p95).toBe(2);
   });
 });

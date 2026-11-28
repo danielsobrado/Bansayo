@@ -1,6 +1,7 @@
 import type {PoseLandmarks2D} from "@contracts";
-import type {Capture} from "./captureTypes";
+import {completeCapture,type Capture} from "./captureTypes";
 import {OPTICAL_SYNC as C,type OpticalRecording,type OpticalSelection,type OpticalObservation} from "./opticalSyncConfig";
+import {SYNC_ANALYSIS} from "./syncConfig";
 import {compareTiming,scalarPoints,type SyncPoint} from "./syncMath";
 
 export function opticalObservation(frame:PoseLandmarks2D,selection:OpticalSelection):OpticalObservation{
@@ -35,11 +36,11 @@ export function opticalAngularSpeed(frames:readonly OpticalObservation[]):{point
 }
 export function opticalTiming(capture:Capture,device:string){
   const optical=capture.optical,window=capture.window;
-  if(!optical||!window||optical.invalidReason||capture.lost||capture.resets||!/^(Stopped by operator|Duration completed)$/.test(capture.reason))return {error:optical?.invalidReason??"Complete common-window capture required.",result:null};
+  if(!optical||!window||optical.invalidReason||!completeCapture(capture))return {error:optical?.invalidReason??"Complete common-window capture required.",result:null};
   const frames=optical.frames.filter(p=>p.t_us>=window.start_us&&p.t_us<window.end_us);
   // Compare only the latest analysis window; earlier camera detection failures do not enter it.
   const end=frames.at(-1)?.t_us??0;
-  const selected=frames.filter(p=>p.t_us>=end-8_200_000);
+  const selected=frames.filter(p=>p.t_us>=end-SYNC_ANALYSIS.maxWindowUs-SYNC_ANALYSIS.maxLagUs);
   const {points,error}=opticalAngularSpeed(selected);
   if(error)return {error,result:null};
   const gyro=capture.samples.filter(s=>s.device===device&&s.channel==="gyro"&&s.point.t_us>=window.start_us&&s.point.t_us<window.end_us);

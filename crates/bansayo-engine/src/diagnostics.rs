@@ -11,6 +11,7 @@ use std::sync::{
 
 pub const WINDOW_US: u64 = 10_000_000;
 pub const OVER_BUDGET_US: u64 = 5_000_000;
+const MAX_STAGE_SAMPLES: usize = 32_768;
 
 /// The stages of the camera path (15 §2.1) and their budgets at 60 fps, microseconds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -110,6 +111,9 @@ impl Timing {
         }
         if let Ok(mut i) = self.inner.lock() {
             let q = i.samples.entry(stage).or_default();
+            if q.len() == MAX_STAGE_SAMPLES {
+                q.pop_front();
+            }
             q.push_back((t_us, duration_us));
             while q
                 .front()
@@ -144,19 +148,27 @@ impl Timing {
     }
 
     fn stats(&self, now_us: u64, window_us: u64) -> Vec<StageTiming> {
-        let Ok(i) = self.inner.lock() else {
-            return vec![];
+        let samples: Vec<_> = {
+            let Ok(i) = self.inner.lock() else {
+                return vec![];
+            };
+            Stage::ALL
+                .iter()
+                .filter_map(|s| {
+                    let d: Vec<u64> = i
+                        .samples
+                        .get(s)?
+                        .iter()
+                        .filter(|(t, _)| *t <= now_us && now_us - *t <= window_us)
+                        .map(|(_, d)| *d)
+                        .collect();
+                    Some((*s, d))
+                })
+                .collect()
         };
-        Stage::ALL
-            .iter()
-            .filter_map(|s| {
-                let mut d: Vec<u64> = i
-                    .samples
-                    .get(s)?
-                    .iter()
-                    .filter(|(t, _)| now_us.saturating_sub(*t) <= window_us)
-                    .map(|(_, d)| *d)
-                    .collect();
+        samples
+            .into_iter()
+            .filter_map(|(s, mut d)| {
                 if d.is_empty() {
                     return None;
                 }

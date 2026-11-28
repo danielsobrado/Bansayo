@@ -6,8 +6,12 @@ mod support;
 use serde_json::{Value, json};
 use support::*;
 
+// Real-time simulator tests share CPU resources; run one rig at a time.
+static TRAINING_TEST: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn guided_roundhouse_session_is_counted_stored_and_reviewable() {
+    let _guard = TRAINING_TEST.lock().await;
     let dir = tempfile::tempdir().unwrap();
     let engine = engine(&rig(dir.path(), "")).await;
     let addr = engine.bound_addr();
@@ -184,6 +188,7 @@ async fn guided_roundhouse_session_is_counted_stored_and_reviewable() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn without_consent_a_session_runs_and_nothing_is_stored() {
+    let _guard = TRAINING_TEST.lock().await;
     let dir = tempfile::tempdir().unwrap();
     let engine = engine(&rig(dir.path(), "")).await;
     let addr = engine.bound_addr();
@@ -233,6 +238,7 @@ async fn wait_session(addr: std::net::SocketAddr, id: &str) -> Value {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn recorded_session_is_reviewable_and_reanalyses_are_identical() {
+    let _guard = TRAINING_TEST.lock().await;
     let dir = tempfile::tempdir().unwrap();
     let engine = engine(&rig(dir.path(), "")).await;
     let addr = engine.bound_addr();
@@ -367,6 +373,7 @@ async fn recorded_session_is_reviewable_and_reanalyses_are_identical() {
 /// different pose-model id is a separate series rather than a continuation.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_second_session_and_a_different_pose_model_appear_in_progress() {
+    let _guard = TRAINING_TEST.lock().await;
     let dir = tempfile::tempdir().unwrap();
     let q = "progress/series?athlete_id=ana&technique=taekwondo.dollyeo_chagi&metric=kick.total_time&side=right&origin=simulated";
     let engine = engine(&rig(dir.path(), "")).await;

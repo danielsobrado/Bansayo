@@ -68,8 +68,8 @@ export function GuidedTests({ deviceId, channels, enabled }: {
         <h3>90° rotation check</h3>
         <label>Physical axis <select value={axis} onChange={e=>{setAxis(e.target.value);setStart(null);setTurn(null);}}>{["X","Y","Z"].map(a=><option key={a}>{a}</option>)}</select></label>
         <p>Hold still, capture start, rotate exactly 90° about {axis} using a physical reference, then stop and capture end.</p>
-        <button disabled={!still || !q} onClick={()=>{if(q){setStart({q:q.values,t:q.t_us});setTurn(null);}}}>Capture start</button>
-        <button disabled={!still || !q || !start || q.t_us<=start.t} onClick={()=>{if(q&&start){const result=rotationCheck(start.q,q.values,["X","Y","Z"].indexOf(axis));setTurn(result);setTurns(old=>{const next={...old};if(result)next[axis]=result;else delete next[axis];return next;});}}}>Capture end</button>
+        <button disabled={!still || !q} onClick={()=>{if(q){setStart({q:q.values,t:q.t_us});setTurn(null);setTurns(old=>{const next={...old};delete next[axis];return next;});}}}>Capture start</button>
+        <button disabled={!still || !q || !start || q.t_us<=start.t} onClick={()=>{if(q&&start){const result=rotationCheck(start.q,q.values,["X","Y","Z"].indexOf(axis));setTurn(result);setStart(null);setTurns(old=>{const next={...old};if(result)next[axis]=result;else delete next[axis];return next;});}}}>Capture end</button>
         <p className="subtle">Axes captured: {Object.keys(turns).join(", ")||"None"}</p><button onClick={()=>{setTurns({});setTurn(null);setStart(null);}}>Reset rotation tests</button>
         {turn!==null&&<p className={Math.abs(turn.angle-90)<=ROTATION_TOLERANCE_DEG&&turn.axisError<=ROTATION_TOLERANCE_DEG?"lab-result-ok":"lab-result-warn"}>Rotation {turn.angle.toFixed(2)}° · angle error {Math.abs(turn.angle-90).toFixed(2)}° · axis error {turn.axisError.toFixed(2)}° (unsigned axis)</p>}
       </div>
@@ -78,7 +78,7 @@ export function GuidedTests({ deviceId, channels, enabled }: {
         <p>Leave the unit untouched. Start and stop manually; use a full session recording to prove continuous stillness.</p>
         <button disabled={!still || !q} onClick={()=>{if(q){setDrift({q:q.values,t:q.t_us});setReport(null);}}}>Start drift baseline</button>
         <p className="mono">{drift&&q?`${Math.max(0,(q.t_us-drift.t)/1e6).toFixed(1)} s · net ${quaternionAngle(drift.q,q.values)?.toFixed(2)??"—"}°`:"No baseline"}</p>
-        <button disabled={!still || !q || !drift || q.t_us<=drift.t} onClick={()=>{if(q&&drift){const angle=quaternionAngle(drift.q,q.values);if(angle!==null)setReport({angle,seconds:(q.t_us-drift.t)/1e6});setDrift(null);}}}>Finish test</button>
+        <button disabled={!still || !q || !drift || q.t_us-drift.t<CALIBRATION_SCORE.minimumDriftSeconds*1e6} onClick={()=>{if(q&&drift){const angle=quaternionAngle(drift.q,q.values);if(angle!==null)setReport({angle,seconds:(q.t_us-drift.t)/1e6});setDrift(null);}}}>Finish test</button>
         {report&&<p>Net orientation change {report.angle.toFixed(2)}° over {report.seconds.toFixed(1)} s; not a pure yaw estimate.</p>}
       </div>
   </section>;

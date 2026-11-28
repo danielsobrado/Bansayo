@@ -37,3 +37,9 @@ export function continuesBatch(previous:JournalCursor,batch:Batch):boolean {
   return Number.isSafeInteger(expected)&&batch.next===expected&&
     (batch.entries.length===0||batch.entries[0]!.cursor===previous.next+batch.lost+1);
 }
+
+/** A completed, continuous capture is required for timing or acceptance claims. */
+export function completeCapture(capture:Capture):boolean {
+  const window=capture.window;
+  return !!window&&Number.isSafeInteger(window.start_us)&&Number.isSafeInteger(window.end_us)&&window.start_us>=0&&window.end_us>window.start_us&&capture.lost===0&&capture.resets===0&&/^(Imported: )?(Stopped by operator|Duration completed)$/.test(capture.reason);
+}

@@ -10,6 +10,6 @@ describe("engine diagnostic snapshots",()=>{
   });
   it("rejects malformed archive pages",()=>{
     expect(parseEngineReliability({enabled:false,rows:[]})).not.toBeNull();
-    expect(parseEngineReliability({enabled:true,rows:[{epoch:"x",at_ms:1,t_us:1,devices:[{}]}]})).toBeNull();
+    expect(parseEngineReliability({enabled:true,rows:[{id:1,epoch:"x",at_ms:1,t_us:1,devices:[{}]}]})).toBeNull();
   });
 });

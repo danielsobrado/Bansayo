@@ -1,5 +1,5 @@
 import {useMemo,useState} from "react";
-import type {Capture} from "./captureTypes";
+import {completeCapture,type Capture} from "./captureTypes";
 import {CHANNELS,type Point} from "./trace";
 import {compareTiming,scalarPoints,signalHealth,type SyncAxis,type SyncResult} from "./syncMath";
 import {SYNC_ANALYSIS} from "./syncConfig";
@@ -37,7 +37,7 @@ export function SynchronizationPanel({capture}:{capture:Capture}){
     const a=data.find(d=>d.device===id);
     return {format:"bansayo-sensor-sync-v1",started:capture.started,reason:capture.reason,window:capture.window??null,lost:capture.lost,resets:capture.resets,channel,axis,reference:id,settings:SYNC_ANALYSIS,
       health:data.map(d=>({device:d.device,epochs:d.epochs,...signalHealth(d.points)})),
-      comparisons:data.filter(d=>d!==a).map(d=>({device:d.device,result:a&&a.epochs===1&&d.epochs===1&&capture.resets===0&&capture.lost===0?compareTiming(a.points,d.points):null}))};
+      comparisons:data.filter(d=>d!==a).map(d=>({device:d.device,result:a&&a.epochs===1&&d.epochs===1&&completeCapture(capture)?compareTiming(a.points,d.points):null}))};
   },[groups,axis,id,channel,capture]);
   return <section className="lab-card"><header><h3>Multi-device timing and signal health</h3></header>
     <p>Mount sensors on the same rigid object and use distinctive motion. Magnitude avoids assuming axis alignment; axes require aligned mounting. Positive lag means the test signal is later in mapped engine time.</p>
@@ -52,7 +52,7 @@ export function SynchronizationPanel({capture}:{capture:Capture}){
     </tbody></table></div>
     <small className="subtle">Signal statistics in {CHANNELS[channel].unit}, over all selected recorded observations. Long interval: &gt;1.5× median. Standard deviation during motion is not sensor noise.</small>
     {ids.length<2&&<p>Record at least two devices with the selected channel for timing comparison.</p>}
-    {(capture.lost>0||capture.resets>0)&&<p className="lab-result-warn">Capture reported loss or reference reset; lag estimation is disabled.</p>}
+    {!completeCapture(capture)&&<p className="lab-result-warn">Capture incomplete or discontinuous; lag estimation is disabled.</p>}
     {report.comparisons.map(({device,result})=><div key={device} className="studio-pinned"><h4>{id} vs {device}</h4>
       {result?<><p className="mono">Lag {fmt(result.lagMs)} ms · peak r {fmt(result.correlation,3)} · zero-lag r {fmt(result.zeroCorrelation,3)} · grid {fmt(result.stepUs===null?null:result.stepUs/1000)} ms · {result.pairs} pairs</p><p className={result.status==="estimated"?"subtle":"lab-result-warn"}>{result.reason}</p><ComparisonPlot result={result} label={id+" vs "+device+" unshifted signals"}/></>:<p>Reference changed or capture integrity is insufficient.</p>}
     </div>)}

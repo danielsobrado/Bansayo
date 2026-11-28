@@ -60,8 +60,14 @@ pub fn router(api: Api) -> Router {
             get(inspection::batch),
         )
         .route("/api/v1/inspection/clock", get(inspection::clock))
-        .route("/api/v1/inspection/performance", get(inspection::performance))
-        .route("/api/v1/inspection/reliability", get(inspection::reliability))
+        .route(
+            "/api/v1/inspection/performance",
+            get(inspection::performance),
+        )
+        .route(
+            "/api/v1/inspection/reliability",
+            get(inspection::reliability),
+        )
         .route("/api/v1/inspection/solver", post(inspection::solver))
         .route(
             "/api/v1/inspection/recording",

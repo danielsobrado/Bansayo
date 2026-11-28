@@ -3,7 +3,7 @@ import type {TransportSnapshot} from "./trace";
 export function transportMetrics(s:TransportSnapshot){
   const jitter=s.intervals_ms.map(([device,arrival])=>Math.abs(arrival-device)).sort((a,b)=>a-b);
   const mean=jitter.length?jitter.reduce((sum,v)=>sum+v,0)/jitter.length:null;
-  const p95=jitter.length?jitter[Math.floor((jitter.length-1)*.95)]!:null;
+  const p95=jitter.length?jitter[Math.ceil(jitter.length*.95)-1]!:null;
   const total=s.received+s.missing;
   return {mean,p95,lossRatio:total?s.missing/total:null};
 }

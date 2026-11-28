@@ -1,4 +1,4 @@
-import type {Capture} from "./captureTypes";
+import {completeCapture,type Capture} from "./captureTypes";
 import type {Point} from "./trace";
 import {GRAVITY,quaternionAngle} from "./benchMath";
 import {scalarPoints,signalHealth} from "./syncMath";
@@ -25,7 +25,8 @@ export function stationaryReport(capture:Capture,device:string,limits:Stationary
   const start=Math.max(...channels.map(c=>grouped[c][0]?.t_us??Infinity));
   const end=Math.min(...channels.map(c=>grouped[c].at(-1)?.t_us??-Infinity));
   const commonSeconds=Number.isFinite(end-start)?Math.max(0,(end-start)/1e6):0;
-  const gyro=grouped.gyro,accel=grouped.accel,orientation=grouped.orientation;
+  const common=(channel:Channel)=>grouped[channel].filter(p=>p.t_us>=start&&p.t_us<=end);
+  const gyro=common("gyro"),accel=common("accel"),orientation=common("orientation");
   const finite=channels.every(c=>grouped[c].length>=2&&grouped[c].every(p=>p.values.length===(c==="orientation"?4:3)&&p.values.every(Number.isFinite)&&(c!=="orientation"||Math.hypot(...p.values)>1e-6)));
   const gyroAxes=([0,1,2] as const).map(i=>axisStats(gyro,i)),accelAxes=([0,1,2] as const).map(i=>axisStats(accel,i));
   let gyroPeak=0,gravityError=0,orientationMax=0;
@@ -47,12 +48,11 @@ export function stationaryReport(capture:Capture,device:string,limits:Stationary
   gate("Worst gyro axis std dev (rad/s)",gyro.length?Math.max(...gyroAxes.map(a=>a.std??NaN)):null,limits.maxGyroStd,"max");
   gate("Worst accel axis std dev (m/s²)",accel.length?Math.max(...accelAxes.map(a=>a.std??NaN)):null,limits.maxAccelStd,"max");
   gate("Orientation excursion (°)",first?orientationMax:null,limits.maxOrientationDriftDeg,"max");
-  const clean= /^(Imported: )?(Stopped by operator|Duration completed)$/i.test(capture.reason);
   const reasons:string[]=[];
   if(!confirmed)reasons.push("Confirm the tracker was rigidly stationary.");
   if(!validLimits(limits))reasons.push("Invalid acceptance limits.");
-  if(!clean||capture.lost||capture.resets||epochs.size!==1||!capture.window)reasons.push("Incomplete or incompatible capture evidence.");
-  if(!finite||health.some(h=>h.nonIncreasing||h.longIntervals))reasons.push("Missing, invalid or irregular channel samples.");
+  if(!completeCapture(capture)||epochs.size!==1)reasons.push("Incomplete or incompatible capture evidence.");
+  if(!finite||[gyro,accel,orientation].some(p=>p.length<2)||health.some(h=>h.nonIncreasing||h.longIntervals))reasons.push("Missing, invalid or irregular channel samples.");
   if(commonSeconds<limits.minSeconds)reasons.push("Insufficient common duration.");
   if(gyroPeak>limits.maxGyroPeak||gravityError>limits.maxGravityError)reasons.push("Stationary motion screen failed; noise is not isolated.");
   const status=reasons.length?"inconclusive":gates.every(g=>g.pass)?"pass":"fail";

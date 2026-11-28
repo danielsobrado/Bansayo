@@ -1,6 +1,6 @@
 //! Opt-in persistent device status snapshots; no pose, camera images or athlete data.
 use bansayo_contracts::{EngineMode, SystemState};
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OpenFlags, params};
 use serde::Serialize;
 use std::{
     path::{Path, PathBuf},
@@ -17,6 +17,7 @@ const MAX_READ: u64 = 120;
 
 #[derive(Serialize)]
 pub struct Entry {
+    id: u64,
     epoch: String,
     at_ms: u64,
     t_us: u64,
@@ -69,13 +70,14 @@ fn record(path: &Path, entry: Entry) -> Result<(), crate::app::EngineError> {
 }
 
 pub fn read(path: &Path, before: Option<u64>) -> Result<Vec<Entry>, crate::app::EngineError> {
-    if !path.exists() {
+    if !path.try_exists()? {
         return Ok(vec![]);
     }
-    let db = open(path)?;
+    let db = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    db.busy_timeout(Duration::from_secs(2))?;
     let mut stmt = db.prepare(
-        "SELECT epoch,at_ms,t_us,devices FROM reliability
-        WHERE at_ms >= ?1 AND at_ms < ?2 ORDER BY at_ms DESC,id DESC LIMIT ?3",
+        "SELECT id,epoch,at_ms,t_us,devices FROM reliability
+        WHERE at_ms >= ?1 AND id < ?2 ORDER BY id DESC LIMIT ?3",
     )?;
     let mut rows = stmt.query(params![
         now_ms().saturating_sub(RETENTION_MS),
@@ -84,14 +86,15 @@ pub fn read(path: &Path, before: Option<u64>) -> Result<Vec<Entry>, crate::app::
     ])?;
     let mut out = Vec::new();
     while let Some(row) = rows.next()? {
-        let payload: String = row.get(3)?;
+        let payload: String = row.get(4)?;
         if payload.len() > MAX_PAYLOAD_BYTES {
             return Err("Invalid reliability snapshot size".into());
         }
         out.push(Entry {
-            epoch: row.get(0)?,
-            at_ms: row.get(1)?,
-            t_us: row.get(2)?,
+            id: row.get(0)?,
+            epoch: row.get(1)?,
+            at_ms: row.get(2)?,
+            t_us: row.get(3)?,
             devices: serde_json::from_str(&payload)?,
         });
     }
@@ -118,7 +121,9 @@ pub fn spawn(
                 _ = cancel.cancelled() => break,
                 _ = timer.tick() => {}
             }
-            let changed = state.has_changed().unwrap_or(false);
+            let Ok(changed) = state.has_changed() else {
+                break;
+            };
             if !changed {
                 continue;
             }
@@ -138,6 +143,7 @@ pub fn spawn(
                 })
                 .collect::<Vec<_>>();
             let entry = Entry {
+                id: 0,
                 epoch: clock.epoch_utc().into(),
                 at_ms: now_ms(),
                 t_us: clock.now_us(),
@@ -163,6 +169,31 @@ mod tests {
     use super::*;
 
     #[test]
+    fn pagination_preserves_same_timestamp_rows() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = path(dir.path());
+        let now = now_ms();
+        for _ in 0..=MAX_READ {
+            record(
+                &path,
+                Entry {
+                    id: 0,
+                    epoch: "same".into(),
+                    at_ms: now,
+                    t_us: 5,
+                    devices: serde_json::json!([]),
+                },
+            )
+            .unwrap();
+        }
+        let page = read(&path, None).unwrap();
+        assert_eq!(page.len(), MAX_READ as usize);
+        let older = read(&path, Some(page[0].id)).unwrap();
+        assert_eq!(older.len(), 1);
+        assert!(older[0].id < page[0].id);
+    }
+
+    #[test]
     fn persisted_history_survives_reopen_and_excludes_old_rows() {
         let dir = tempfile::tempdir().unwrap();
         let path = path(dir.path());
@@ -171,6 +202,7 @@ mod tests {
             record(
                 &path,
                 Entry {
+                    id: 0,
                     epoch: epoch.into(),
                     at_ms,
                     t_us: 5,
@@ -182,6 +214,6 @@ mod tests {
         let rows = read(&path, None).unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].epoch, "new");
-        assert!(read(&path, Some(now - 1)).unwrap().is_empty());
+        assert!(read(&path, Some(rows[0].id)).unwrap().is_empty());
     }
 }

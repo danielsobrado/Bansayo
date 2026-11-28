@@ -111,13 +111,16 @@ pub async fn performance(State(api): State<Api>) -> Response {
 
 #[derive(serde::Deserialize)]
 pub struct ReliabilityQuery {
-    before_ms: Option<u64>,
+    before_id: Option<u64>,
 }
 
-pub async fn reliability(State(api): State<Api>, Query(query): Query<ReliabilityQuery>) -> Response {
+pub async fn reliability(
+    State(api): State<Api>,
+    Query(query): Query<ReliabilityQuery>,
+) -> Response {
     let path = crate::reliability::path(&api.data_dir);
     let result =
-        tokio::task::spawn_blocking(move || crate::reliability::read(&path, query.before_ms)).await;
+        tokio::task::spawn_blocking(move || crate::reliability::read(&path, query.before_id)).await;
     match result {
         Ok(Ok(rows)) => Json(ApiResponse::ok(serde_json::json!({
             "enabled": api.reliability_enabled, "rows": rows
@@ -125,7 +128,10 @@ pub async fn reliability(State(api): State<Api>, Query(query): Query<Reliability
         .into_response(),
         Ok(Err(error)) => {
             tracing::warn!(%error, "Reliability history read failed");
-            failure(ApiErrorCode::Unavailable, "Reliability history unavailable.")
+            failure(
+                ApiErrorCode::Unavailable,
+                "Reliability history unavailable.",
+            )
         }
         Err(error) => {
             tracing::warn!(%error, "Reliability history worker failed");

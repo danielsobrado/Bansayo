@@ -21,7 +21,7 @@ test("sensor studio instrumentation and responsive layouts",async({page},info)=>
     return route.fulfill({json:{ok:true,data:engineRecording}});
   });
   await page.route("**/inspection/performance",route=>route.fulfill({json:{ok:true,data:{enabled:true,timing_enabled:true,epoch:"fixture",samples:[{t_us:1000,cpu_percent_one_core:null,resident_bytes:10485760},{t_us:2001000,cpu_percent_one_core:130,resident_bytes:20971520}],stages:[{stage:"solve",p50_us:1000,p95_us:3000,p99_us:4000,max_us:5000,count:10,budget_us:2000}]}}}));
-  await page.route("**/inspection/reliability*",route=>route.fulfill({json:{ok:true,data:{enabled:true,rows:[{epoch:"fixture",at_ms:1000,t_us:1000,devices:[{device:"MOSAICO-01",origin:"fixture",state:"tracking",stream:{measured_rate_hz:200,received:100,dropped:1}}]}]}}}));
+  await page.route("**/inspection/reliability*",route=>route.fulfill({json:{ok:true,data:{enabled:true,rows:[{id:1,epoch:"fixture",at_ms:1000,t_us:1000,devices:[{device:"MOSAICO-01",origin:"fixture",state:"tracking",stream:{measured_rate_hz:200,received:100,dropped:1}}]}]}}}));
   await page.goto("/tests/fixtures/sensor-studio.html");
   const studio=page.getByRole("region",{name:"Sensor Studio"});
   const views=studio.getByRole("navigation",{name:"Sensor Studio views"});

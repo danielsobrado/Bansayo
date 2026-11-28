@@ -47,7 +47,7 @@ pub fn spawn(
     };
     let (tx, rx) = watch::channel(Arc::new(snapshot.clone()));
     let task = tokio::spawn(async move {
-        if !enabled {
+        if !enabled && !timing.on() {
             return Ok(());
         }
         let mut interval = tokio::time::interval(SAMPLE_PERIOD);
@@ -58,7 +58,11 @@ pub fn spawn(
                 _ = cancel.cancelled() => break,
                 _ = interval.tick() => {}
             }
-            let counters = tokio::task::spawn_blocking(process_resources::read).await?;
+            let counters = if enabled {
+                tokio::task::spawn_blocking(process_resources::read).await?
+            } else {
+                process_resources::Counters::default()
+            };
             let now = clock.now_us();
             let cpu = prior.and_then(|(t, value)| {
                 cpu_percent(
@@ -68,14 +72,16 @@ pub fn spawn(
                 )
             });
             prior = counters.cpu_seconds.map(|v| (now, v));
-            if snapshot.samples.len() == MAX_SAMPLES {
-                snapshot.samples.pop_front();
+            if enabled {
+                if snapshot.samples.len() == MAX_SAMPLES {
+                    snapshot.samples.pop_front();
+                }
+                snapshot.samples.push_back(Sample {
+                    t_us: now,
+                    cpu_percent_one_core: cpu,
+                    resident_bytes: counters.resident_bytes,
+                });
             }
-            snapshot.samples.push_back(Sample {
-                t_us: now,
-                cpu_percent_one_core: cpu,
-                resident_bytes: counters.resident_bytes,
-            });
             snapshot.stages = timing.summary(now);
             tx.send_replace(Arc::new(snapshot.clone()));
         }

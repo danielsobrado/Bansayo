@@ -10,10 +10,10 @@ export function parsePerformance(v:unknown):PerformanceSnapshot|null{
   if(!v.stages.every(s=>obj(s)&&typeof s.stage==="string"&&["p50_us","p95_us","p99_us","max_us","count","budget_us"].every(k=>nn(s[k]))))return null;
   return v as unknown as PerformanceSnapshot;
 }
-export interface EngineReliabilityEntry {epoch:string;at_ms:number;t_us:number;devices:Record<string,unknown>[]}
+export interface EngineReliabilityEntry {id:number;epoch:string;at_ms:number;t_us:number;devices:Record<string,unknown>[]}
 export interface EngineReliability {enabled:boolean;rows:EngineReliabilityEntry[]}
 export function parseEngineReliability(v:unknown):EngineReliability|null{
   if(!obj(v)||typeof v.enabled!=="boolean"||!Array.isArray(v.rows)||v.rows.length>120)return null;
-  if(!v.rows.every(r=>obj(r)&&typeof r.epoch==="string"&&nn(r.at_ms)&&r.at_ms<=8.64e15&&nn(r.t_us)&&Array.isArray(r.devices)&&r.devices.every(d=>obj(d)&&typeof d.device==="string"&&typeof d.state==="string"&&typeof d.origin==="string"&&obj(d.stream)&&nn(d.stream.measured_rate_hz)&&nn(d.stream.received)&&nn(d.stream.dropped))))return null;
+  if(!v.rows.every((r,i,a)=>obj(r)&&nn(r.id)&&Number.isSafeInteger(r.id)&&r.id>0&&(i===0||r.id>a[i-1].id)&&typeof r.epoch==="string"&&nn(r.at_ms)&&r.at_ms<=8.64e15&&nn(r.t_us)&&Array.isArray(r.devices)&&r.devices.every(d=>obj(d)&&typeof d.device==="string"&&typeof d.state==="string"&&typeof d.origin==="string"&&obj(d.stream)&&nn(d.stream.measured_rate_hz)&&nn(d.stream.received)&&nn(d.stream.dropped))))return null;
   return v as unknown as EngineReliability;
 }
