@@ -9,6 +9,8 @@ export class JournalReader {
   private footer=false;
   private cursors=new Map<string,{epoch:number;next:number}>();
   private devices=new Set<string>();
+  private windowStart:number|undefined;
+  private scheduledEnd:number|undefined;
   accept(line:string) {
     if(!line.trim())return;
     const v=JSON.parse(line);
@@ -17,10 +19,21 @@ export class JournalReader {
       if(v.type!=="header"||v.format!=="bansayo-diagnostic-journal-v1"||typeof v.started_utc!=="string"||!Array.isArray(v.devices)||v.devices.length<1||v.devices.length>4||!v.devices.every((x:unknown)=>typeof x==="string"))throw Error("Unsupported journal header.");
       this.devices=new Set(v.devices);
       if(this.devices.size!==v.devices.length)throw Error("Duplicate journal devices.");
+      if(v.window_start_us!==undefined||v.scheduled_end_us!==undefined){
+        if(!Number.isSafeInteger(v.window_start_us)||v.window_start_us<0||!Number.isSafeInteger(v.scheduled_end_us)||v.scheduled_end_us<v.window_start_us)throw Error("Invalid journal window.");
+        this.windowStart=v.window_start_us;this.scheduledEnd=v.scheduled_end_us;
+      }
       this.header=true;this.result.started=v.started_utc;return;
     }
     if(v.type==="footer"){
       if(v.observations!==this.result.samples.length||v.lost!==this.result.lost||typeof v.reason!=="string")throw Error("Journal footer counts do not match.");
+      if(this.windowStart!==undefined){
+        if(!Number.isSafeInteger(v.window_end_us)||v.window_end_us<this.windowStart||v.window_end_us>this.scheduledEnd!)throw Error("Invalid recording end boundary.");
+        const start=this.windowStart,end:number=v.window_end_us;
+        const count=this.result.samples.length;
+        this.result.samples=this.result.samples.filter(s=>s.point.t_us>=start&&s.point.t_us<end);
+        this.result.window={start_us:start,end_us:end,excluded:count-this.result.samples.length};
+      }
       this.footer=true;this.result.reason="Imported: "+v.reason;
       if(v.reason==="Stream reference reset")this.result.resets++;
       return;

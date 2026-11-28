@@ -177,6 +177,11 @@ assignments:
         .collect();
     assert_eq!(rows.first().unwrap()["type"], "header");
     assert_eq!(rows.last().unwrap()["type"], "footer");
+    let start_us = rows[0]["window_start_us"].as_u64().unwrap();
+    let end_us = rows.last().unwrap()["window_end_us"].as_u64().unwrap();
+    assert!(end_us > start_us);
+    assert!(end_us - start_us < 30_000_000);
+    assert_eq!(finished["window_end_us"], end_us);
     let preview = ok(
         addr,
         "POST",

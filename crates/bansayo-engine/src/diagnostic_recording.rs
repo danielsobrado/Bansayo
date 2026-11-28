@@ -1,5 +1,8 @@
 //! One bounded, engine-owned diagnostic recording; disk I/O stays off the tracking actor.
-use crate::sources::{RuntimeMap, inspection};
+use crate::{
+    clock::SessionClock,
+    sources::{RuntimeMap, inspection},
+};
 use bansayo_contracts::{DeviceId, EngineMode, SystemState};
 use serde::Serialize;
 use serde_json::json;
@@ -7,8 +10,11 @@ use std::{
     fs::{self, OpenOptions},
     io::{self, BufWriter, Write},
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
-    time::{Duration, Instant},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicU64, Ordering},
+    },
+    time::Duration,
 };
 use tokio::sync::{mpsc, watch};
 use tokio_util::sync::CancellationToken;
@@ -17,6 +23,8 @@ const MAX_SECONDS: u64 = 3600;
 const MAX_BYTES: u64 = 256 * 1024 * 1024;
 const MAX_FILES: usize = 32;
 const POLL: Duration = Duration::from_millis(100);
+const DRAIN_US: u64 = 250_000;
+const NO_STOP: u64 = u64::MAX;
 
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct Status {
@@ -26,24 +34,27 @@ pub struct Status {
     pub lost: u64,
     pub bytes: u64,
     pub reason: String,
+    pub window_start_us: Option<u64>,
+    pub window_end_us: Option<u64>,
 }
 
 struct Job {
     ids: Vec<DeviceId>,
     duration: Duration,
-    stop: CancellationToken,
+    stop: Arc<AtomicU64>,
 }
 
 #[derive(Default)]
 struct Shared {
     status: Status,
-    stop: Option<CancellationToken>,
+    stop: Option<Arc<AtomicU64>>,
 }
 
 #[derive(Clone)]
 pub struct Recorder {
     shared: Arc<Mutex<Shared>>,
     tx: mpsc::Sender<Job>,
+    clock: SessionClock,
 }
 
 impl Recorder {
@@ -62,7 +73,7 @@ impl Recorder {
         if shared.status.running {
             return Err("A diagnostic recording is already running.");
         }
-        let stop = CancellationToken::new();
+        let stop = Arc::new(AtomicU64::new(NO_STOP));
         self.tx
             .try_send(Job {
                 ids,
@@ -83,7 +94,12 @@ impl Recorder {
         if let Ok(shared) = self.shared.lock()
             && let Some(stop) = &shared.stop
         {
-            stop.cancel();
+            let _ = stop.compare_exchange(
+                NO_STOP,
+                self.clock.now_us(),
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            );
         }
         self.status()
     }
@@ -92,7 +108,7 @@ impl Recorder {
 struct Environment {
     runtime: RuntimeMap,
     state: watch::Receiver<SystemState>,
-    epoch: String,
+    clock: SessionClock,
     dir: PathBuf,
     cancel: CancellationToken,
     shared: Arc<Mutex<Shared>>,
@@ -101,7 +117,7 @@ struct Environment {
 pub fn spawn(
     runtime: RuntimeMap,
     state: watch::Receiver<SystemState>,
-    epoch: String,
+    clock: SessionClock,
     dir: PathBuf,
     cancel: CancellationToken,
 ) -> (
@@ -113,11 +129,12 @@ pub fn spawn(
     let recorder = Recorder {
         shared: shared.clone(),
         tx,
+        clock: clock.clone(),
     };
     let env = Arc::new(Environment {
         runtime,
         state,
-        epoch,
+        clock,
         dir: dir.join("diagnostics"),
         cancel,
         shared,
@@ -196,16 +213,6 @@ fn run(env: &Environment, job: Job) -> io::Result<()> {
         reason: "Recording".into(),
         ..Default::default()
     };
-    publish(env, &status);
-    line(
-        &mut writer,
-        &mut status,
-        &json!({
-            "type": "header", "format": "bansayo-diagnostic-journal-v1",
-            "session_epoch_utc": env.epoch, "started_utc": crate::clock::utc_now_rfc3339(),
-            "devices": job.ids, "duration_s": job.duration.as_secs()
-        }),
-    )?;
     let mut cursors: Vec<_> = job
         .ids
         .iter()
@@ -214,7 +221,22 @@ fn run(env: &Environment, job: Job) -> io::Result<()> {
             (b.epoch, b.next)
         })
         .collect();
-    let started = Instant::now();
+    let started = env.clock.now_us();
+    let scheduled_end = started.saturating_add(job.duration.as_secs() * 1_000_000);
+    status.window_start_us = Some(started);
+    status.window_end_us = Some(scheduled_end);
+    publish(env, &status);
+    line(
+        &mut writer,
+        &mut status,
+        &json!({
+            "type": "header", "format": "bansayo-diagnostic-journal-v1",
+            "session_epoch_utc": env.clock.epoch_utc(),
+            "started_utc": crate::clock::utc_now_rfc3339(),
+            "devices": job.ids, "duration_s": job.duration.as_secs(),
+            "window_start_us": started, "scheduled_end_us": scheduled_end
+        }),
+    )?;
     let reason = 'record: loop {
         if env.cancel.is_cancelled() {
             break "Engine shutdown";
@@ -242,18 +264,32 @@ fn run(env: &Environment, job: Job) -> io::Result<()> {
             status.observations += count;
             status.lost += lost;
         }
+        let requested_stop = job.stop.load(Ordering::Relaxed);
+        let end = scheduled_end.min(requested_stop).max(started);
+        status.window_end_us = Some(end);
+        let now = env.clock.now_us();
+        if now >= end {
+            status.reason = "Finalizing".into();
+        }
         writer.flush()?;
         publish(env, &status);
-        if job.stop.is_cancelled() {
-            break "Stopped by operator";
-        }
-        if started.elapsed() >= job.duration {
-            break "Duration completed";
+        if now >= end.saturating_add(DRAIN_US) {
+            break if requested_stop < scheduled_end {
+                "Stopped by operator"
+            } else {
+                "Duration completed"
+            };
         }
         std::thread::sleep(POLL);
     };
+    let ended = scheduled_end
+        .min(job.stop.load(Ordering::Relaxed))
+        .min(env.clock.now_us())
+        .max(started);
+    status.window_end_us = Some(ended);
     let footer = json!({
-        "type":"footer","reason":reason,"observations":status.observations,"lost":status.lost
+        "type":"footer","reason":reason,"observations":status.observations,"lost":status.lost,
+        "window_end_us":ended,"late_arrival_drain_us":DRAIN_US
     });
     line(&mut writer, &mut status, &footer)?;
     writer.flush()?;

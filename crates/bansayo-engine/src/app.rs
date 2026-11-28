@@ -269,7 +269,7 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
     let (diagnostic_recorder, worker) = crate::diagnostic_recording::spawn(
         runtime.clone(),
         streams.state.clone(),
-        streams.epoch.clone(),
+        clock.clone(),
         data_dir.clone(),
         cancel.clone(),
     );

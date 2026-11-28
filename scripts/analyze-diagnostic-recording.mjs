@@ -39,8 +39,28 @@ for await(const line of createInterface({input:createReadStream(file),crlfDelay:
   if(parseError)break;
 }
 if(!parseError&&footer&&(footer.observations!==rows||footer.lost!==lost))parseError='Footer counts do not match';
+let window=null;
+if(!parseError&&header?.window_start_us!==undefined&&footer){
+  const start=header.window_start_us,end=footer.window_end_us,scheduled=header.scheduled_end_us;
+  if(!Number.isSafeInteger(start)||start<0||!Number.isSafeInteger(end)||!Number.isSafeInteger(scheduled)||end<start||end>scheduled)parseError='Invalid recording window';
+  else{
+    const counts=new Map();let excluded=0;
+    for await(const line of createInterface({input:createReadStream(file),crlfDelay:Infinity})){
+      if(!line.trim())continue;
+      const row=JSON.parse(line);
+      if(row.type!=='batch')continue;
+      for(const e of row.batch.entries){
+        if(e.point.t_us<start||e.point.t_us>=end){excluded++;continue;}
+        const key=row.device+'/'+e.channel;
+        const current=counts.get(key)??{device:row.device,channel:e.channel,count:0};
+        current.count++;counts.set(key,current);
+      }
+    }
+    window={start_us:start,end_us:end,duration_s:(end-start)/1e6,excluded,channels:[...counts.values()]};
+  }
+}
 const complete=!!header&&!!footer&&!parseError;
-const report={file,complete,header,footer,parse_error:parseError,observations:rows,journal_lost:lost,channels:[...channels.values()].map(({interval_sum,interval_count,last_seq,...s})=>({...s,min_interval_us:Number.isFinite(s.min_interval_us)?s.min_interval_us:null,mean_interval_us:interval_count?interval_sum/interval_count:null,observed_rate_hz:s.last_us>s.first_us?(s.count-1)*1e6/(s.last_us-s.first_us):null}))};
+const report={file,complete,header,footer,parse_error:parseError,observations:rows,journal_lost:lost,window,channels:[...channels.values()].map(({interval_sum,interval_count,last_seq,...s})=>({...s,min_interval_us:Number.isFinite(s.min_interval_us)?s.min_interval_us:null,mean_interval_us:interval_count?interval_sum/interval_count:null,observed_rate_hz:s.last_us>s.first_us?(s.count-1)*1e6/(s.last_us-s.first_us):null}))};
 await writeFile(output,JSON.stringify(report,null,2)+'\n',{flag:'wx'});
 console.log(JSON.stringify({complete,observations:rows,journal_lost:lost,output}));
 if(!complete)process.exitCode=1;

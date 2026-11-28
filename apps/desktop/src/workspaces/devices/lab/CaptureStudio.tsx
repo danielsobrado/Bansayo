@@ -22,6 +22,7 @@ export function CaptureStudio({devices,live,active}:{devices:DeviceStatus[];live
     {record&&<>{!imported&&<progress max={seconds} value={Math.min(seconds,capture.elapsed)}/> }<p className="mono">{record.samples.length.toLocaleString()} observations · {record.lost} journal losses · {record.resets} resets{!imported&&" · "+capture.elapsed.toFixed(1)+" s"}</p></>}
     <div className="studio-controls"><input aria-label="Event marker label" maxLength={80} value={label} onChange={e=>setLabel(e.target.value)}/><button disabled={!capture.running||capture.stopping||!label.trim()} onClick={()=>capture.mark(label.trim())}>Add event marker</button></div>
     <div className="studio-controls"><label>Open saved engine journal <input aria-label="Open saved engine journal" type="file" accept=".jsonl" disabled={capture.running||loading} onChange={e=>{const file=e.target.files?.[0];e.target.value="";if(file)void load(file);}}/></label>{imported&&<button onClick={()=>setImported(null)}>Close imported recording</button>}</div>
+    {record?.window&&<p className="mono">Engine-clock analysis window {((record.window.end_us-record.window.start_us)/1e6).toFixed(3)} s · {record.window.excluded} raw observations outside window</p>}
     {loading&&<p>Reading recording…</p>}{importError&&<p role="alert" className="lab-result-warn">{importError}</p>}
   </section>{active&&record&&<><Timeline capture={record}/>{!capture.running&&<AnalysisPanel capture={record}/>}</>}</div>;
 }
