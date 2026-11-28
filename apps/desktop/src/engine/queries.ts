@@ -21,6 +21,7 @@ export function createQueryCache(
 ): QueryCache {
   const entries = new Map<string, Promise<ApiResponse<unknown>>>();
   const version = createStore(0);
+  const maxEntries = 256;
   return {
     version,
     get<T>(path: string) {
@@ -28,10 +29,14 @@ export function createQueryCache(
       if (!hit) {
         hit = load(path).then((r) => {
           // Failures are not cached: the next read retries.
-          if (!r.ok) entries.delete(path);
+          if (!r.ok && entries.get(path) === hit) entries.delete(path);
           return r;
         });
         entries.set(path, hit);
+        if (entries.size > maxEntries) {
+          const oldest = entries.keys().next().value;
+          if (oldest !== undefined) entries.delete(oldest);
+        }
       }
       return hit as Promise<ApiResponse<T>>;
     },

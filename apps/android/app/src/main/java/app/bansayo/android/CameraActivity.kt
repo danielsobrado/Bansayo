@@ -7,6 +7,7 @@ import android.graphics.Rect
 import android.graphics.YuvImage
 import android.hardware.camera2.CaptureRequest
 import android.os.Bundle
+import android.util.Log
 import android.util.Range
 import android.util.Size
 import android.view.Gravity
@@ -135,7 +136,14 @@ class CameraActivity : ComponentActivity() {
     private fun startCamera() {
         val future = ProcessCameraProvider.getInstance(this)
         future.addListener({
-            val provider = future.get()
+            if (isDestroyed || isFinishing) return@addListener
+            val provider = try {
+                future.get()
+            } catch (error: Exception) {
+                Log.e("BansayoCamera", "Camera provider unavailable", error)
+                notice.show("Camera unavailable: ${error.message}")
+                return@addListener
+            }
             val ratio = if (wanted.width * 3 == wanted.height * 4) AspectRatio.RATIO_4_3 else AspectRatio.RATIO_16_9
             val selector = ResolutionSelector.Builder()
                 .setAspectRatioStrategy(AspectRatioStrategy(ratio, AspectRatioStrategy.FALLBACK_RULE_AUTO))
@@ -150,7 +158,16 @@ class CameraActivity : ComponentActivity() {
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
                 .build()
-            analysis.setAnalyzer(worker) { image -> image.use { send(it) } }
+            analysis.setAnalyzer(worker) { image ->
+                image.use {
+                    try {
+                        send(it)
+                    } catch (error: Exception) {
+                        skipped++
+                        Log.w("BansayoCamera", "Frame conversion or send failed", error)
+                    }
+                }
+            }
             provider.unbindAll()
             camera = provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, shown, analysis)
         }, mainExecutor)
@@ -180,8 +197,9 @@ class CameraActivity : ComponentActivity() {
         socket.set(
             Engine.socket(conn, "ingest/camera/$id", object : WebSocketListener() {
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                    socket.compareAndSet(webSocket, null)
+                    if (!socket.compareAndSet(webSocket, null)) return
                     runOnUiThread {
+                        if (isDestroyed || socket.get() != null) return@runOnUiThread
                         notice.show(if (response?.code == 401) Engine.REFUSED else "${Engine.UNREACHABLE}: connection lost (${t.message ?: response?.code})")
                     }
                 }
@@ -223,7 +241,7 @@ class CameraActivity : ComponentActivity() {
 
     private fun tick() {
         status.postDelayed({
-            if (isFinishing) return@postDelayed
+            if (isFinishing || isDestroyed) return@postDelayed
             val ws = socket.get()
             val warn = if (frameSize.isNotEmpty() && frameSize != "${wanted.width}x${wanted.height}")
                 "\nThis camera gives $frameSize; set resolution_px: [${frameSize.replace("x", ", ")}] for the slot on the engine."
@@ -232,6 +250,11 @@ class CameraActivity : ComponentActivity() {
             status.text = "sent $sent · skipped $skipped · $frameSize$warn"
             tick()
         }, 1000)
+    }
+
+    override fun onStop() {
+        disconnect()
+        super.onStop()
     }
 
     override fun onDestroy() {
@@ -266,7 +289,7 @@ class CameraActivity : ComponentActivity() {
                 }
             }
             val out = ByteArrayOutputStream(w * h / 4)
-            YuvImage(nv21, ImageFormat.NV21, w, h, null).compressToJpeg(Rect(0, 0, w, h), 80, out)
+            check(YuvImage(nv21, ImageFormat.NV21, w, h, null).compressToJpeg(Rect(0, 0, w, h), 80, out)) { "JPEG compression failed" }
             return out.toByteArray()
         }
     }

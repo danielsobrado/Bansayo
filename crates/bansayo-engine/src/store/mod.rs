@@ -54,6 +54,12 @@ pub fn open(path: &Path) -> Result<Connection, StoreError> {
 /// Applies migrations after `user_version`; a failure leaves the file untouched (12 §9).
 pub fn migrate(c: &mut Connection) -> Result<(), StoreError> {
     let current: usize = c.pragma_query_value(None, "user_version", |r| r.get(0))?;
+    if current > MIGRATIONS.len() {
+        return Err(StoreError::Other(format!(
+            "Database schema version {current} is newer than supported version {}",
+            MIGRATIONS.len()
+        )));
+    }
     for (i, (name, sql)) in MIGRATIONS.iter().enumerate().skip(current) {
         let tx = c.transaction()?;
         tx.execute_batch(sql)

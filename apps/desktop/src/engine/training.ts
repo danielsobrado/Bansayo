@@ -32,7 +32,9 @@ export function createTrainingEvents(
 ): TrainingEvents {
   const store = createStore<readonly TrainingEvent[]>([]);
   let session: string | null = null;
-  let refilling = false;
+  let generation = 0;
+  let refilling: Promise<void> | null = null;
+  let missingAfter: number | null = null;
   const last = () => store.get().at(-1)?.event_seq ?? 0;
   const insert = (incoming: readonly TrainingEvent[]) => {
     const bySeq = new Map(store.get().map((e) => [e.event_seq, e]));
@@ -46,16 +48,40 @@ export function createTrainingEvents(
   const enter = (sessionId: string) => {
     if (session === sessionId) return;
     session = sessionId;
+    generation++;
+    refilling = null;
+    missingAfter = null;
     store.set([]);
   };
   const refill = async (sessionId: string, afterSeq: number) => {
-    if (refilling) return;
-    refilling = true;
+    missingAfter = missingAfter === null ? afterSeq : Math.min(missingAfter, afterSeq);
+    if (refilling) return refilling;
+    const epoch = generation;
+    const cursor = missingAfter;
+    const task = (async () => {
+      try {
+        const got = await fetchAfter(sessionId, cursor);
+        if (generation !== epoch || session !== sessionId || !got) return;
+        insert(got);
+        const rows = store.get();
+        let expected = rows.length === capacity
+          ? Math.max(cursor + 1, rows[0]?.event_seq ?? cursor + 1)
+          : cursor + 1;
+        for (const event of rows) {
+          if (event.event_seq < expected) continue;
+          if (event.event_seq !== expected) break;
+          expected++;
+        }
+        missingAfter = expected <= last() ? expected - 1 : null;
+      } catch {
+        // Keep the pending cursor for the next state update.
+      }
+    })();
+    refilling = task;
     try {
-      const got = await fetchAfter(sessionId, afterSeq);
-      if (got && session === sessionId) insert(got);
+      await task;
     } finally {
-      refilling = false;
+      if (generation === epoch && refilling === task) refilling = null;
     }
   };
   return {
@@ -65,14 +91,19 @@ export function createTrainingEvents(
       enter(sessionId);
       const before = last();
       insert([event]);
-      if (event.event_seq > before + 1) await refill(sessionId, before);
+      if (event.event_seq > before + 1 || missingAfter !== null)
+        await refill(sessionId, missingAfter ?? before);
     },
     async sync(sessionId, lastEventSeq) {
       enter(sessionId);
-      if (lastEventSeq > last()) await refill(sessionId, last());
+      if (lastEventSeq > last() || missingAfter !== null)
+        await refill(sessionId, missingAfter ?? last());
     },
     clear() {
       session = null;
+      generation++;
+      refilling = null;
+      missingAfter = null;
       store.set([]);
     },
   };

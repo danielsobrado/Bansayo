@@ -233,7 +233,11 @@ async fn session(
                 // Silent sender: stop presenting its last poses as current; the socket stays.
                 link.unlink_all(ingress.clock.now_us(), |e| ingress.enqueue(e));
                 stats.idle += 1;
-                idle_at = None;
+                idle_at = if link.has_linked_devices() {
+                    Some(Instant::now() + idle)
+                } else {
+                    None
+                };
                 continue;
             }
             m = socket.recv() => m,
@@ -271,7 +275,6 @@ async fn session(
                     }
                     Err(XrValidationError::OverRate) => {
                         stats.over_rate += 1;
-                        idle_at = Some(Instant::now() + idle);
                         Ok(())
                     }
                     Err(e) => Err((e.code(), e.to_string())),
@@ -295,7 +298,21 @@ async fn session(
             }
         }
     };
-    link.unlink_all(ingress.clock.now_us(), |e| ingress.enqueue(e));
+    let mut disconnects = Vec::new();
+    link.unlink_all(ingress.clock.now_us(), |event| {
+        disconnects.push(event);
+        true
+    });
+    for event in disconnects {
+        tokio::select! {
+            _ = cancel.cancelled() => break,
+            result = ingress.events.send(Ingest::Event(event)) => {
+                if result.is_err() {
+                    break;
+                }
+            }
+        }
+    }
     let dropped: u64 = ingress
         .dropped
         .iter()

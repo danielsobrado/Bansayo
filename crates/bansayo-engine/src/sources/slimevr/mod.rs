@@ -22,6 +22,7 @@ const KEEP_ALIVE_US: u64 = 100_000;
 /// Battery and signal are reported at most this often.
 const DIAGNOSTICS_US: u64 = 1_000_000;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
+const FEED_TIMEOUT: Duration = Duration::from_secs(10);
 const BACKOFF_MIN: Duration = Duration::from_millis(500);
 const BACKOFF_MAX: Duration = Duration::from_secs(5);
 
@@ -85,7 +86,7 @@ impl SlimevrSource {
 /// Per-connection bookkeeping that survives reconnects.
 #[derive(Default)]
 struct State {
-    seq: BTreeMap<DeviceId, u64>,
+    seq: BTreeMap<(DeviceId, bool), u64>,
     last: BTreeMap<DeviceId, ([u32; 4], u64)>,
     diagnostics: BTreeMap<DeviceId, u64>,
     announced: BTreeSet<DeviceId>,
@@ -94,8 +95,8 @@ struct State {
     invalid: u64,
 }
 
-fn send(context: &SourceContext, event: SourceEvent) {
-    let _ = context.events.try_send(Ingest::Event(event));
+fn send(context: &SourceContext, event: SourceEvent) -> bool {
+    context.events.try_send(Ingest::Event(event)).is_ok()
 }
 
 impl SlimevrSource {
@@ -120,14 +121,17 @@ impl SlimevrSource {
             return None;
         }
         let id = generated_id(&t.key)?;
-        if state.announced.insert(id.clone()) {
+        if !state.announced.contains(&id) {
             let rate = t.poll_rate_hz.filter(|r| r.is_finite() && *r > 0.0);
-            send(
+            if !send(
                 context,
                 SourceEvent::DeviceAnnounced {
                     descriptor: self.descriptor(&id, t.name.as_deref(), rate),
                 },
-            );
+            ) {
+                return None;
+            }
+            state.announced.insert(id.clone());
             tracing::info!(source=%self.spec.id, tracker=%t.key, device=%id, "SlimeVR tracker announced");
         }
         Some(id)
@@ -142,27 +146,33 @@ impl SlimevrSource {
             Some(solarxr::STATUS_OK | solarxr::STATUS_BUSY | solarxr::STATUS_OCCLUDED)
         );
         if !usable {
-            if state.linked.remove(&id) {
-                send(
+            if state.linked.contains(&id)
+                && send(
                     context,
                     SourceEvent::DeviceLink {
-                        device_id: id,
+                        device_id: id.clone(),
                         connected: false,
                         t_us: now,
                     },
-                );
+                )
+            {
+                state.linked.remove(&id);
+                state.last.remove(&id);
             }
             return;
         }
-        if state.linked.insert(id.clone()) {
-            send(
+        if !state.linked.contains(&id) {
+            if !send(
                 context,
                 SourceEvent::DeviceLink {
                     device_id: id.clone(),
                     connected: true,
                     t_us: now,
                 },
-            );
+            ) {
+                return;
+            }
+            state.linked.insert(id.clone());
             if let Ok(mut r) = self.runtime.write() {
                 r.entry(id.clone()).or_default().time_sync = Some(TimeSyncStatus {
                     time_quality: TimeQuality::ReceiveTime,
@@ -243,12 +253,7 @@ impl SlimevrSource {
     ) {
         let key = id.clone();
         // Orientation and diagnostics are separate streams with their own sequence numbers.
-        let seq_key = if matches!(data, ObservationData::Diagnostics { .. }) {
-            DeviceId::new(format!("{}#d", &key.as_str()[..key.as_str().len().min(60)]))
-                .unwrap_or(key.clone())
-        } else {
-            key.clone()
-        };
+        let seq_key = (key.clone(), matches!(data, ObservationData::Diagnostics { .. }));
         let seq = state.seq.entry(seq_key).or_insert(0);
         *seq += 1;
         let observation = SensorObservation {
@@ -283,15 +288,21 @@ impl SlimevrSource {
         .map_err(|_| "connection timed out".to_string())?
         .map_err(|e| e.to_string())?;
         tracing::info!(source=%self.spec.id, endpoint=%self.spec.endpoint, "Connected to SlimeVR Server");
-        ws.send(Message::Binary(
-            solarxr::start_data_feed(self.spec.feed_interval_ms).into(),
-        ))
+        tokio::time::timeout(
+            CONNECT_TIMEOUT,
+            ws.send(Message::Binary(
+                solarxr::start_data_feed(self.spec.feed_interval_ms).into(),
+            )),
+        )
         .await
+        .map_err(|_| "feed request timed out".to_string())?
         .map_err(|e| e.to_string())?;
         loop {
             let message = tokio::select! {
                 _ = context.cancel.cancelled() => return Ok(()),
-                m = ws.next() => m,
+                m = tokio::time::timeout(FEED_TIMEOUT, ws.next()) => {
+                    m.map_err(|_| "SlimeVR feed timed out".to_string())?
+                },
             };
             match message {
                 Some(Ok(Message::Binary(bytes))) => {
@@ -333,15 +344,22 @@ impl Source for SlimevrSource {
             }
             let now = context.clock.now_us();
             for id in std::mem::take(&mut state.linked) {
-                send(
-                    &context,
-                    SourceEvent::DeviceLink {
-                        device_id: id,
-                        connected: false,
-                        t_us: now,
-                    },
-                );
+                let event = Ingest::Event(SourceEvent::DeviceLink {
+                    device_id: id,
+                    connected: false,
+                    t_us: now,
+                });
+                tokio::select! {
+                    _ = context.cancel.cancelled() => return Ok(()),
+                    result = context.events.send(event) => {
+                        if result.is_err() {
+                            return Ok(());
+                        }
+                    }
+                }
             }
+            state.last.clear();
+            state.diagnostics.clear();
             if let Err(e) = result
                 && e != last_error
             {

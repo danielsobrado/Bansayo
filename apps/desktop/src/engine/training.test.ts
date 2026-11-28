@@ -44,6 +44,24 @@ describe("trainingEvents", () => {
     expect(events.store.get().map((e) => e.event_seq)).toEqual([1]);
   });
 
+  it("retries a missing range even after the newest event arrives", async () => {
+    let attempts = 0;
+    const events = createTrainingEvents(async () => ++attempts === 1 ? null : [ev(1), ev(2), ev(3)]);
+    await events.apply("s1", ev(4));
+    await events.sync("s1", 4);
+    expect(events.store.get().map(e => e.event_seq)).toEqual([1, 2, 3, 4]);
+  });
+  it("does not let a previous session block or contaminate a new refill", async () => {
+    let finish!: (events: TrainingEvent[]) => void;
+    const events = createTrainingEvents(async id => id === "s1"
+      ? new Promise<TrainingEvent[]>(resolve => { finish = resolve; })
+      : [ev(1), ev(2)]);
+    const old = events.apply("s1", ev(5));
+    await events.apply("s2", ev(3));
+    finish([ev(4)]);
+    await old;
+    expect(events.store.get().map(e => e.event_seq)).toEqual([1, 2, 3]);
+  });
   it("a failed refill keeps what arrived", async () => {
     const events = createTrainingEvents(async () => null);
     await events.apply("s1", ev(4));

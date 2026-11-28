@@ -227,6 +227,10 @@ impl XrLink {
         Ok(queued)
     }
 
+    pub fn has_linked_devices(&self) -> bool {
+        self.linked.contains(&Some(true))
+    }
+
     /// Marks every device this connection has linked as disconnected (idle, close, shutdown).
     pub fn unlink_all(&mut self, t_us: TimeUs, mut send: impl FnMut(SourceEvent) -> bool) {
         for role in XrRole::ORDER {

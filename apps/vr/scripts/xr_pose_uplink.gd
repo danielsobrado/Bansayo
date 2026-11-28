@@ -8,6 +8,7 @@ signal status_changed(text: String)
 
 const PROTOCOL_VERSION := 1
 const PATH := "/api/v1/ingest/xr"
+const HELLO_TIMEOUT_US := 10000000
 
 var engine_url := "http://127.0.0.1:7700"
 var rate_hz := 60
@@ -30,6 +31,7 @@ var _next_sample_us := 0
 var _attempt := 0
 var _retry_at_us := 0
 var _paused_sent := false
+var _connect_deadline_us := 0
 
 static func enabled() -> bool:
 	return bool(ProjectSettings.get_setting("bansayo/xr_uplink_enabled", false))
@@ -56,6 +58,7 @@ func _set_status(text: String) -> void:
 
 func _connect() -> void:
 	_socket = WebSocketPeer.new()
+	_connect_deadline_us = Time.get_ticks_usec() + HELLO_TIMEOUT_US
 	_hello_sent = false
 	_handshaken = false
 	_paused_sent = false
@@ -83,6 +86,10 @@ func _process(_delta: float) -> void:
 			_connect()
 		return
 	_socket.poll()
+	if not _handshaken and Time.get_ticks_usec() >= _connect_deadline_us:
+		_socket.close()
+		_retry("engine handshake timed out")
+		return
 	match _socket.get_ready_state():
 		WebSocketPeer.STATE_OPEN:
 			if not _hello_sent:
@@ -130,7 +137,6 @@ func _tick(now_us: int) -> void:
 		device_samples = capture.call()
 	elif not _paused_sent:
 		# One explicit "untracked" frame on focus loss, then nothing until focus returns.
-		_paused_sent = true
 		device_samples = []
 		for role in XrPoseCapture.ROLES:
 			device_samples.append(XrPoseCapture.untracked(role))
@@ -141,6 +147,8 @@ func _tick(now_us: int) -> void:
 		return
 	if _socket.send_text(JSON.stringify(XrPoseCapture.frame(_seq, now_us, device_samples))) == OK:
 		_seq += 1
+		if not focused or not capture.is_valid():
+			_paused_sent = true
 
 ## XR recentered: stage poses may jump; they are still raw stage, so streaming continues.
 func recentered() -> void:

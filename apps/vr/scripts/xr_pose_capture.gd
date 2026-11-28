@@ -21,6 +21,8 @@ static func sample(role: String, stage_from_world: Transform3D, device_global: T
 		return untracked(role)
 	var stage_from_device := stage_from_world * device_global
 	var p := stage_from_device.origin
+	if not stage_from_device.basis.is_finite() or stage_from_device.basis.determinant() <= 0.000001:
+		return untracked(role)
 	var q := stage_from_device.basis.orthonormalized().get_rotation_quaternion()
 	var values := [p.x, p.y, p.z, q.x, q.y, q.z, q.w]
 	for v in values:
@@ -34,10 +36,11 @@ static func sample(role: String, stage_from_world: Transform3D, device_global: T
 static func samples(origin: Node3D, head: Node3D, left: Node3D, right: Node3D, tracked: Array[bool]) -> Array:
 	var nodes := [head, left, right]
 	var out := []
-	var stage_from_world := origin.global_transform.affine_inverse() if origin else Transform3D.IDENTITY
+	var valid_origin := origin != null and origin.global_transform.basis.is_finite() and origin.global_transform.basis.determinant() > 0.000001
+	var stage_from_world := origin.global_transform.affine_inverse() if valid_origin else Transform3D.IDENTITY
 	for i in range(ROLES.size()):
 		var node: Node3D = nodes[i]
-		var ok: bool = origin != null and node != null and tracked[i]
+		var ok: bool = valid_origin and node != null and i < tracked.size() and tracked[i]
 		out.append(sample(ROLES[i], stage_from_world, node.global_transform if node else Transform3D.IDENTITY, ok))
 	return out
 

@@ -183,7 +183,8 @@ fn point_with_noise_floor(
         * (1.0 - rms / max).clamp(0.0, 1.0);
     (errors.iter().all(|e| *e <= max)
         && spread >= config.min_ray_angle_deg.to_radians()
-        && m.iter().all(|v| v.is_finite() && v.abs() <= f32::MAX as f64))
+        && m.iter()
+            .all(|v| v.is_finite() && v.abs() <= f32::MAX as f64))
     .then(|| TriangulatedLandmark3D {
         sigma_m: keypoint_sigma(
             rms,

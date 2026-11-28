@@ -36,7 +36,7 @@ impl History {
     pub fn at(&self, t: u64, obs: &Obs) -> Option<f64> {
         let i = obs.index?;
         let (_, row) = self.frames.iter().rev().find(|(ft, _)| *ft <= t)?;
-        let (v, n) = row[i];
+        let (v, n) = *row.get(i)?;
         if obs.norm { n } else { v }
     }
 }
@@ -60,12 +60,9 @@ impl Rest {
 
 fn raw(frame: &ObservableFrame, obs: &Obs) -> Option<(f64, u64, bool)> {
     let v = frame.get(obs.index?);
-    let x = if obs.norm { v.norm } else { v.value }?;
-    Some((
-        x * obs.sign,
-        v.evidence.t_obs_us.unwrap_or(frame.t_us),
-        v.fresh,
-    ))
+    let x = if obs.norm { v.norm } else { v.value }? * obs.sign;
+    let t = v.evidence.t_obs_us.unwrap_or(frame.t_us);
+    (x.is_finite() && t <= frame.t_us).then_some((x, t, v.fresh))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -119,20 +116,30 @@ impl Peak {
 
 /// Vertex of the parabola through three samples (04 §7), clamped to the outer two.
 pub fn vertex(a: (u64, f64), b: (u64, f64), c: (u64, f64)) -> (u64, f64) {
-    let (x0, x1, x2) = (a.0 as f64, b.0 as f64, c.0 as f64);
-    let (y0, y1, y2) = (a.1, b.1, c.1);
-    let d = (x0 - x1) * (x0 - x2) * (x1 - x2);
-    if d.abs() < 1e-9 {
+    if !(a.0 < b.0 && b.0 < c.0) || ![a.1, b.1, c.1].iter().all(|v| v.is_finite()) {
         return b;
     }
-    let pa = (x2 * (y1 - y0) + x1 * (y0 - y2) + x0 * (y2 - y1)) / d;
-    let pb = (x2 * x2 * (y0 - y1) + x1 * x1 * (y2 - y0) + x0 * x0 * (y1 - y2)) / d;
-    if pa.abs() < 1e-18 {
+    // Fit around the middle timestamp to avoid cancellation on long-running sessions.
+    let left = (b.0 - a.0) as f64;
+    let right = (c.0 - b.0) as f64;
+    let slope_left = (b.1 - a.1) / left;
+    let slope_right = (c.1 - b.1) / right;
+    let quadratic = (slope_right - slope_left) / (left + right);
+    let linear = slope_left + quadratic * left;
+    if quadratic >= 0.0 || !quadratic.is_finite() {
         return b;
     }
-    let tv = (-pb / (2.0 * pa)).clamp(x0, x2);
-    let pc = y0 - pa * x0 * x0 - pb * x0;
-    (tv.round() as u64, pa * tv * tv + pb * tv + pc)
+    let offset = (-linear / (2.0 * quadratic)).clamp(-left, right);
+    let value = b.1 + offset * (linear + quadratic * offset);
+    if !value.is_finite() {
+        return b;
+    }
+    let t = if offset < 0.0 {
+        b.0.saturating_sub((-offset).round() as u64)
+    } else {
+        b.0.saturating_add(offset.round() as u64)
+    };
+    (t, value)
 }
 
 fn cross(a: (u64, f64), b: (u64, f64), level: f64) -> u64 {
@@ -179,7 +186,7 @@ impl AtomState {
     }
 
     fn update(&mut self, a: &CAtom, frame: &ObservableFrame, refs: &Refs) {
-        let Some((x, t, fresh)) = raw(frame, &a.obs) else {
+        let Some((x, t, _fresh)) = raw(frame, &a.obs) else {
             self.known = false;
             self.since = None;
             self.prev = None;
@@ -190,10 +197,16 @@ impl AtomState {
             return;
         };
         self.known = true;
-        if !fresh && self.prev.is_some_and(|p| p.0 >= t) {
+        if self.prev.is_some_and(|p| p.0 >= t) {
             return;
         }
         let x = x - r;
+        if !x.is_finite() {
+            self.known = false;
+            self.since = None;
+            self.prev = None;
+            return;
+        }
         let prev = self.prev;
         let p = prev.unwrap_or((t, x));
         match a.op {
@@ -558,7 +571,7 @@ impl Machine {
         let Some((x, t, fresh)) = raw(frame, &s.obs) else {
             return;
         };
-        if !fresh {
+        if !fresh || self.last_strike.is_some_and(|(last, _)| t <= last) {
             return;
         }
         let x = if s.max { x } else { -x };
@@ -604,5 +617,20 @@ impl Machine {
 
     pub fn mandatory_phases(&self) -> usize {
         self.tech.phases.iter().filter(|p| !p.optional).count()
+    }
+}
+
+#[cfg(test)]
+mod numerical_tests {
+    use super::*;
+
+    #[test]
+    fn peak_vertex_is_stable_at_large_timestamps() {
+        let start = 9_000_000_000_000;
+        assert_eq!(
+            vertex((start, 1.0), (start + 1000, 2.0), (start + 2000, 1.0)),
+            (start + 1000, 2.0)
+        );
+        assert_eq!(vertex((3, 1.0), (2, 2.0), (1, 1.0)), (2, 2.0));
     }
 }
