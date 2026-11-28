@@ -5,6 +5,9 @@ import { StatePill } from "../../../ui/StatePill";
 import { Reasons } from "../../../ui/Reasons";
 import { Icon } from "../../../ui/Icon";
 import { BodyMap } from "../../../ui/BodyMap";
+import {profileReadiness} from "./calibrationQuality";
+import {NetworkPanel} from "./NetworkPanel";
+import {transportFresh} from "./networkMath";
 import { OpticalLab } from "./OpticalLab";
 import { CameraPreview } from "../../cameras/CameraPreview";
 import { OrientationView } from "./Plots";
@@ -35,7 +38,8 @@ export function DeviceInspector({device,devices,live,skeleton,view,focus,onFocus
   const accel=orientation?nearestPoint(channels.accel?.points??[],orientation.t_us,40_000)?.values:undefined;
   const motion=!frozen?motionSummary(channels.gyro,channels.accel):null;
   const used=useSampledFrame(4,(frame,age)=>frame&&age<=STALE_MS?(frame.pose?.segments??[]).filter(s=>s.sources.includes(device.descriptor.id)).length:null);
-  const timing=device.time_sync;
+  const timing=available?device.time_sync:null;
+  const calibration=profileReadiness(device.calibration);
   const metrics=[
     ["Rate",`${device.stream.measured_rate_hz.toFixed(1)} Hz`,`Nominal ${device.descriptor.nominal_rate_hz??"—"} Hz`],
     ["Dropped",String(device.stream.dropped),"Observations"],
@@ -79,13 +83,14 @@ export function DeviceInspector({device,devices,live,skeleton,view,focus,onFocus
               <MountingPanel key={snapshot?.reference??0} device={device} live={live} frozen={frozen} channels={channels}/>
               <GuidedTests key={snapshot?.reference??0} deviceId={device.descriptor.id} channels={channels} enabled={available&&!frozen}/>
             </div>
-            {view==="timing"&&<div className="lab-grid"><TimingPanel timing={(frozen||channels.orientation)?snapshot?.timing:undefined}/><MagneticPanel a={channels.mag0} b={channels.mag1}/><SaturationPanel gyro={channels.gyro} accel={channels.accel} native={native}/><BatteryHistory device={device} enabled={available}/></div>}
+            {view==="timing"&&<div className="lab-grid"><section className="lab-card"><h3>Device clock estimator</h3><p className="mono">Drift {timing?.settled&&timing.drift_ppm!==null?timing.drift_ppm.toFixed(2)+" ppm":"—"} · offset {timing?.settled&&timing.offset_us!==null?timing.offset_us+" µs":"—"} · resets {timing?.resets??"—"}</p><p className="subtle">Continuously estimated by the engine; positive ppm means device clock runs slow. See Reliability for history.</p></section><TimingPanel timing={(frozen||channels.orientation)?snapshot?.timing:undefined}/><NetworkPanel snapshot={!frozen&&available&&transportFresh(snapshot?.transport,device,performance.now()-reading.receivedAt)?snapshot?.transport:undefined}/><MagneticPanel a={channels.mag0} b={channels.mag1}/><SaturationPanel gyro={channels.gyro} accel={channels.accel} native={native}/><BatteryHistory device={device} enabled={available}/></div>}
           </>}
       </div>
       {showInspector&&<aside className="studio-inspector" aria-label="Device properties">
         <div className="studio-panel-title"><Icon name="sliders"/><strong>INSPECTOR</strong></div>
         <dl className="studio-properties">{fields.map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
         <div className="studio-panel-title"><strong>CALIBRATION</strong></div>
+        <p className="subtle studio-no-match">Profile readiness: {calibration.valid}/{calibration.total} valid · not an accuracy score</p>
         <dl className="studio-properties">{device.calibration.length?device.calibration.map(c=><div key={c.kind+":"+c.profile_id}><dt>{c.kind}</dt><dd>{c.state}</dd></div>):<div><dt>Profiles</dt><dd>None</dd></div>}</dl>
         {device.assignment&&skeleton&&<><div className="studio-panel-title"><strong>BODY ASSIGNMENT</strong></div><BodyMap skeleton={skeleton} values={[]} highlight={device.assignment}/><p className="subtle studio-no-match">Reference assignment, not live pose.</p></>}
         <Reasons reasons={device.reasons}/>

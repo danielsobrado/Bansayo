@@ -1,4 +1,6 @@
 import { useState } from "react";
+import {benchQuality} from "./calibrationQuality";
+import {CALIBRATION_SCORE} from "./reliabilityConfig";
 import { Icon } from "../../../ui/Icon";
 import { FaceReference } from "./FaceReference";
 import { FACES, faceMeasurement, quaternionAngle, rotationCheck, sixFaceEstimate, ROTATION_TOLERANCE_DEG } from "./benchMath";
@@ -11,6 +13,7 @@ export function GuidedTests({ deviceId, channels, enabled }: {
   const [face,setFace] = useState(0);
   const [start,setStart] = useState<{q:number[];t:number}|null>(null);
   const [turn,setTurn] = useState<ReturnType<typeof rotationCheck>>(null);
+  const [turns,setTurns]=useState<Partial<Record<string,NonNullable<ReturnType<typeof rotationCheck>>>>>({});
   const [drift,setDrift] = useState<{q:number[];t:number}|null>(null);
   const [report,setReport] = useState<{angle:number;seconds:number}|null>(null);
   const [axis,setAxis] = useState("X");
@@ -22,8 +25,9 @@ export function GuidedTests({ deviceId, channels, enabled }: {
   const [test,setTest] = useState<"face"|"rotation"|"drift">("face");
   const complete = Object.keys(faces).length;
   const passing = Object.values(faces).filter(v=>v.pass).length;
+  const quality=benchQuality(faces,turns,report);
   function download() {
-    const blob = new Blob([JSON.stringify({deviceId,faces,accelerationEstimate:estimate,rotation:{axis,result:turn},drift:report,
+    const blob = new Blob([JSON.stringify({deviceId,faces,accelerationEstimate:estimate,rotation:{axis,result:turn,axes:turns},drift:report,quality,
       thresholds:"Advisory, not metrological calibration",exported_at:new Date().toISOString()},null,2)],{type:"application/json"});
     const url=URL.createObjectURL(blob);
     const a=document.createElement("a"); a.href=url; a.download=deviceId+"-bench.json"; a.click();
@@ -32,6 +36,8 @@ export function GuidedTests({ deviceId, channels, enabled }: {
   return <section className="lab-card">
     <header><h3>Guided hardware tests</h3><button onClick={download}>Export test report</button></header>
     <p className="subtle">Advisory checks using sampled telemetry; no coefficients are written to firmware.</p>
+    <p className="mono">Calibration bench score: {quality.score===null?"Incomplete":quality.score+"/100"} · {quality.completed}/10 checks captured · {quality.passing} within tolerance</p>
+    <p className="subtle">Complete six faces, 90° rotations on all three axes, and a stationary endpoint drift test of at least {CALIBRATION_SCORE.minimumDriftSeconds} s. Equal-weight gate score, not calibrated accuracy; endpoint stillness is not continuous proof.</p>
     <div className="studio-subbar" aria-label="Calibration tests">
       <button aria-pressed={test==="face"} onClick={()=>setTest("face")}>Accelerometer · {complete}/6</button>
       <button aria-pressed={test==="rotation"} onClick={()=>setTest("rotation")}>90° rotation</button>
@@ -63,7 +69,8 @@ export function GuidedTests({ deviceId, channels, enabled }: {
         <label>Physical axis <select value={axis} onChange={e=>{setAxis(e.target.value);setStart(null);setTurn(null);}}>{["X","Y","Z"].map(a=><option key={a}>{a}</option>)}</select></label>
         <p>Hold still, capture start, rotate exactly 90° about {axis} using a physical reference, then stop and capture end.</p>
         <button disabled={!still || !q} onClick={()=>{if(q){setStart({q:q.values,t:q.t_us});setTurn(null);}}}>Capture start</button>
-        <button disabled={!still || !q || !start || q.t_us<=start.t} onClick={()=>{if(q&&start)setTurn(rotationCheck(start.q,q.values,["X","Y","Z"].indexOf(axis)));}}>Capture end</button>
+        <button disabled={!still || !q || !start || q.t_us<=start.t} onClick={()=>{if(q&&start){const result=rotationCheck(start.q,q.values,["X","Y","Z"].indexOf(axis));setTurn(result);setTurns(old=>{const next={...old};if(result)next[axis]=result;else delete next[axis];return next;});}}}>Capture end</button>
+        <p className="subtle">Axes captured: {Object.keys(turns).join(", ")||"None"}</p><button onClick={()=>{setTurns({});setTurn(null);setStart(null);}}>Reset rotation tests</button>
         {turn!==null&&<p className={Math.abs(turn.angle-90)<=ROTATION_TOLERANCE_DEG&&turn.axisError<=ROTATION_TOLERANCE_DEG?"lab-result-ok":"lab-result-warn"}>Rotation {turn.angle.toFixed(2)}° · angle error {Math.abs(turn.angle-90).toFixed(2)}° · axis error {turn.axisError.toFixed(2)}° (unsigned axis)</p>}
       </div>
       <div className="studio-test-panel" hidden={test!=="drift"}>

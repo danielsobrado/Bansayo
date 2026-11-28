@@ -100,6 +100,7 @@ pub struct Snapshot {
     reference: u64,
     channels: BTreeMap<&'static str, ChannelSnapshot>,
     timing: Option<TimingSnapshot>,
+    transport: Option<super::transport_timing::TransportSnapshot>,
 }
 
 impl Trace {
@@ -149,6 +150,7 @@ impl Trace {
     fn snapshot(&self) -> Snapshot {
         Snapshot {
             reference: self.reference,
+            transport: None,
             timing: self.timing.last.map(|_| TimingSnapshot {
                 intervals_ms: self.timing.intervals.iter().copied().collect(),
                 sequence_gaps: self.timing.gaps,
@@ -279,13 +281,19 @@ pub fn magnetic(
 }
 
 pub fn snapshot(runtime: &RuntimeMap, id: &DeviceId) -> Snapshot {
-    let trace = runtime
+    let (trace, transport) = runtime
         .read()
         .ok()
-        .and_then(|all| all.get(id)?.inspection.clone());
-    trace
+        .and_then(|all| {
+            let device = all.get(id)?;
+            Some((device.inspection.clone(), device.transport.clone()))
+        })
+        .unwrap_or_default();
+    let mut result = trace
         .and_then(|trace| trace.lock().ok().map(|t| t.snapshot()))
-        .unwrap_or_default()
+        .unwrap_or_default();
+    result.transport = transport;
+    result
 }
 
 pub fn batch(runtime: &RuntimeMap, id: &DeviceId, epoch: Option<u64>, after: u64) -> Batch {

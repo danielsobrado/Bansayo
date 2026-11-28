@@ -194,6 +194,7 @@ struct Track {
     last_mapped_us: Option<u64>,
     last_diag_us: Option<u64>,
     status_us: Option<u64>,
+    transport: super::transport_timing::TransportTiming,
 }
 
 // Accept forward modular sequences, including wrap. A backwards sequence is a
@@ -337,9 +338,11 @@ impl Source for Esp32Source {
             };
             let track = tracks.entry(id.clone()).or_default();
             let Some((seq, reset)) = track.observe(&p, reference, now) else {
+                track.transport.reject();
                 continue;
             };
             if reset {
+                track.transport.reset(now);
                 track.wrap = Default::default();
                 if track.last_mapped_us.take().is_some() {
                     track.time.reset();
@@ -362,6 +365,7 @@ impl Source for Esp32Source {
                 }
             }
             let device = track.wrap.extend(p.device_time_us);
+            track.transport.record(seq, device, now);
             let (mapped, quality) = track.time.map(Some(device), now, self.spec.latency_us);
             // A newly observed minimum offset can move the estimate backwards.
             // Keep accepted capture times nondecreasing within this stream.
@@ -389,6 +393,17 @@ impl Source for Esp32Source {
                     c.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 }
             };
+            if track
+                .status_us
+                .is_none_or(|l| now.saturating_sub(l) >= 1_000_000)
+            {
+                track.status_us = Some(now);
+                if let Ok(mut r) = self.runtime.write() {
+                    let runtime = r.entry(id.clone()).or_default();
+                    runtime.time_sync = Some(track.time.status());
+                    runtime.transport = Some(track.transport.snapshot());
+                }
+            }
             if p.status >= 2 {
                 continue;
             }
@@ -437,15 +452,6 @@ impl Source for Esp32Source {
                     },
                     None,
                 );
-            }
-            if track
-                .status_us
-                .is_none_or(|l| now.saturating_sub(l) >= 1_000_000)
-            {
-                track.status_us = Some(now);
-                if let Ok(mut r) = self.runtime.write() {
-                    r.entry(id.clone()).or_default().time_sync = Some(track.time.status());
-                }
             }
         }
     }

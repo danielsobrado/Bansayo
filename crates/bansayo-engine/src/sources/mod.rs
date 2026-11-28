@@ -6,6 +6,7 @@ pub mod inspection;
 pub mod simulated;
 pub mod slimevr;
 pub mod supervision;
+mod transport_timing;
 pub mod validation;
 pub mod xr;
 use crate::clock::SessionClock;
@@ -23,6 +24,7 @@ pub struct DeviceRuntime {
     pub time_sync: Option<bansayo_contracts::TimeSyncStatus>,
     pub last_inference_us: Option<u64>,
     pub inspection: Option<inspection::SharedTrace>,
+    pub transport: Option<transport_timing::TransportSnapshot>,
 }
 pub type RuntimeMap = Arc<std::sync::RwLock<BTreeMap<DeviceId, DeviceRuntime>>>;
 #[derive(Debug, thiserror::Error)]

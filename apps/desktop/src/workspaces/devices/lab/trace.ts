@@ -32,7 +32,11 @@ export interface Timing {
   intervals_ms: [number,number][];
   sequence_gaps: number;
 }
+export interface TransportSnapshot {
+  generation:number;received:number;missing:number;rejected_order:number;last_receive_us:number;intervals_ms:[number,number][];
+}
 export interface Snapshot {
+  transport?:TransportSnapshot;
   reference?: number;
   channels: Partial<Record<ChannelId, Channel>>;
   timing?: Timing;
@@ -58,7 +62,13 @@ export function parseSnapshot(value: unknown): Snapshot | null {
     channels[id] = { age_ms: c.age_ms, points };
   }
   const timing = value.timing;
-  const identity=reference===undefined?{}:{reference};
+  const transport=value.transport;
+  const identity:Pick<Snapshot,"reference"|"transport">=reference===undefined?{}:{reference};
+  if(transport!=null){
+    if(!isObj(transport)||!["generation","received","missing","rejected_order","last_receive_us"].every(k=>typeof transport[k]==="number"&&Number.isSafeInteger(transport[k])&&(transport[k] as number)>=0)||
+      !Array.isArray(transport.intervals_ms)||transport.intervals_ms.length>256||!transport.intervals_ms.every(v=>tuple(v,2)&&v[0]!>0&&v[1]!>=0))return null;
+    identity.transport=transport as unknown as TransportSnapshot;
+  }
   if (timing == null) return { ...identity, channels };
   if (!isObj(timing) || !isNum(timing.sequence_gaps) || timing.sequence_gaps < 0 ||
       !Array.isArray(timing.intervals_ms) || timing.intervals_ms.length > 256 ||

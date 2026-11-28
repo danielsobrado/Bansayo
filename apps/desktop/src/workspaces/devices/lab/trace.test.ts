@@ -12,6 +12,12 @@ describe("device inspection", () => {
     expect(parseSnapshot({channels:{},timing:{intervals_ms:[[5,6]],sequence_gaps:2}})?.timing?.sequence_gaps).toBe(2);
     expect(parseSnapshot({channels:{},timing:{intervals_ms:[[5,-6]],sequence_gaps:2}})).toBeNull();
   });
+  it("validates native UDP transport metadata independently",()=>{
+    const transport={generation:1,received:100,missing:2,rejected_order:3,last_receive_us:1000,intervals_ms:[[5,6]]};
+    expect(parseSnapshot({channels:{},transport})?.transport?.missing).toBe(2);
+    expect(parseSnapshot({channels:{},transport:{...transport,received:-1}})).toBeNull();
+    expect(parseSnapshot({channels:{},transport:{...transport,intervals_ms:[[0,2]]}})).toBeNull();
+  });
   it("expires samples if the HTTP poll stalls or the device disconnects", () => {
     const channels = {gyro: {age_ms: 30, points: []}};
     expect(freshChannels(channels, 50, true).gyro?.age_ms).toBe(80);

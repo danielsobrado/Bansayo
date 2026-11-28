@@ -91,6 +91,14 @@ test("sensor studio instrumentation and responsive layouts",async({page},info)=>
   const recording=page.waitForEvent("download");
   await studio.getByRole("button",{name:"Export recording"}).click();
   expect((await recording).suggestedFilename()).toBe("bansayo-full-rate.json");
+  await views.getByRole("button",{name:"Reliability",exact:true}).click();
+  await expect(studio.getByRole("heading",{name:"Sensor reliability history"})).toBeVisible();
+  await expect(studio.getByRole("img",{name:"Engine clock drift (ppm) history"})).toBeVisible();
+  const reliability=page.waitForEvent("download");
+  await studio.getByRole("button",{name:"Export reliability history"}).click();
+  expect((await reliability).suggestedFilename()).toBe("bansayo-reliability.json");
+  await views.getByRole("button",{name:"Calibration",exact:true}).click();
+  await expect(studio.getByText(/Calibration bench score: Incomplete/)).toBeVisible();
   const shelf=studio.getByRole("complementary",{name:"Pinned instruments"});
   await shelf.getByLabel("Dock instrument").selectOption("timing");
   await shelf.getByRole("button",{name:"Pin",exact:true}).click();
