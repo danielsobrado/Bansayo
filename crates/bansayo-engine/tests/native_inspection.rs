@@ -92,6 +92,21 @@ assignments:
             bytes[4] = VERSION_V2;
             bytes[64..].copy_from_slice(&sender_ref.load(Ordering::Relaxed).to_le_bytes());
             socket.send_to(&bytes, ("127.0.0.1", port)).await.unwrap();
+            if seq % 10 == 0 {
+                let mut mag = [0_u8; 40];
+                mag[..4].copy_from_slice(b"BMAG");
+                mag[4] = 2;
+                mag[8..14].copy_from_slice(&packet.mac);
+                mag[16..20].copy_from_slice(&(seq / 10).to_le_bytes());
+                mag[20..24].copy_from_slice(&packet.device_time_us.to_le_bytes());
+                mag[24..26].copy_from_slice(&100_i16.to_le_bytes());
+                mag[32..].copy_from_slice(&bytes[64..]);
+                socket.send_to(&mag, ("127.0.0.1", port)).await.unwrap();
+                // A foreign reference must never enter the current diagnostic stream.
+                mag[24..26].copy_from_slice(&999_i16.to_le_bytes());
+                mag[32..].copy_from_slice(&999_u64.to_le_bytes());
+                socket.send_to(&mag, ("127.0.0.1", port)).await.unwrap();
+            }
         }
     });
     wait_for(addr, |state| {
@@ -124,6 +139,9 @@ assignments:
     wait_for(addr, |state| mounting_state(state, "valid")).await;
     let trace = ok(addr, "GET", "devices/MOSAICO/inspection", Value::Null).await;
     assert!(trace["reference"].as_u64().unwrap() > 0);
+    let magnetic = trace["channels"]["mag0"]["points"].as_array().unwrap();
+    assert!(!magnetic.is_empty());
+    assert!(magnetic.iter().all(|p| p["values"][0] == 100.0));
     assert!(
         trace["channels"]["gyro"]["points"]
             .as_array()

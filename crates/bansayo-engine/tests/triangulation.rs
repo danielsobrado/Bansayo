@@ -316,7 +316,8 @@ fn a_displaced_view_is_rejected_among_four_and_voids_the_point_between_two() {
     let trace = p.view_diagnostics.as_ref().unwrap();
     assert_eq!(trace.len(), 4);
     assert_eq!(trace.iter().filter(|v| v.used).count(), 3);
-    assert!(trace.iter().any(|v| !v.used && v.device_id == four.specs[2].id
+    assert!(trace.iter().any(|v| !v.used
+        && v.device_id == four.specs[2].id
         && v.error_px.is_some_and(|error| error > 50.0)));
     assert!(error_m(&p, &truth[5]) < 2e-3);
 

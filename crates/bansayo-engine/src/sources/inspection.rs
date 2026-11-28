@@ -265,6 +265,7 @@ pub fn magnetic(
                 logical = last_logical.saturating_add(u64::from(delta));
             }
         }
+        let t_us = previous.map_or(t_us, |(_, _, last_t, _)| t_us.max(last_t));
         trace.channels.entry(kind).or_default().magnetic_sequence =
             Some((seq, device_time_us, t_us, logical));
         trace.push_values(

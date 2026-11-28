@@ -96,7 +96,33 @@ assignments:
 
     let mut orientation = vec![];
     let (mut gyro, mut accel, mut diag) = (0, 0, 0);
-    while let Ok(Ingest::Event(SourceEvent::Observation { observation: o })) = rx.try_recv() {
+    let mut magnetic = 0;
+    while let Ok(event) = rx.try_recv() {
+        let o = match event {
+            Ingest::Magnetic {
+                device_id,
+                channel,
+                t_us,
+                seq,
+                device_time_us,
+                values,
+            } => {
+                assert_eq!(device_id.as_str(), "ESP-SHIN-R");
+                magnetic += 1;
+                bansayo_engine::sources::inspection::magnetic(
+                    &runtime,
+                    &device_id,
+                    channel,
+                    t_us,
+                    seq,
+                    device_time_us,
+                    values,
+                );
+                continue;
+            }
+            Ingest::Event(SourceEvent::Observation { observation }) => observation,
+            _ => continue,
+        };
         assert_eq!(o.device_id.as_str(), "ESP-SHIN-R");
         match o.data {
             ObservationData::Orientation { .. } => orientation.push(o),
@@ -114,6 +140,7 @@ assignments:
     }
     assert_eq!(orientation.len(), 20);
     assert_eq!((gyro, accel, diag), (20, 20, 1));
+    assert_eq!(magnetic, 1);
     assert!(
         orientation
             .iter()

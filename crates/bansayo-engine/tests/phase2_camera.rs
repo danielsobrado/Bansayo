@@ -16,6 +16,8 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 use support::*;
 
+// The real-time image-folder tests share CPU and disk bandwidth on CI.
+static CAMERA_TEST: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 const RATE_HZ: f64 = 30.0;
 const SIZE: [u32; 2] = [320, 240];
 /// Canonical point index of each COCO-17 landmark; eyes and nose sit on the head.
@@ -124,6 +126,7 @@ fn first_reason(m: &Value) -> &str {
 /// the readiness reasons of 22 §5; unplugging pauses after 3 s and replugging resumes (08 §10).
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn guided_roundhouse_on_one_image_folder_camera() {
+    let _serial = CAMERA_TEST.lock().await;
     let dir = tempfile::tempdir().unwrap();
     let frames = dir.path().join("frames");
     write_kicks(&frames);
@@ -312,6 +315,7 @@ async fn guided_roundhouse_on_one_image_folder_camera() {
 /// of the camera path and the frame drop counters every 10 s.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn stage_timings_reach_the_diagnostics_topic() {
+    let _serial = CAMERA_TEST.lock().await;
     use futures_util::StreamExt;
     let dir = tempfile::tempdir().unwrap();
     let frames = dir.path().join("frames");
@@ -359,6 +363,7 @@ async fn stage_timings_reach_the_diagnostics_topic() {
 /// counting (precision, recall at IoU ≥ 0.5) and phase boundaries against the annotations.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_take_is_promoted_annotated_and_evaluated() {
+    let _serial = CAMERA_TEST.lock().await;
     let dir = tempfile::tempdir().unwrap();
     let frames = dir.path().join("frames");
     let n = write_kicks(&frames);

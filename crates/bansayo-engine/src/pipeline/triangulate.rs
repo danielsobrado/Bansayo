@@ -186,7 +186,10 @@ fn point_with_noise_floor(
     })
 }
 fn view_diagnostic(v: &View<'_>, m: &V3, used: bool) -> TriangulatedViewDiagnostic {
-    let projected_px = v.camera.project(m).filter(|p| p.iter().all(|x| x.is_finite()));
+    let projected_px = v
+        .camera
+        .project(m)
+        .filter(|p| p.iter().all(|x| x.is_finite()));
     let error_px = projected_px.map(|p| (p[0] - v.px[0]).hypot(p[1] - v.px[1]));
     let direction = (v.camera.q_world_from_camera * V3::new(v.n[0], v.n[1], 1.0)).normalize();
     TriangulatedViewDiagnostic {
