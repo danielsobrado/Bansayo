@@ -270,6 +270,16 @@ impl Runtime {
                             entry.orientations.clear();
                             entry.first_us = None;
                         }
+                        engine.registry.fusion.heading.remove(&id);
+                        if engine
+                            .registry
+                            .fusion
+                            .anchor
+                            .as_ref()
+                            .is_some_and(|a| a.sources.contains(&id))
+                        {
+                            engine.registry.fusion.anchor = None;
+                        }
                     }
                     self.record_context(&engine);
                     self.publish_state(&engine);

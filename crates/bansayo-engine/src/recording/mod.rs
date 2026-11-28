@@ -159,7 +159,9 @@ impl Context {
         );
         for o in &self.latest {
             if !registry.accept(o.clone()) {
-                return Err("Recording context contains duplicate or unordered observations.".into());
+                return Err(
+                    "Recording context contains duplicate or unordered observations.".into(),
+                );
             }
         }
         for (id, entry) in &mut registry.entries {

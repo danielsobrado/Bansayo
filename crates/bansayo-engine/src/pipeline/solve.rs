@@ -86,6 +86,9 @@ pub fn solve(
             else {
                 continue;
             };
+            if !entry.connected || entry.failure.is_some() {
+                continue;
+            }
             let Some(mounting) = store.mounting(id, segment) else {
                 reasons.push(reason(
                     match store.reference(id, Some(segment)).state {
@@ -160,9 +163,10 @@ pub fn solve(
         }
     }
     let t_ref = t_imu.or(t_cam);
-    let anchor_age = |t: u64| t_ref.map_or(0, |r| r.saturating_sub(t));
+    let anchor_age = |t: u64| t_ref.map_or(0, |r| r.abs_diff(t));
     // The camera set anchors t_ref only while it is recent enough.
-    let camera_current = t_cam.is_some_and(|t| anchor_age(t) <= max_anchor_us);
+    let camera_current =
+        t_cam.is_some_and(|t| anchor_age(t) <= max_anchor_us && now - t <= max_anchor_us);
     let camera_fit: Option<Fit> = landmarks_3d
         .as_ref()
         .filter(|_| camera_current)
@@ -298,7 +302,14 @@ pub fn solve(
         .as_ref()
         .filter(|_| imu.iter().any(Option::is_some))
         .zip(t_ref)
-        .filter(|(a, t)| *t >= a.t_us && *t - a.t_us <= max_anchor_us);
+        .filter(|(a, t)| {
+            *t >= a.t_us
+                && *t - a.t_us <= max_anchor_us
+                && now.saturating_sub(a.t_us) <= max_anchor_us
+                && a.sources
+                    .iter()
+                    .all(|id| !store.identity_unconfirmed.contains(id))
+        });
     let root = if let (Some((p, sigma, conf, views)), Some(t)) = (fresh_anchor, t_cam) {
         next.anchor = Some(Anchor {
             root: p,
@@ -320,13 +331,14 @@ pub fn solve(
             None,
             "Cameras lost the body; the root is held at its last camera position with growing uncertainty.",
         ));
-        root_sigma_m = Some(a.sigma_m.unwrap_or(0.0).hypot(speed_sigma(t - a.t_us)));
+        root_sigma_m = a.sigma_m.map(|s| s.hypot(speed_sigma(t - a.t_us)));
         root_t_obs = Some(a.t_us);
         root_sources.clone_from(&a.sources);
         root_confidence = a.confidence;
         root_held = true;
         a.root
     } else {
+        next.anchor = None;
         floor_contact_root(sk, &rotations)
     };
 

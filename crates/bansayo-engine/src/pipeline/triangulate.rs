@@ -13,6 +13,10 @@ use crate::{
 };
 use bansayo_contracts::*;
 use nalgebra::DMatrix;
+use std::collections::BTreeSet;
+
+const UNDISTORT_RESIDUAL_PX: f64 = 0.1;
+const DLT_EPSILON: f64 = 1e-12;
 
 /// A calibrated pinhole camera with Brown-Conrady distortion.
 #[derive(Debug, Clone)]
@@ -36,7 +40,11 @@ impl Camera {
         let c = self
             .q_world_from_camera
             .inverse_transform_vector(&(p - self.centre));
-        (c.z > 0.0).then(|| self.distort([c.x / c.z, c.y / c.z]))
+        if c.z <= 0.0 || !c.iter().all(|v| v.is_finite()) {
+            return None;
+        }
+        let px = self.distort([c.x / c.z, c.y / c.z]);
+        px.iter().all(|v| v.is_finite()).then_some(px)
     }
     fn distort(&self, [x, y]: [f64; 2]) -> [f64; 2] {
         let k = &self.k;
@@ -63,6 +71,13 @@ impl Camera {
             [x, y] = [(d[0] - dx) / radial, (d[1] - dy) / radial];
         }
         [x, y]
+    }
+
+    fn checked_undistort(&self, px: [f64; 2]) -> Option<[f64; 2]> {
+        let n = self.undistort(px);
+        let reprojected = self.distort(n);
+        let residual = (reprojected[0] - px[0]).hypot(reprojected[1] - px[1]);
+        (n.iter().all(|v| v.is_finite()) && residual <= UNDISTORT_RESIDUAL_PX).then_some(n)
     }
 }
 pub fn intrinsics_valid(k: &CameraIntrinsicsData) -> bool {
@@ -100,20 +115,29 @@ fn point_with_noise_floor(
 ) -> Option<TriangulatedLandmark3D> {
     let max = config.max_reprojection_error_px;
     let min = config.min_views.max(2) as usize;
+    if !max.is_finite() || max <= 0.0 {
+        return None;
+    }
+    let mut unique = BTreeSet::new();
     let mut used: Vec<View> = detections
         .iter()
-        .filter(|(_, _, l)| l.confidence > 0.0)
-        .map(|&(device, camera, l)| {
+        .filter_map(|&(device, camera, l)| {
+            if !l.confidence.is_finite() || l.confidence <= 0.0 || l.confidence > 1.0 {
+                return None;
+            }
             let px = [l.x_px.into(), l.y_px.into()];
-            View {
+            let n = camera.checked_undistort(px)?;
+            if !unique.insert(device) {
+                return None;
+            }
+            Some(View {
                 device,
                 camera,
                 px,
-                n: camera.undistort(px),
+                n,
                 w: l.confidence.into(),
-            }
+            })
         })
-        .filter(|v| v.n.iter().chain(&v.px).all(|x| x.is_finite()) && v.w.is_finite())
         .collect();
     if used.len() < min {
         return None;
@@ -147,14 +171,19 @@ fn point_with_noise_floor(
     let spread = rays
         .iter()
         .enumerate()
-        .flat_map(|(i, a)| rays[i + 1..].iter().map(move |b| angle_between(a, b)))
+        .flat_map(|(i, a)| {
+            rays[i + 1..].iter().map(move |b| {
+                let angle = angle_between(a, b);
+                angle.min(std::f64::consts::PI - angle)
+            })
+        })
         .fold(0.0, f64::max);
     let rms = (errors.iter().map(|e| e * e).sum::<f64>() / errors.len() as f64).sqrt();
     let confidence = used.iter().map(|v| v.w).sum::<f64>() / used.len() as f64
         * (1.0 - rms / max).clamp(0.0, 1.0);
     (errors.iter().all(|e| *e <= max)
         && spread >= config.min_ray_angle_deg.to_radians()
-        && m.iter().all(|v| v.is_finite()))
+        && m.iter().all(|v| v.is_finite() && v.abs() <= f32::MAX as f64))
     .then(|| TriangulatedLandmark3D {
         sigma_m: keypoint_sigma(
             rms,
@@ -219,9 +248,12 @@ fn dlt(views: &[View]) -> Option<V3> {
             rows.extend(((p.row(2) * *s - p.row(k)) * v.w).iter());
         }
     }
+    if rows.iter().any(|v| !v.is_finite()) {
+        return None;
+    }
     let svd = DMatrix::from_row_slice(rows.len() / 4, 4, &rows).svd(false, true);
     let h = svd.v_t?.row(svd.singular_values.imin()).clone_owned();
-    (h[3].abs() > 1e-12).then(|| V3::new(h[0], h[1], h[2]) / h[3])
+    (h[3].abs() > DLT_EPSILON).then(|| V3::new(h[0], h[1], h[2]) / h[3])
 }
 /// Two frames of one camera further apart than this are not interpolated between.
 pub const MAX_INTERPOLATION_GAP_US: u64 = 100_000;
@@ -256,10 +288,13 @@ pub fn triangulate_with_noise_floor(
         .entries
         .iter()
         .filter_map(|(id, e)| {
+            if !e.connected || e.failure.is_some() {
+                return None;
+            }
             let frames: Vec<&PoseLandmarks2D> = e
                 .landmarks
                 .iter()
-                .filter(|o| now.saturating_sub(o.t_us) <= stale_us)
+                .filter(|o| o.t_us <= now && now - o.t_us <= stale_us)
                 .filter_map(|o| match &o.data {
                     ObservationData::Landmarks2d { landmarks } => Some(landmarks),
                     _ => None,
@@ -299,10 +334,14 @@ pub fn triangulate_with_noise_floor(
     let aligned: Vec<_> = views
         .iter()
         .filter_map(|(id, camera, frames, refs)| {
+            let latest = frames.last()?;
             let compatible = |f: &&&PoseLandmarks2D| {
                 f.schema_id == schema
                     && f.points.len() == len
                     && f.frame_meta.image_size_px == camera.k.image_size_px
+                    && f.detector == latest.detector
+                    && f.origin == latest.origin
+                    && f.frame_meta.time_quality == latest.frame_meta.time_quality
             };
             let after = frames
                 .iter()
@@ -378,7 +417,17 @@ pub fn keypoint_sigma(
     ray_angle: f64,
     views: usize,
 ) -> Option<f64> {
-    if views < 2 || focal_px <= 0.0 || ray_angle.sin().abs() <= f64::EPSILON {
+    if views < 2
+        || ![rms_px, floor_px, distance_m, focal_px, ray_angle]
+            .iter()
+            .all(|v| v.is_finite())
+        || rms_px < 0.0
+        || floor_px <= 0.0
+        || distance_m < 0.0
+        || focal_px <= 0.0
+        || !(0.0..=std::f64::consts::PI).contains(&ray_angle)
+        || ray_angle.sin().abs() <= f64::EPSILON
+    {
         return None;
     }
     let sigma = rms_px.max(floor_px) * distance_m

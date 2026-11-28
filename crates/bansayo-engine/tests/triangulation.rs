@@ -720,3 +720,41 @@ fn free_running_cameras_are_interpolated_to_one_instant() {
     );
     assert!(interpolated < nearest / 3.0, "{interpolated} vs {nearest}");
 }
+
+#[test]
+fn future_and_disconnected_camera_frames_are_not_used() {
+    let mut rig = rig(&RING[..2], 0.0, false);
+    rig.observe(Motion::Standing, 0.5, 1, NOW + 1000);
+    assert!(rig.triangulate(NOW).is_none());
+    assert!(rig.triangulate(NOW + 1000).is_some());
+    rig.registry
+        .entries
+        .get_mut(&rig.specs[0].id)
+        .unwrap()
+        .connected = false;
+    assert!(rig.triangulate(NOW + 1000).is_none());
+}
+
+#[test]
+fn duplicate_and_nearly_opposing_rays_are_not_independent_geometry() {
+    let first = spec(0, [0.0, 1.0, 3.0], 0.0);
+    let second = spec(1, [0.01, 1.0, -3.0], 0.0);
+    let (k1, e1) = declared(&first);
+    let (k2, e2) = declared(&second);
+    let c1 = Camera::new(k1, &e1).unwrap();
+    let c2 = Camera::new(k2, &e2).unwrap();
+    let target = V3::new(0.0, 1.0, 0.0);
+    let detection = |c: &Camera| {
+        let [x, y] = c.project(&target).unwrap();
+        Landmark2D {
+            x_px: x as f32,
+            y_px: y as f32,
+            confidence: 1.0,
+        }
+    };
+    let a = detection(&c1);
+    let b = detection(&c2);
+    let cfg = TriangulationConfig::default();
+    assert!(point(&[(&first.id, &c1, &a), (&first.id, &c1, &a)], &cfg).is_none());
+    assert!(point(&[(&first.id, &c1, &a), (&second.id, &c2, &b)], &cfg).is_none());
+}

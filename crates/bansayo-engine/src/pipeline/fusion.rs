@@ -104,19 +104,22 @@ pub fn step(
     t_us: u64,
     cfg: &FusionConfig,
 ) -> Result<f64, Suppressed> {
+    if !error.is_finite() || state.last_us.is_some_and(|last| t_us <= last) {
+        return Err(Suppressed::Degenerate);
+    }
     let dt = state
         .last_us
         .map_or(0.0, |l| t_us.saturating_sub(l) as f64 * 1e-6)
         .min(MAX_STEP_S);
     state.last_us = Some(t_us);
     if state.converged && error.abs() > cfg.heading_outlier_deg.to_radians() {
-        state.rejected += 1;
+        state.rejected = state.rejected.saturating_add(1);
         return Err(Suppressed::Outlier);
     }
     let limit = cfg.max_heading_correction_deg_s.to_radians() * dt;
     let applied = (error * (dt / cfg.heading_time_constant_s).min(1.0)).clamp(-limit, limit);
     state.yaw_rad = wrap(state.yaw_rad + applied);
-    state.accepted += 1;
+    state.accepted = state.accepted.saturating_add(1);
     if (error - applied).abs() < CONVERGED_DEG.to_radians() {
         state.converged = true;
     }
@@ -129,6 +132,27 @@ mod tests {
 
     fn shin_down() -> V3 {
         V3::new(0.0, -0.4, 0.0)
+    }
+
+    #[test]
+    fn repeated_and_reversed_timestamps_do_not_change_heading() {
+        let cfg = FusionConfig::default();
+        let mut state = HeadingState::default();
+        step(&mut state, 0.2, 1000, &cfg).unwrap();
+        let before = state.clone();
+        assert_eq!(
+            step(&mut state, 0.2, 1000, &cfg),
+            Err(Suppressed::Degenerate)
+        );
+        assert_eq!(
+            step(&mut state, 0.2, 999, &cfg),
+            Err(Suppressed::Degenerate)
+        );
+        assert_eq!(
+            step(&mut state, f64::NAN, 2000, &cfg),
+            Err(Suppressed::Degenerate)
+        );
+        assert_eq!(state, before);
     }
 
     #[test]

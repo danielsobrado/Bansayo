@@ -156,14 +156,25 @@ impl<'a> Lifecycle<'a> {
     /// Compares the hardware with the profile on disk. Re-read on every open and, while
     /// unconfirmed, every publish: the user may have confirmed the identity meanwhile.
     fn check_identity(&mut self, found: &CameraIdentity) {
-        if let Ok(profile) = identity::load_profile(self.data_dir, &self.id) {
-            self.profile = profile;
-            if self
-                .identity_problem
-                .as_ref()
-                .is_some_and(|r| r.code == "camera_profile_invalid")
-            {
-                self.identity_problem = None;
+        match identity::load_profile(self.data_dir, &self.id) {
+            Ok(profile) => {
+                self.profile = profile;
+                if self
+                    .identity_problem
+                    .as_ref()
+                    .is_some_and(|r| r.code == "camera_profile_invalid")
+                {
+                    self.identity_problem = None;
+                }
+            }
+            Err(error) => {
+                self.identity_problem = Some(reason(
+                    "camera_profile_invalid",
+                    Some(self.id.to_string()),
+                    &format!("Camera identity profile is unreadable: {error}"),
+                ));
+                self.status.identity_confirmed = false;
+                return;
             }
         }
         let changed = |r: &Reason| r.code == "camera_identity_changed";
@@ -209,6 +220,17 @@ impl<'a> Lifecycle<'a> {
 
     pub fn opened(&mut self, negotiated: Option<CaptureMode>) {
         self.stats.restart();
+        self.status.timing = None;
+        self.status.decode_ms = None;
+        self.settings_problem = false;
+        if let Ok(mut all) = self.runtime.write()
+            && let Some(entry) = all.get_mut(&self.id)
+        {
+            entry.last_inference_us = None;
+            if let Some(camera) = entry.camera.as_mut() {
+                camera.inference_hz = None;
+            }
+        }
         self.rate_problem = None;
         if self.status.identity_confirmed
             && let Some(found) = self.status.identity.clone()
@@ -389,6 +411,27 @@ mod tests {
             .camera
             .clone()
             .unwrap()
+    }
+
+    #[test]
+    fn corrupt_identity_profile_on_reopen_disables_calibration() {
+        let dir = tempfile::tempdir().unwrap();
+        let runtime = RuntimeMap::default();
+        let camera = spec(30.0);
+        let mut life = Lifecycle::new(&camera, &runtime, dir.path());
+        let device = present(0, "6&aaa&0&0000");
+        life.identified(&device, &[mode(30.0)], &camera, &[]);
+        life.opened(Some(mode(30.0)));
+        assert!(status(&runtime).identity_confirmed);
+        std::fs::write(identity::profile_path(dir.path(), &camera.id), b"{broken").unwrap();
+        life.lost("unplugged");
+        life.identified(&device, &[mode(30.0)], &camera, &[]);
+        life.opened(Some(mode(30.0)));
+        let current = status(&runtime);
+        assert!(!current.identity_confirmed);
+        assert!(current.timing.is_none());
+        assert!(current.decode_ms.is_none());
+        assert!(current.inference_hz.is_none());
     }
 
     /// A fake device through the whole lifecycle: first sighting, a 120 fps request on a 30 fps
