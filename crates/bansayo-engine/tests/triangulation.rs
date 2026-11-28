@@ -209,6 +209,9 @@ fn noiseless_two_three_and_four_cameras_reconstruct_below_a_millimetre() {
                 let p = p.as_ref().expect("every landmark is reconstructed");
                 assert_eq!(p.views as usize, n, "every camera sees every landmark");
                 assert!(p.rejected_views.is_empty());
+                let trace = p.view_diagnostics.as_ref().unwrap();
+                assert_eq!(trace.len(), n);
+                assert!(trace.iter().all(|v| v.used && v.error_px.unwrap() < 0.01));
                 worst = worst.max(error_m(p, t));
                 rms = rms.max(p.reprojection_error_px);
             }
@@ -310,6 +313,11 @@ fn a_displaced_view_is_rejected_among_four_and_voids_the_point_between_two() {
     );
     assert_eq!(p.rejected_views, [four.specs[2].id.clone()]);
     assert_eq!(p.views, 3);
+    let trace = p.view_diagnostics.as_ref().unwrap();
+    assert_eq!(trace.len(), 4);
+    assert_eq!(trace.iter().filter(|v| v.used).count(), 3);
+    assert!(trace.iter().any(|v| !v.used && v.device_id == four.specs[2].id
+        && v.error_px.is_some_and(|error| error > 50.0)));
     assert!(error_m(&p, &truth[5]) < 2e-3);
 
     // Displaced across the near-horizontal epipolar lines of two cameras at similar heights.

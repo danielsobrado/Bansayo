@@ -189,7 +189,14 @@ function isTriangulated(v: unknown): boolean {
           isNum(p.reprojection_error_px) &&
           isNum(p.confidence) &&
           strings(p.used_views) &&
-          strings(p.rejected_views)),
+          strings(p.rejected_views) &&
+          (p.view_diagnostics == null ||
+            (Array.isArray(p.view_diagnostics) &&
+              p.view_diagnostics.every(v => isObj(v) && isStr(v.device_id) &&
+                tuple(v.observed_px, 2) && (v.projected_px === null || tuple(v.projected_px, 2)) &&
+                (v.error_px === null || (isNum(v.error_px) && v.error_px >= 0)) &&
+                tuple(v.ray_origin_m, 3) && tuple(v.ray_direction, 3) &&
+                typeof v.used === "boolean")))),
     )
   );
 }

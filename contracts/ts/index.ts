@@ -224,6 +224,7 @@ export type { TrainingTotals } from "./TrainingTotals";
 export type { Transport } from "./Transport";
 export type { Trend } from "./Trend";
 export type { TriangulatedLandmark3D } from "./TriangulatedLandmark3D";
+export type { TriangulatedViewDiagnostic } from "./TriangulatedViewDiagnostic";
 export type { UpAxis } from "./UpAxis";
 export type { WorkoutPlan } from "./WorkoutPlan";
 export type { XrClientMessage } from "./XrClientMessage";

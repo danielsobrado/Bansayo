@@ -242,6 +242,7 @@ fn triangulated_landmarks() -> PoseLandmarks3D {
                 confidence: 0.9,
                 used_views: vec![dev("SIM-CAM1"), dev("SIM-CAM2")],
                 rejected_views: vec![],
+                view_diagnostics: None,
             })
         })
         .chain([None])

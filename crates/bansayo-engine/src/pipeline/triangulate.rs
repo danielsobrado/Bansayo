@@ -113,6 +113,7 @@ fn point_with_noise_floor(
                 w: l.confidence.into(),
             }
         })
+        .filter(|v| v.n.iter().chain(&v.px).all(|x| x.is_finite()) && v.w.is_finite())
         .collect();
     if used.len() < min {
         return None;
@@ -137,7 +138,7 @@ fn point_with_noise_floor(
         if error <= max || used.len() <= min {
             break (m, errors);
         }
-        rejected.push(used.remove(worst).device.clone());
+        rejected.push(used.remove(worst));
     };
     let rays: Vec<V3> = used
         .iter()
@@ -175,9 +176,30 @@ fn point_with_noise_floor(
         reprojection_error_px: rms as f32,
         confidence: confidence as f32,
         used_views: used.iter().map(|v| v.device.clone()).collect(),
-        rejected_views: rejected,
+        rejected_views: rejected.iter().map(|v| v.device.clone()).collect(),
+        view_diagnostics: Some(
+            used.iter()
+                .map(|v| view_diagnostic(v, &m, true))
+                .chain(rejected.iter().map(|v| view_diagnostic(v, &m, false)))
+                .collect(),
+        ),
     })
 }
+fn view_diagnostic(v: &View<'_>, m: &V3, used: bool) -> TriangulatedViewDiagnostic {
+    let projected_px = v.camera.project(m).filter(|p| p.iter().all(|x| x.is_finite()));
+    let error_px = projected_px.map(|p| (p[0] - v.px[0]).hypot(p[1] - v.px[1]));
+    let direction = (v.camera.q_world_from_camera * V3::new(v.n[0], v.n[1], 1.0)).normalize();
+    TriangulatedViewDiagnostic {
+        device_id: v.device.clone(),
+        observed_px: v.px,
+        projected_px,
+        error_px,
+        ray_origin_m: v3_to_wire(&v.camera.centre),
+        ray_direction: v3_to_wire(&direction),
+        used,
+    }
+}
+
 /// Confidence-weighted linear triangulation in normalised camera coordinates, solved by SVD.
 fn dlt(views: &[View]) -> Option<V3> {
     let mut rows: Vec<f64> = Vec::with_capacity(views.len() * 8);

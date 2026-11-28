@@ -373,6 +373,7 @@ mod tests {
                         confidence: 1.0,
                         used_views: vec![],
                         rejected_views: vec![],
+                        view_diagnostics: None,
                     })
                 })
                 .collect(),

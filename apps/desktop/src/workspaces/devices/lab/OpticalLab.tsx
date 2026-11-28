@@ -18,8 +18,16 @@ export function OpticalLab({live}:{live:boolean}) {
     (p.kind!=="camera_extrinsics"||roomOf(p)===room));
   const cameras=calibratedCameras(profiles,room);
   const rays:Ray[]=[];
-  const rows:{id:string;skew:number;error:number;status:string}[]=[];
-  if(point&&data&&frame)for(const camera of cameras){
+  const rows:{id:string;skew:number|null;error:number|null;status:string}[]=[];
+  const exact=point?.view_diagnostics;
+  if(point&&exact){
+    for(const view of exact){
+      const status=view.used?"Used":"Rejected";
+      const nearest=nearestOnRay(view.ray_origin_m,view.ray_direction,point.m);
+      rays.push({origin:view.ray_origin_m,end:nearest,point:point.m,status});
+      rows.push({id:view.device_id,skew:null,error:view.error_px,status});
+    }
+  }else if(point&&data&&frame)for(const camera of cameras){
     const image=frame.images.get(camera.id), observed=image?.points[index];
     const profile=profiles.find(p=>p.device_id===camera.id&&p.kind==="camera_intrinsics");
     const i=intrinsics(profile?.data);
@@ -38,8 +46,8 @@ export function OpticalLab({live}:{live:boolean}) {
       <label>Landmark <select value={index} onChange={e=>setSelected(Number(e.target.value))}>{data.points.map((_,i)=><option key={i} value={i}>Landmark {i}</option>)}</select></label>
       <OpticalViewport cameras={cameras} point={point?.m} rays={rays}/>
       {!cameras.length&&<p className="subtle">No matching active calibration profiles for this reconstruction.</p>}
-      {point?<><p className="mono">Solver RMS {point.reprojection_error_px.toFixed(2)} px · {point.views} views · σ {point.sigma_m==null?"—":(point.sigma_m*1000).toFixed(1)+" mm"}</p><table className="studio-stats"><thead><tr><th>Camera</th><th>Skew</th><th>Preview residual</th><th>Solver status</th></tr></thead><tbody>{rows.map(row=><tr key={row.id}><td>{row.id}</td><td>{row.skew.toFixed(1)} ms</td><td>{row.error.toFixed(2)} px</td><td>{row.status}</td></tr>)}</tbody></table></>:<p>Selected landmark unavailable.</p>}
+      {point?<><p className="mono">Solver RMS {point.reprojection_error_px.toFixed(2)} px · {point.views} views · σ {point.sigma_m==null?"—":(point.sigma_m*1000).toFixed(1)+" mm"}</p><table className="studio-stats"><thead><tr><th>Camera</th><th>Preview skew</th><th>{exact?"Solver residual":"Preview residual"}</th><th>Solver status</th></tr></thead><tbody>{rows.map(row=><tr key={row.id}><td>{row.id}</td><td>{row.skew===null?"—":row.skew.toFixed(1)+" ms"}</td><td>{row.error===null?"Not projectable":row.error.toFixed(2)+" px"}</td><td>{row.status}</td></tr>)}</tbody></table></>:<p>Selected landmark unavailable.</p>}
     </>}
-    <p className="subtle">Rays use latest compatible 2D detections within 40 ms and valid calibration at matching resolution. Preview residuals are not the solver's exact input residuals. Ray-to-point segments show geometric disagreement, not ground truth.</p>
+    <p className="subtle">{exact?"Exact aligned solver inputs and final-point reprojection, including rejected views. Camera frustums show matching currently available profiles; rays use the original solver geometry.":"Legacy reconstruction: rays use compatible 2D previews within 40 ms, not exact solver inputs."} Ray-to-point segments show geometric disagreement, not ground truth.</p>
   </section>;
 }

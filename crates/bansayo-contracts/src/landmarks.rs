@@ -76,6 +76,18 @@ pub struct ModelLandmark3D {
     pub confidence: f32,
 }
 
+/// Exact aligned observation and final-solution reprojection for one triangulation view.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct TriangulatedViewDiagnostic {
+    pub device_id: DeviceId,
+    pub observed_px: [f64; 2],
+    pub projected_px: Option<[f64; 2]>,
+    pub error_px: Option<f64>,
+    pub ray_origin_m: Vec3,
+    pub ray_direction: Vec3,
+    pub used: bool,
+}
+
 /// One triangulated landmark, metres in the world frame.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct TriangulatedLandmark3D {
@@ -95,6 +107,10 @@ pub struct TriangulatedLandmark3D {
     /// Cameras that observed the landmark but were rejected as outliers.
     #[serde(default)]
     pub rejected_views: Vec<DeviceId>,
+    /// Exact per-view evidence; absent in older recordings.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub view_diagnostics: Option<Vec<TriangulatedViewDiagnostic>>,
 }
 
 /// 3D landmarks. The two kinds have different fields and are never converted into each other.
