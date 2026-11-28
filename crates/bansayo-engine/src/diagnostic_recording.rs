@@ -58,6 +58,10 @@ pub struct Recorder {
 }
 
 impl Recorder {
+    pub fn clock(&self) -> &SessionClock {
+        &self.clock
+    }
+
     pub fn status(&self) -> Status {
         self.shared
             .lock()

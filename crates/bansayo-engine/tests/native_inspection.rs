@@ -149,6 +149,9 @@ assignments:
             .len()
             > 2
     );
+    let clock = ok(addr, "GET", "inspection/clock", Value::Null).await;
+    assert!(clock["t_us"].as_u64().unwrap() > 0);
+    assert!(clock["session_epoch_utc"].is_string());
     let start = ok(addr, "GET", "devices/MOSAICO/inspection/batch", Value::Null).await;
     let epoch = start["epoch"].as_u64().unwrap();
     let cursor = start["next"].as_u64().unwrap();

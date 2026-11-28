@@ -3,6 +3,13 @@ export const CAPTURE_SECONDS=[10,60,300,600] as const;
 export const MAX_ROWS=500_000;
 export const MAX_DEVICES=4;
 export const BATCH_MS=250;
+export const CAPTURE_DRAIN_MS=250;
+export interface EngineClock {session_epoch_utc:string;t_us:number}
+export function parseClock(value:unknown):EngineClock|null {
+  if(!value||typeof value!=="object")return null;
+  const v=value as EngineClock;
+  return typeof v.session_epoch_utc==="string"&&v.session_epoch_utc.length>0&&Number.isSafeInteger(v.t_us)&&v.t_us>=0?v:null;
+}
 export interface Sample { device:string; epoch:number; cursor:number; channel:ChannelId; point:Point }
 export interface Marker { t_us:number; label:string; device?:string }
 export interface Capture { samples:Sample[];markers:Marker[];lost:number;resets:number;started:string;reason:string;window?:{start_us:number;end_us:number;excluded:number} }

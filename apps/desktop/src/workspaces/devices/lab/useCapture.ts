@@ -1,6 +1,6 @@
 import { useEffect,useRef,useState } from "react";
 import { request,seg } from "../../../engine/http";
-import { BATCH_MS,MAX_ROWS,MAX_DEVICES,parseBatch,continuesBatch,type Capture,type Sample } from "./captureTypes";
+import { BATCH_MS,CAPTURE_DRAIN_MS,MAX_ROWS,MAX_DEVICES,parseBatch,continuesBatch,parseClock,type Capture,type Sample,type EngineClock } from "./captureTypes";
 
 export function useCapture(live:boolean) {
   const [running,setRunning]=useState(false),[stopping,setStopping]=useState(false),[elapsed,setElapsed]=useState(0),[revision,setRevision]=useState(0);
@@ -16,14 +16,32 @@ export function useCapture(live:boolean) {
     const ctl=new AbortController();controller.current=ctl;
     const capture:Capture={samples:[],markers:[],lost:0,resets:0,started:new Date().toISOString(),reason:"Capturing"};
     data.current=capture;latest.current=0;setRunning(true);setStopping(false);setElapsed(0);setRevision(v=>v+1);
-    const started=performance.now();
+    let clockStart:EngineClock|null=null,cutoff:number|null=null,lastClock:number|null=null;
+    let excluded=0;
     const cursors=new Map<string,{epoch:number;next:number}>();
     let timer=0,inFlight=false,operatorStop=false;
     ctl.signal.addEventListener("abort",()=>window.clearTimeout(timer),{once:true});
     const finish=(reason:string)=>{
       if(ctl.signal.aborted)return;
+      if(clockStart&&lastClock!==null){
+        const end=Math.max(clockStart.t_us,Math.min(cutoff??lastClock,lastClock));
+        const count=capture.samples.length;
+        capture.samples=capture.samples.filter(s=>s.point.t_us>=clockStart!.t_us&&s.point.t_us<end);
+        capture.window={start_us:clockStart.t_us,end_us:end,excluded:excluded+count-capture.samples.length};
+      }
       ctl.abort();window.clearTimeout(timer);capture.reason=reason;setRunning(false);setStopping(false);setRevision(v=>v+1);
     };
+    async function readClock(){
+      const res=await request<unknown>("GET","/inspection/clock",undefined,(url,init)=>fetch(url,{...init,cache:"no-store",signal:AbortSignal.any([ctl.signal,AbortSignal.timeout(3000)])}));
+      if(ctl.signal.aborted)return null;
+      const value=res.ok?parseClock(res.data):null;
+      if(!value){finish(res.ok?"Invalid engine clock":res.error.message);return null;}
+      if(clockStart&&(clockStart.session_epoch_utc!==value.session_epoch_utc||(lastClock!==null&&value.t_us<lastClock))){
+        capture.resets++;finish("Engine clock changed; restart capture");return null;
+      }
+      lastClock=value.t_us;
+      return value;
+    }
     stopRef.current=(reason)=>{
       if(reason!=="Stopped by operator"){finish(reason);return;}
       if(ctl.signal.aborted||operatorStop)return;
@@ -33,14 +51,14 @@ export function useCapture(live:boolean) {
     async function poll(){
       if(ctl.signal.aborted||inFlight)return;
       inFlight=true;
-      const finalPoll=operatorStop;
+      const initial=cursors.size===0;
+      const finalPoll=cutoff!==null;
       const results=await Promise.all(ids.map(async id=>{
         const cursor=cursors.get(id);
         const suffix=cursor?`?epoch=${cursor.epoch}&after=${cursor.next}`:"";
         const res=await request<unknown>("GET",`/devices/${seg(id)}/inspection/batch${suffix}`,undefined,(url,init)=>fetch(url,{...init,cache:"no-store",signal:AbortSignal.any([ctl.signal,AbortSignal.timeout(3000)])}));
         return {id,batch:res.ok?parseBatch(res.data):null,error:res.ok?"Invalid diagnostic response":res.error.message};
       }));
-      inFlight=false;
       if(ctl.signal.aborted)return;
       let backlog=false;
       for(const {id,batch,error} of results){
@@ -56,15 +74,28 @@ export function useCapture(live:boolean) {
         cursors.set(id,{epoch:batch.epoch,next:batch.next});
         backlog ||= batch.entries.length===4096;
         for(const entry of batch.entries){
+          if(clockStart&&entry.point.t_us<clockStart.t_us){excluded++;continue;}
+          if(cutoff!==null&&entry.point.t_us>=cutoff){excluded++;continue;}
           if(capture.samples.length>=MAX_ROWS){finish("Browser capture capacity reached");return;}
           const sample:Sample={...entry,device:id,epoch:batch.epoch};
           capture.samples.push(sample);latest.current=Math.max(latest.current,entry.point.t_us);
         }
       }
-      const age=(performance.now()-started)/1000;setElapsed(age);setRevision(v=>v+1);
-      if(finalPoll){finish(backlog?"Stopped by operator (journal backlog may remain)":"Stopped by operator");return;}
-      if(operatorStop){void poll();return;}
-      if(age>=seconds){finish(backlog?"Duration completed (journal backlog may remain)":"Duration completed");return;}
+      const clock=await readClock();
+      inFlight=false;
+      if(!clock||ctl.signal.aborted)return;
+      if(initial)clockStart=clock;
+      if(!clockStart){finish("Missing capture clock");return;}
+      const scheduled=clockStart.t_us+seconds*1e6;
+      if(cutoff===null&&(operatorStop||clock.t_us>=scheduled)){
+        cutoff=Math.min(scheduled,clock.t_us);setStopping(true);
+      }
+      const age=(Math.min(clock.t_us,cutoff??scheduled)-clockStart.t_us)/1e6;
+      setElapsed(age);setRevision(v=>v+1);
+      if(finalPoll&&cutoff!==null&&clock.t_us>=cutoff+CAPTURE_DRAIN_MS*1000){
+        const reason=operatorStop?"Stopped by operator":"Duration completed";
+        finish(backlog?reason+" (journal backlog may remain)":reason);return;
+      }
       timer=window.setTimeout(()=>void poll(),backlog?0:BATCH_MS);
     }
     void poll();

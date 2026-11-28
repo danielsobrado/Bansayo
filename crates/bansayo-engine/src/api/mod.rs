@@ -57,6 +57,7 @@ pub fn router(api: Api) -> Router {
             "/api/v1/devices/{id}/inspection/batch",
             get(inspection::batch),
         )
+        .route("/api/v1/inspection/clock", get(inspection::clock))
         .route("/api/v1/inspection/solver", post(inspection::solver))
         .route(
             "/api/v1/inspection/recording",

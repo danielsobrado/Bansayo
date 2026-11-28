@@ -54,7 +54,12 @@ test("sensor studio instrumentation and responsive layouts",async({page},info)=>
   await expect(studio.getByRole("button",{name:"Stop engine recording"})).toBeEnabled();
   await studio.getByRole("button",{name:"Stop engine recording"}).click();
   await expect(studio.getByText("diagnostics/capture-test.jsonl",{exact:true})).toBeVisible();
-  let cursor=0;
+  let cursor=0,clockUs=1_000_000;
+  await page.route("**/inspection/clock",route=>{
+    const t_us=clockUs;
+    clockUs=Math.max(clockUs+320_000,1_000_000+cursor*5000+1);
+    return route.fulfill({json:{ok:true,data:{session_epoch_utc:"2026-11-28T00:00:00Z",t_us}}});
+  });
   await page.route("**/inspection/batch*",route=>{
     const url=new URL(route.request().url());
     if(!url.searchParams.has("epoch"))return route.fulfill({json:{ok:true,data:{epoch:1,next:0,lost:0,reset:false,entries:[]}}});
