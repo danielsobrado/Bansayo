@@ -7,11 +7,11 @@ use axum::{
 use bansayo_contracts::{ApiErrorCode, ApiResponse, DeviceId, EngineMode};
 
 pub async fn clock(State(api): State<Api>) -> Response {
-    if matches!(
-        api.streams.state.borrow().engine.mode,
-        EngineMode::Replay
-    ) {
-        return failure(ApiErrorCode::Conflict, "Live capture is unavailable during replay.");
+    if matches!(api.streams.state.borrow().engine.mode, EngineMode::Replay) {
+        return failure(
+            ApiErrorCode::Conflict,
+            "Live capture is unavailable during replay.",
+        );
     }
     let clock = api.diagnostic_recorder.clock();
     Json(ApiResponse::ok(serde_json::json!({
