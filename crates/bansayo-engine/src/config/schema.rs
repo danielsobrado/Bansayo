@@ -131,6 +131,8 @@ impl Default for CameraManagementConfig {
 #[serde(deny_unknown_fields, default)]
 pub struct DiagnosticsConfig {
     pub timing: bool,
+    pub resources: bool,
+    pub reliability: bool,
 }
 
 impl Config {

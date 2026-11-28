@@ -31,6 +31,8 @@ pub struct Api {
     pub fiducials: crate::sources::camera::FiducialPreviews,
     pub camera_settings: crate::sources::camera::CameraSettings,
     pub runtime: crate::sources::RuntimeMap,
+    pub performance: tokio::sync::watch::Receiver<Arc<crate::performance::Snapshot>>,
+    pub reliability_enabled: bool,
     pub diagnostic_recorder: crate::diagnostic_recording::Recorder,
     /// Frames of network cameras (phones), by camera id (ADR-042).
     pub feeds: crate::sources::camera::capture::NetworkFeeds,
@@ -58,6 +60,8 @@ pub fn router(api: Api) -> Router {
             get(inspection::batch),
         )
         .route("/api/v1/inspection/clock", get(inspection::clock))
+        .route("/api/v1/inspection/performance", get(inspection::performance))
+        .route("/api/v1/inspection/reliability", get(inspection::reliability))
         .route("/api/v1/inspection/solver", post(inspection::solver))
         .route(
             "/api/v1/inspection/recording",

@@ -242,3 +242,39 @@ assignments:
     sender.abort();
     handle.shutdown().await.unwrap();
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn opt_in_engine_diagnostics_are_available_without_browser() {
+    let dir = tempfile::tempdir().unwrap();
+    let yaml = format!(
+        r#"schema_version: 2
+engine: {{ data_dir: {data:?} }}
+api: {{ bind: "127.0.0.1:0" }}
+diagnostics: {{ timing: true, resources: true, reliability: true }}
+sources:
+  - id: sim
+    kind: simulated
+    trackers:
+      - {{ id: SIM-T01, rate_hz: 100 }}
+"#,
+        data = dir.path().display().to_string()
+    );
+    let handle = engine(&yaml).await;
+    let addr = handle.bound_addr();
+    let deadline = Instant::now() + Duration::from_secs(15);
+    loop {
+        let perf = ok(addr, "GET", "inspection/performance", Value::Null).await;
+        let history = ok(addr, "GET", "inspection/reliability", Value::Null).await;
+        assert_eq!(perf["enabled"], true);
+        assert_eq!(history["enabled"], true);
+        if perf["samples"].as_array().unwrap().len() >= 2
+            && !history["rows"].as_array().unwrap().is_empty()
+        {
+            break;
+        }
+        assert!(Instant::now() < deadline, "diagnostic samples unavailable");
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+    handle.shutdown().await.unwrap();
+    assert!(dir.path().join("diagnostics/reliability.sqlite").exists());
+}

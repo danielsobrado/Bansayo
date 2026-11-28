@@ -6,6 +6,8 @@ import { DeviceInspector } from "./DeviceInspector";
 import { SolverBench } from "./SolverBench";
 import { TrackerComparison } from "./TrackerComparison";
 import {useReliability} from "./useReliability";
+import {PerformancePanel} from "./PerformancePanel";
+import {EngineReliabilityPanel} from "./EngineReliabilityPanel";
 import {ReliabilityPanel} from "./ReliabilityPanel";
 import { StudioEvents, useStudioEvents } from "./StudioEvents";
 import { DockShelf } from "./DockShelf";
@@ -36,7 +38,7 @@ export function DeviceLab({ devices, live, skeleton }: {
     <header className="studio-top">
       <div className="studio-title"><Icon name="sliders" size={20}/><div><h2>Sensor Studio</h2><small>Instrumentation / Diagnostics</small></div></div>
       <nav className="studio-tabs" aria-label="Sensor Studio views">
-        {(["overview","signals","calibration","timing","compare","optical","events","capture","reliability"] as const).map(tab =>
+        {(["overview","signals","calibration","timing","compare","optical","events","capture","reliability","performance"] as const).map(tab =>
           <button key={tab} aria-pressed={view === tab} onClick={() => setView(tab)}>{tab[0]!.toUpperCase()+tab.slice(1)}</button>)}
       </nav>
       <div className="studio-controls">
@@ -50,7 +52,7 @@ export function DeviceLab({ devices, live, skeleton }: {
       {layout.explorer && <DeviceExplorer devices={devices} selected={device?.descriptor.id ?? ""} focus={focus} view={view} onSelect={select}/>}
       <section className="studio-workspace" aria-label="Sensor workspace">
         <DockShelf devices={devices} live={live}><div hidden={view!=="capture"}><CaptureStudio devices={devices} live={live} active={view==="capture"}/></div>
-        {view==="capture"?null:view==="reliability"?<ReliabilityPanel devices={devices} {...reliability}/>:view==="events"?<StudioEvents events={events}/>:!device ? <div className="studio-empty"><Icon name="usb" size={28}/><h3>No configured devices</h3><p>Connect or configure a sensor source to begin inspection.</p></div> :
+        {view==="capture"?null:view==="performance"?<PerformancePanel live={live}/>:view==="reliability"?<><ReliabilityPanel devices={devices} {...reliability}/><EngineReliabilityPanel live={live}/></>:view==="events"?<StudioEvents events={events}/>:!device ? <div className="studio-empty"><Icon name="usb" size={28}/><h3>No configured devices</h3><p>Connect or configure a sensor source to begin inspection.</p></div> :
           view === "compare" ? <><div className="studio-subbar"><button aria-pressed={comparison==="solver"} onClick={()=>setComparison("solver")}>Solver comparison</button><button aria-pressed={comparison==="tracker"} onClick={()=>setComparison("tracker")}>Tracker comparison</button></div>
           {comparison==="solver"?<SolverBench devices={devices} live={live}/>:<TrackerComparison devices={devices} live={live}/>}</> :
           <DeviceInspector key={device.descriptor.id + ":" + live} device={device} devices={devices} live={live} skeleton={skeleton} view={view} focus={focus} onFocus={setFocus} showInspector={layout.inspector} onSelectCamera={id=>{setSelected(id);setFocus("all");}}/>}

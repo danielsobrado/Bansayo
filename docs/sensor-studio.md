@@ -102,3 +102,19 @@ The engine's existing continuous minimum-delay clock estimator is authoritative:
 Native BIMU UDP inspection now exposes socket-level transport counters and the latest 256 consecutive packet interval pairs. Timing displays inferred missing sequence slots, accepted datagrams, rejected ordering/reference datagrams, absolute receive-minus-device interval residual and its p95, and a bounded counter-delta gap-ratio chart. It excludes BMAG and malformed/unconfigured datagrams. It resets at reference changes, publishes roughly once per second while accepted datagrams arrive, and cannot distinguish sender-side omissions from network loss. Socket timestamps include scheduling and buffering; this is not hardware NIC timing. Engine observation counters remain distinct. Other transports retain their existing pipeline/camera diagnostics.
 
 Guided hardware tests calculate an equal-weight advisory score only once all ten checks have evidence: six accelerometer faces, three 90° rotation axes and a drift endpoint test of at least 30 seconds. Existing face and rotation tolerances apply; the endpoint limit is 2°. Incomplete evidence produces no numeric score. Export includes individual gates. Device calibration profile readiness is separately the fraction of reported profiles marked valid, not a measurement-accuracy score. Guided tests are decimated and operator-driven; stationary endpoints do not establish continuous stillness. Physical references and independent validation remain necessary.
+
+## Engine performance and reliability archive (P2)
+
+Opt in using schema version 2:
+
+```yaml
+schema_version: 2
+diagnostics:
+  timing: true
+  resources: true
+  reliability: true
+```
+
+Restart the engine. Performance shows engine-process CPU (100% = one logical core), RSS/working set and the existing 10-second pipeline stage percentiles and budgets. Resources are sampled every two seconds outside the tracking pipeline and at most 300 points are retained. Linux 64-bit and Windows process CPU counters are supported; unavailable counters are null. GPU utilization/VRAM are not measured. Export the current sample window as JSON.
+
+Reliability additionally exposes an opt-in engine-owned SQLite archive in the engine data directory at diagnostics/reliability.sqlite. It stores device status, stream counters, clock status, battery and signal, without athlete or motion data. It samples live state every five seconds independently of the browser, skips replay, and retains at most 20,000 snapshots or seven days (whichever limit is reached first). SQLite may retain freed pages for reuse. The API returns 120 snapshots per page; browse older pages and export individual pages. Disabled collection does not delete previous data. This is sampled evidence, not continuous uptime.

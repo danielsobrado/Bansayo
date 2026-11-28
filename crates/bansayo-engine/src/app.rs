@@ -231,7 +231,7 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
     ];
     let diagnostics = spawn_diagnostics(
         &mut tasks,
-        timing,
+        timing.clone(),
         streams.notices.clone(),
         drops.clone(),
         clock.clone(),
@@ -274,7 +274,25 @@ pub async fn start(config: Validated) -> Result<EngineHandle, EngineError> {
         cancel.clone(),
     );
     tasks.push(worker);
+    let diagnostic_config = config.config.diagnostics();
+    let (performance, worker) = crate::performance::spawn(
+        diagnostic_config.resources,
+        timing,
+        clock.clone(),
+        cancel.clone(),
+    );
+    tasks.push(worker);
+    if diagnostic_config.reliability {
+        tasks.push(crate::reliability::spawn(
+            crate::reliability::path(&data_dir),
+            streams.state.clone(),
+            clock.clone(),
+            cancel.clone(),
+        ));
+    }
     let api = Api {
+        performance,
+        reliability_enabled: diagnostic_config.reliability,
         diagnostic_recorder,
         xr,
         client,

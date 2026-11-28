@@ -5,6 +5,10 @@ engine:
   publish_rate_hz: 120
   stale_after_ms: 250
   data_dir: ./data
+diagnostics:
+  timing: true
+  resources: true
+  reliability: false # Opt in to persistent device status history when needed.
 tracking:
   mode: imu_only
 sources:

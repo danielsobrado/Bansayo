@@ -104,3 +104,32 @@ pub async fn solver(
         Err(error) => super::control_error(error),
     }
 }
+
+pub async fn performance(State(api): State<Api>) -> Response {
+    Json(ApiResponse::ok(api.performance.borrow().as_ref().clone())).into_response()
+}
+
+#[derive(serde::Deserialize)]
+pub struct ReliabilityQuery {
+    before_ms: Option<u64>,
+}
+
+pub async fn reliability(State(api): State<Api>, Query(query): Query<ReliabilityQuery>) -> Response {
+    let path = crate::reliability::path(&api.data_dir);
+    let result =
+        tokio::task::spawn_blocking(move || crate::reliability::read(&path, query.before_ms)).await;
+    match result {
+        Ok(Ok(rows)) => Json(ApiResponse::ok(serde_json::json!({
+            "enabled": api.reliability_enabled, "rows": rows
+        })))
+        .into_response(),
+        Ok(Err(error)) => {
+            tracing::warn!(%error, "Reliability history read failed");
+            failure(ApiErrorCode::Unavailable, "Reliability history unavailable.")
+        }
+        Err(error) => {
+            tracing::warn!(%error, "Reliability history worker failed");
+            failure(ApiErrorCode::Internal, "Reliability history worker failed.")
+        }
+    }
+}
