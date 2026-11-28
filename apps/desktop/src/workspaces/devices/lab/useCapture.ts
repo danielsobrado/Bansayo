@@ -1,4 +1,6 @@
 import { useEffect,useRef,useState } from "react";
+import {startOpticalCapture} from "./opticalCapture";
+import type {OpticalSelection} from "./opticalSyncConfig";
 import { request,seg } from "../../../engine/http";
 import { BATCH_MS,CAPTURE_DRAIN_MS,MAX_ROWS,MAX_DEVICES,parseBatch,continuesBatch,parseClock,type Capture,type Sample,type EngineClock } from "./captureTypes";
 
@@ -11,10 +13,11 @@ export function useCapture(live:boolean) {
   function stop(reason="Stopped by operator"){stopRef.current(reason);}
   useEffect(()=>{if(!live)stopRef.current("Engine left live mode");},[live]);
   useEffect(()=>()=>{controller.current?.abort();},[]);
-  function start(ids:string[],seconds:number) {
+  function start(ids:string[],seconds:number,optical?:OpticalSelection) {
     if(!live||running||!ids.length||ids.length>MAX_DEVICES||new Set(ids).size!==ids.length||(controller.current&&!controller.current.signal.aborted))return;
     const ctl=new AbortController();controller.current=ctl;
     const capture:Capture={samples:[],markers:[],lost:0,resets:0,started:new Date().toISOString(),reason:"Capturing"};
+    if(optical)capture.optical=startOpticalCapture(optical,ctl.signal);
     data.current=capture;latest.current=0;setRunning(true);setStopping(false);setElapsed(0);setRevision(v=>v+1);
     let clockStart:EngineClock|null=null,cutoff:number|null=null,lastClock:number|null=null;
     let excluded=0;
@@ -28,6 +31,7 @@ export function useCapture(live:boolean) {
         const count=capture.samples.length;
         capture.samples=capture.samples.filter(s=>s.point.t_us>=clockStart!.t_us&&s.point.t_us<end);
         capture.window={start_us:clockStart.t_us,end_us:end,excluded:excluded+count-capture.samples.length};
+        if(capture.optical)capture.optical.frames=capture.optical.frames.filter(p=>p.t_us>=clockStart!.t_us&&p.t_us<end);
       }
       ctl.abort();window.clearTimeout(timer);capture.reason=reason;setRunning(false);setStopping(false);setRevision(v=>v+1);
     };

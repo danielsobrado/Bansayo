@@ -90,7 +90,7 @@ export function compareTiming(a:readonly SyncPoint[],b:readonly SyncPoint[]):Syn
   }
   if(!curve.length)return unavailable("Insufficient signal variation; move both sensors together.");
   const best=curve.reduce((p,q)=>q.correlation>p.correlation?q:p);
-  const alt=curve.filter(p=>Math.abs(p.lagMs-best.lagMs)>=Math.max(C.competingPeakUs,2*step/1000)).reduce<number|null>((v,p)=>v===null||p.correlation>v?p.correlation:v,null);
+  const alt=curve.filter(p=>Math.abs(p.lagMs-best.lagMs)>=Math.max(C.competingPeakUs/1000,2*step/1000)).reduce<number|null>((v,p)=>v===null||p.correlation>v?p.correlation:v,null);
   const zero=curve.find(p=>p.lagMs===0)?.correlation??null;
   const status=best.correlation<C.minCorrelation?"weak":Math.abs(best.lagMs)>=maxLag*step/1000?"boundary":alt!==null&&best.correlation-alt<C.ambiguityMargin?"ambiguous":"estimated";
   const reasons={weak:"Weak correlation; no reliable lag estimate.",boundary:"Peak at the search boundary; lag may exceed the search range.",ambiguous:"Competing lag candidates; repeat with distinctive non-periodic movement.",estimated:"Advisory feature lag, not a hardware clock or latency measurement."};

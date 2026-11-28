@@ -1,3 +1,4 @@
+import type {OpticalRecording} from "./opticalSyncConfig";
 import { CHANNEL_IDS,CHANNELS,type ChannelId,type Point } from "./trace";
 export const CAPTURE_SECONDS=[10,60,300,600] as const;
 export const MAX_ROWS=500_000;
@@ -12,7 +13,7 @@ export function parseClock(value:unknown):EngineClock|null {
 }
 export interface Sample { device:string; epoch:number; cursor:number; channel:ChannelId; point:Point }
 export interface Marker { t_us:number; label:string; device?:string }
-export interface Capture { samples:Sample[];markers:Marker[];lost:number;resets:number;started:string;reason:string;window?:{start_us:number;end_us:number;excluded:number} }
+export interface Capture { optical?:OpticalRecording; samples:Sample[];markers:Marker[];lost:number;resets:number;started:string;reason:string;window?:{start_us:number;end_us:number;excluded:number} }
 export interface Batch {epoch:number;next:number;lost:number;reset:boolean;entries:Omit<Sample,"device"|"epoch">[]}
 export function parseBatch(value:unknown):Batch|null {
   if(!value||typeof value!=="object")return null;
