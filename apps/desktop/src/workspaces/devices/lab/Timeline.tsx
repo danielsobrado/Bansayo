@@ -8,8 +8,8 @@ const WIDTH=720,HEIGHT=180,BINS=600;
 export function Timeline({capture}:{capture:Capture}) {
   const [device,setDevice]=useState(""),[channel,setChannel]=useState<ChannelId>("gyro"),[axis,setAxis]=useState(0);
   const [windowSec,setWindowSec]=useState(30),[offset,setOffset]=useState(0);
-  const index=useRef<{capture:Capture;count:number;groups:Map<string,Map<ChannelId,Sample[]>>;unordered:Set<Sample[]>;min:number;max:number}|null>(null);
-  if(!index.current||index.current.capture!==capture)index.current={capture,count:0,groups:new Map(),unordered:new Set(),min:Infinity,max:0};
+  const index=useRef<{capture:Capture;source:Sample[];count:number;groups:Map<string,Map<ChannelId,Sample[]>>;unordered:Set<Sample[]>;min:number;max:number}|null>(null);
+  if(!index.current||index.current.capture!==capture||index.current.source!==capture.samples)index.current={capture,source:capture.samples,count:0,groups:new Map(),unordered:new Set(),min:Infinity,max:0};
   const indexed=index.current;
   const groups=indexed.groups;
   for(let i=indexed.count;i<capture.samples.length;i++){

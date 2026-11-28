@@ -98,7 +98,7 @@ jobs:
         with:
           node-version: 22
       - run: cargo test -p bansayo-engine --test native_inspection
-      - run: node --test scripts/diagnostic-journal-validation.test.mjs
+      - run: node --test scripts/diagnostic-journal-validation.test.mjs scripts/sensor-hardware-acceptance.test.mjs
       - run: node scripts/bench-sensor-studio-sim.mjs tmp/studio-sim-benchmark
       - uses: actions/upload-artifact@v4
         if: always()

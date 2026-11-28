@@ -76,3 +76,5 @@ Persistent recordings activate all selected device cursors before establishing a
 The native UDP integration now sends valid and foreign-reference BMAG v2 samples to verify filtering through the engine actor. The real-time image-folder test suite runs its three camera fixtures serially to reduce competing decode and scheduler load without reducing measurement acceptance requirements.
 
 Quick browser capture also reads the live engine's monotonic clock after arming all journals, and clips its exported samples to a common half-open mapped-time window. It detects engine epoch changes and drains late arrivals before finalizing. Operator stop is timestamped by the next successful engine clock response, not a physical trigger; use persistent recording for lower-jitter engine-owned start/stop. Older engines without the clock endpoint must be upgraded.
+
+Physical acceptance procedure and explicit gate evaluator: [sensor-hardware-acceptance.md](sensor-hardware-acceptance.md). The new CLI is covered by synthetic positive/negative evidence tests; it does not declare simulated results a physical pass.
