@@ -37,6 +37,9 @@ pub fn load(dir: &Path, id: &SessionId) -> Result<Recording, String> {
         return Err("Session was not found.".into());
     }
     let session = metadata(&path, id)?;
+    if session.size_bytes == 0 {
+        return Err("Recording was not finalised.".into());
+    }
     let file = path.join("recording.mcap");
     let size = std::fs::metadata(&file)
         .map_err(|_| "Recording file is missing.")?
@@ -55,8 +58,13 @@ pub fn load(dir: &Path, id: &SessionId) -> Result<Recording, String> {
     let mut initial = None;
     let mut registry: Option<crate::registry::Registry> = None;
     let mut events = vec![];
+    let mut previous_log_time = None;
     for message in stream {
         let message = message.map_err(|_| "Recording contains a damaged message.")?;
+        if previous_log_time.is_some_and(|previous| message.log_time < previous) {
+            return Err("Recording acceptance timestamps are out of order.".into());
+        }
+        previous_log_time = Some(message.log_time);
         let data = match message.channel.topic.as_str() {
             "/bansayo/context" => {
                 let context: Context = serde_json::from_slice(&message.data)
@@ -116,7 +124,9 @@ pub fn load(dir: &Path, id: &SessionId) -> Result<Recording, String> {
                     }
                 }
             }
-            known.event(*event.clone());
+            if !known.event(*event.clone()) {
+                return Err("Recorded event was rejected by the registry.".into());
+            }
         }
         events.push(Recorded {
             accepted_us: message.log_time / 1000,
@@ -126,10 +136,12 @@ pub fn load(dir: &Path, id: &SessionId) -> Result<Recording, String> {
             return Err("Session has too many events for in-memory playback.".into());
         }
     }
-    events.sort_by_key(|e| e.accepted_us);
     let initial: Context = initial.ok_or("Recording context is missing.")?;
     // Replay ends at the session duration, so every event must be within it to be replayed.
-    let end = initial.started_t_us.saturating_add(session.duration_us);
+    let end = initial
+        .started_t_us
+        .checked_add(session.duration_us)
+        .ok_or("Recording duration overflows the session clock.")?;
     if events.last().is_some_and(|e| e.accepted_us > end) {
         return Err("Recording events extend beyond the session duration.".into());
     }

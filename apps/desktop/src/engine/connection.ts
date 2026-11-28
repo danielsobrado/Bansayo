@@ -29,6 +29,7 @@ function announceRep(data: Record<string, unknown>): void {
 
 export const BACKOFF_INITIAL_MS = 500;
 export const BACKOFF_MAX_MS = 8_000;
+export const HELLO_TIMEOUT_MS = 10_000;
 
 /** The part of `WebSocket` the connection uses, so tests can supply a fake. */
 export interface SocketLike {
@@ -64,6 +65,7 @@ export function backoffDelay(attempt: number): number {
 export class EngineConnection {
   private socket: SocketLike | null = null;
   private timer: unknown = null;
+  private helloTimer: unknown = null;
   private attempt = 0;
   private greeted = false;
   private stopped = true;
@@ -82,7 +84,10 @@ export class EngineConnection {
   stop(): void {
     this.stopped = true;
     this.cancelTimer();
+    this.cancelHelloTimer();
     this.detach();
+    this.greeted = false;
+    clearLiveValues();
   }
 
   /** Skips the remaining backoff. */
@@ -178,7 +183,8 @@ export class EngineConnection {
       this.stop();
       return;
     }
-    if (!isCompleteHello(m)) return;
+    if (!isCompleteHello(m) || this.greeted) return;
+    this.cancelHelloTimer();
     clearLiveValues();
     skeletonStore.set(m.skeleton);
     systemStateStore.set(m.state);
@@ -193,6 +199,7 @@ export class EngineConnection {
   }
 
   private connect(): void {
+    this.cancelHelloTimer();
     this.detach();
     this.greeted = false;
     connectionStore.set({ kind: "connecting", attempt: this.attempt });
@@ -204,16 +211,25 @@ export class EngineConnection {
       return;
     }
     socket.onmessage = (ev) => {
-      if (typeof ev.data === "string") this.handleText(ev.data);
+      if (this.socket === socket && typeof ev.data === "string") this.handleText(ev.data);
     };
-    socket.onclose = () => this.onClosed();
+    socket.onclose = () => {
+      if (this.socket === socket) this.onClosed();
+    };
     socket.onerror = () => {
       /* `close` follows `error`; recovery happens there. */
     };
     this.socket = socket;
+    this.helloTimer = this.deps.setTimer(() => {
+      this.helloTimer = null;
+      if (this.socket !== socket || this.greeted || this.stopped) return;
+      this.detach();
+      this.onClosed();
+    }, HELLO_TIMEOUT_MS);
   }
 
   private onClosed(): void {
+    this.cancelHelloTimer();
     this.socket = null;
     if (this.stopped || connectionStore.get().kind === "incompatible") return;
     const wasOpen = connectionStore.get().kind === "open";
@@ -240,6 +256,11 @@ export class EngineConnection {
     s.onclose = null;
     s.onerror = null;
     s.close();
+  }
+
+  private cancelHelloTimer(): void {
+    if (this.helloTimer !== null) this.deps.clearTimer(this.helloTimer);
+    this.helloTimer = null;
   }
 
   private cancelTimer(): void {

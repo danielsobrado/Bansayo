@@ -26,6 +26,14 @@ pub struct Replay {
 }
 impl Replay {
     pub fn new(recording: Recording, speed: f32, looping: bool) -> Result<Self, String> {
+        if !speed.is_finite() || speed <= 0.0 {
+            return Err("Playback speed must be finite and positive.".into());
+        }
+        recording
+            .initial
+            .started_t_us
+            .checked_add(recording.session.duration_us)
+            .ok_or("Recording duration overflows the session clock.")?;
         let (registry, store, skeleton) = recording.initial.restore()?;
         Ok(Self {
             recording,
@@ -53,18 +61,25 @@ impl Replay {
         }
     }
     pub fn seek(&mut self, position: u64) -> Result<(), String> {
+        if position > self.recording.session.duration_us {
+            return Err("Playback position exceeds recording duration.".into());
+        }
         let (registry, store, skeleton) = self.recording.initial.restore()?;
         self.registry = registry;
         self.store = store;
         self.skeleton = skeleton;
         self.cursor = 0;
+        self.planar = Default::default();
         self.position_us = position;
         self.clock_position = position as f64;
         self.apply_until(self.recording.initial.started_t_us + position, None)?;
         let time = self.recording.initial.started_t_us + position;
         let sample = self.solve_at(time).1;
         self.latest_motion = Some(self.with_planar(sample, time));
-        self.next_tick = (position as f64 * self.rate() / 1e6).ceil() as u64;
+        self.next_tick = (position as f64 * self.rate() / 1e6).floor() as u64;
+        while self.tick_offset(self.next_tick) < position {
+            self.next_tick += 1;
+        }
         Ok(())
     }
     fn with_planar(&mut self, mut sample: MotionSample, time: u64) -> MotionSample {

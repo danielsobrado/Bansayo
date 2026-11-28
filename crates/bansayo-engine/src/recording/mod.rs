@@ -158,7 +158,9 @@ impl Context {
             BTreeMap::new(),
         );
         for o in &self.latest {
-            registry.accept(o.clone());
+            if !registry.accept(o.clone()) {
+                return Err("Recording context contains duplicate or unordered observations.".into());
+            }
         }
         for (id, entry) in &mut registry.entries {
             entry.connected = *self.links.get(id).unwrap_or(&true);

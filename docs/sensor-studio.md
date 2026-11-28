@@ -126,3 +126,9 @@ Timing estimates and stationary acceptance require a successfully completed comm
 The engine performance endpoint exposes stage summaries even when resource sampling is disabled. Stage samples are bounded and copied under the timing mutex; sorting is outside the lock. The reliability archive uses read-only queries and an insertion-ID cursor (before_id) rather than wall-clock timestamps, so equal UTC timestamps do not drop rows during pagination. Exported archive rows include the cursor ID. The browser clears stale page results when the query changes or goes offline. UDP jitter p95 uses the nearest-rank percentile.
 
 The real-time training integration tests serialize their simulator rigs to avoid artificial contention on shared CI runners. No production recognition threshold or test assertion has been relaxed; replay count failures still require separate investigation if reproduced.
+
+## Core engine review follow-up
+
+Source supervision cancellation interrupts queued failure reporting. WebSocket subscriptions continue when optional stage diagnostics are disabled, replay the most recent available diagnostic packet on subscription, and reject rates outside 1–1000 Hz before converting them into timer periods. State-only subscriptions do not create frame ticker threads. Desktop connection attempts have a ten-second hello deadline and ignore repeated valid hello messages.
+
+Recording writers exclusively create the MCAP file and require explicit finalisation before publishing completed metadata. Playback rejects zero-size/unfinalised metadata, decreasing log timestamps, registry-rejected events and overflowing duration. Existing compressed golden recordings retain their original metadata size, so exact file-size equality is not enforced by the full loader. Replay rejects invalid seek positions or nonpositive/nonfinite speed, resets planar history on seek and uses the rounded solver tick boundary.

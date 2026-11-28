@@ -37,17 +37,17 @@ pub async fn supervise<S: Source + Clone>(source: S, devices: Vec<DeviceId>, con
             "Source repeatedly failed. Restart the engine after checking its configuration."
         };
         // Control-plane failures wait for bounded capacity, preserving the device failure report.
-        if context
-            .as_ref()
-            .events
-            .send(Ingest::Failure {
-                devices: devices.clone(),
-                message: message.into(),
-            })
-            .await
-            .is_err()
-        {
-            break;
+        let report = Ingest::Failure {
+            devices: devices.clone(),
+            message: message.into(),
+        };
+        tokio::select! {
+            _ = context.as_ref().cancel.cancelled() => break,
+            result = context.as_ref().events.send(report) => {
+                if result.is_err() {
+                    break;
+                }
+            }
         }
         if !retry {
             break;
@@ -77,6 +77,38 @@ mod tests {
             Err(super::super::SourceError("test failure".into()))
         }
     }
+    #[tokio::test]
+    async fn cancellation_interrupts_a_blocked_failure_report() {
+        let (events, _rx) = tokio::sync::mpsc::channel(1);
+        events
+            .try_send(Ingest::Notice {
+                code: "full".into(),
+                message: "full".into(),
+            })
+            .unwrap_or_else(|_| panic!("queue should have capacity"));
+        let cancel = tokio_util::sync::CancellationToken::new();
+        let context = SourceContext {
+            events,
+            clock: SessionClock::start(),
+            cancel: cancel.clone(),
+            dropped: BTreeMap::new(),
+        };
+        let attempts = Arc::new(AtomicU32::new(0));
+        let task = tokio::spawn(supervise(Failing(attempts.clone()), vec![], context));
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while attempts.load(Ordering::Relaxed) == 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        cancel.cancel();
+        tokio::time::timeout(Duration::from_secs(2), task)
+            .await
+            .unwrap()
+            .unwrap();
+    }
+
     #[tokio::test]
     async fn stops_after_capped_restarts_and_reports_each_failure() {
         let (events, mut rx) = tokio::sync::mpsc::channel(16);

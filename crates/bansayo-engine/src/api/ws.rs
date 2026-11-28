@@ -21,6 +21,9 @@ pub struct StreamQuery {
     observables: Option<String>,
 }
 
+const MIN_STREAM_RATE_HZ: f64 = 1.0;
+const MAX_STREAM_RATE_HZ: f64 = 1000.0;
+
 /// Feature flags announced in `hello` (14 §4).
 pub const CAPABILITIES: &[&str] = &["training", "content", "athletes", "progress", "diagnostics"];
 pub async fn upgrade(
@@ -71,10 +74,10 @@ pub async fn upgrade(
         );
     }
     let rate = query.max_rate_hz.unwrap_or(api.publish_rate);
-    if !(rate.is_finite() && rate > 0.0 && rate <= 1000.0) {
+    if !valid_stream_rate(rate) {
         return failure(
             ApiErrorCode::InvalidRequest,
-            "Stream maximum rate must be greater than 0 and at most 1000 Hz.",
+            "Stream maximum rate must be between 1 and 1000 Hz.",
         );
     }
     let Ok(ws) = ws else {
@@ -86,6 +89,10 @@ pub async fn upgrade(
     ws.on_upgrade(move |socket| stream(socket, api, topics, rate, extra))
         .into_response()
 }
+fn valid_stream_rate(rate: f64) -> bool {
+    rate.is_finite() && (MIN_STREAM_RATE_HZ..=MAX_STREAM_RATE_HZ).contains(&rate)
+}
+
 async fn send(
     socket: &mut futures_util::stream::SplitSink<WebSocket, Message>,
     message: &ServerMessage,
@@ -155,13 +162,21 @@ async fn stream(
     let wants_state = topics.iter().any(|t| t == "state");
     let wants_2d = topics.iter().any(|t| t == "landmarks_2d");
     let wants_3d = topics.iter().any(|t| t == "landmarks_3d");
-    let wants_diagnostics = topics.iter().any(|t| t == "diagnostics");
+    let mut wants_diagnostics = topics.iter().any(|t| t == "diagnostics");
+    if wants_diagnostics {
+        let packet = api.diagnostics.borrow_and_update().clone();
+        if let Some(p) = packet
+            && !send_encoded(&mut sink, &p).await
+        {
+            return;
+        }
+    }
     let mut landmarks = api.streams.landmarks.subscribe();
     let mut notices = api.streams.notices.subscribe();
     // shortcut: one ticker thread per socket, fine for a few local clients; share one ticker
     // per rate if many-client load ever matters.
-    let mut timer =
-        crate::ticker::ticker(Duration::from_secs_f64(1.0 / rate.min(api.publish_rate)));
+    let mut timer = (wants_frame || wants_observables)
+        .then(|| crate::ticker::ticker(Duration::from_secs_f64(1.0 / rate.min(api.publish_rate))));
     let mut last_seq = None;
     let mut last_skeleton_rev = api.streams.skeleton.borrow().rev;
     let mut last_state_rev = api.streams.state.borrow().rev;
@@ -186,7 +201,7 @@ async fn stream(
             notice=notices.recv()=>Event::Notice(notice),
             input=incoming.next()=>Event::Input(input),
             changed=api.streams.state.changed(),if wants_state=>Event::State(changed),
-            _=timer.recv(),if wants_frame || wants_observables=>Event::Frame,
+            _=async { match timer.as_mut() { Some(t) => t.recv().await, None => std::future::pending().await } }=>Event::Frame,
             changed=api.training_streams.state.changed(),if wants_training=>Event::Training(changed),
             e=training_events.recv(),if wants_training=>Event::TrainingIncrement(e),
             point=landmarks.recv(),if wants_2d || wants_3d=>Event::Landmark(point),
@@ -198,8 +213,9 @@ async fn stream(
                     break;
                 }
             }
-            Event::Notice(Err(_)) => {}
-            Event::Diagnostics(Err(_)) => break,
+            Event::Notice(Err(tokio::sync::broadcast::error::RecvError::Lagged(_))) => {}
+            Event::Notice(Err(tokio::sync::broadcast::error::RecvError::Closed)) => break,
+            Event::Diagnostics(Err(_)) => wants_diagnostics = false,
             Event::Diagnostics(Ok(())) => {
                 let packet = api.diagnostics.borrow_and_update().clone();
                 if let Some(p) = packet
@@ -345,4 +361,18 @@ async fn send_observables(
         },
     )
     .await
+}
+
+#[cfg(test)]
+mod rate_tests {
+    use super::*;
+
+    #[test]
+    fn stream_rate_is_bounded_before_duration_conversion() {
+        for invalid in [0.0, f64::MIN_POSITIVE, f64::NAN, f64::INFINITY, 1001.0] {
+            assert!(!valid_stream_rate(invalid));
+        }
+        assert!(valid_stream_rate(1.0));
+        assert!(valid_stream_rate(1000.0));
+    }
 }

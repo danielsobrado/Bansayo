@@ -101,16 +101,14 @@ impl Recorder {
                     }
                     Ok((mut writer, mut channels)) => {
                         let _ = ready_tx.send(Ok(()));
-                        let mut duration = 0;
                         let result = (|| -> Result<RecordingSession, String> {
-                            while let Ok(item) = rx.recv() {
+                            let duration = loop {
+                                let item = rx.recv().map_err(|_| {
+                                    "Recording interrupted before explicit finalisation.".to_owned()
+                                })?;
                                 match item {
-                                    Item::Finish { duration_us } => {
-                                        duration = duration_us;
-                                        break;
-                                    }
+                                    Item::Finish { duration_us } => break duration_us,
                                     Item::Event { accepted_us, event } => {
-                                        duration = accepted_us.saturating_sub(started);
                                         write_event(&mut writer, &mut channels, accepted_us, event)
                                             .map_err(|e| e.to_string())?;
                                     }
@@ -118,7 +116,6 @@ impl Recorder {
                                         accepted_us,
                                         context,
                                     } => {
-                                        duration = accepted_us.saturating_sub(started);
                                         write_json(
                                             &mut writer,
                                             &mut channels,
@@ -130,7 +127,7 @@ impl Recorder {
                                         .map_err(|e| e.to_string())?;
                                     }
                                 }
-                            }
+                            };
                             writer.finish().map_err(|e| e.to_string())?;
                             let file = writer
                                 .into_inner()
@@ -195,6 +192,10 @@ fn open(
     session: &RecordingSession,
     context: &Context,
 ) -> Result<(FileWriter, BTreeMap<String, u16>), Box<dyn std::error::Error>> {
+    let file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path.join("recording.mcap"))?;
     atomic_write(
         &path.join("session.json"),
         &serde_json::to_vec_pretty(&SessionFile {
@@ -202,7 +203,6 @@ fn open(
             session: session.clone(),
         })?,
     )?;
-    let file = std::fs::File::create(path.join("recording.mcap"))?;
     // Input recordings stay uncompressed, as before the zstd feature was enabled for motion.mcap.
     let mut writer = mcap::WriteOptions::new()
         .compression(None)

@@ -482,3 +482,16 @@ fn advance_step_sizes_do_not_change_the_messages() {
         assert_eq!(replay(&recording, step), reference, "{step}");
     }
 }
+
+#[test]
+fn rejects_invalid_seek_and_speed() {
+    let recording = recording(1, 100_000, &[]);
+    assert!(Replay::new(recording.clone(), f32::NAN, false).is_err());
+    assert!(Replay::new(recording.clone(), 0.0, false).is_err());
+    let mut replay = Replay::new(recording, 1.0, false).unwrap();
+    assert!(replay.seek(100_001).is_err());
+    assert_eq!(replay.position_us, 0);
+    replay.seek(16_667).unwrap();
+    let messages = replay.advance(0).unwrap();
+    assert_eq!(frames(&messages), [16_667]);
+}

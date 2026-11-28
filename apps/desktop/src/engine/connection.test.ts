@@ -176,6 +176,28 @@ describe("connection and live data lifecycle", () => {
     expect(freshLandmarks(20).size).toBe(0);
     connection.stop();
   });
+  it("retries when a socket never sends a valid hello", () => {
+    const {connection,sockets,timers}=setup();
+    expect(timers).toHaveLength(1);
+    timers.shift()!();
+    expect(sockets[0]!.closed).toBe(true);
+    expect(connectionStore.get().kind).toBe("disconnected");
+    timers.shift()!();
+    expect(sockets).toHaveLength(2);
+    connection.handleText(JSON.stringify(hello));
+    expect(connectionStore.get().kind).toBe("open");
+    expect(timers).toHaveLength(0);
+    connection.stop();
+    expect(systemStateStore.get()).toBeNull();
+  });
+  it("ignores repeated hello on an established connection", () => {
+    const {connection}=setup();
+    connection.handleText(JSON.stringify(hello));
+    connection.handleText(JSON.stringify(frame));
+    connection.handleText(JSON.stringify(hello));
+    expect(frameStore.frame?.seq).toBe(frame.seq);
+    connection.stop();
+  });
   it("caps exponential reconnect backoff", () => {
     expect([0, 1, 4, 20].map(backoffDelay)).toEqual([500, 1000, 8000, 8000]);
   });
