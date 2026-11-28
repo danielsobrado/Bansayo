@@ -74,6 +74,11 @@ test("sensor studio instrumentation and responsive layouts",async({page},info)=>
   await expect(studio.getByRole("img",{name:"Recorded signal and event markers"})).toBeVisible();
   await expect(studio.getByRole("img",{name:"FFT amplitude spectrum"})).toBeVisible();
   await expect(studio.getByRole("img",{name:"Power spectral density"})).toBeVisible();
+  await expect(studio.getByRole("heading",{name:"Multi-device timing and signal health"})).toBeVisible();
+  await expect(studio.getByText("Record at least two devices with the selected channel for timing comparison.")).toBeVisible();
+  const syncReport=page.waitForEvent("download");
+  await studio.getByRole("button",{name:"Export sync report"}).click();
+  expect((await syncReport).suggestedFilename()).toBe("bansayo-sensor-sync.json");
   await page.screenshot({path:info.outputPath("capture-analysis.png")});
   const recording=page.waitForEvent("download");
   await studio.getByRole("button",{name:"Export recording"}).click();
