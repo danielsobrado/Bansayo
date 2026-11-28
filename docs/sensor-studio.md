@@ -22,7 +22,7 @@ Open Devices → Sensor Studio using a simulated or physical rig. Verify filteri
 - Timeline: session-relative min/max envelope, per-device/channel selection, time-window navigation and operator event markers at the latest received session timestamp (not a hardware trigger).
 - Signals: drag to reorder within the instrument grid, keyboard move buttons and wide docking. Panel order persists. No arbitrary floating windows or cross-workspace docking.
 - Analysis: mean-removed Hann FFT, one-sided periodogram power spectral density, overlapping Allan deviation from the latest contiguous approximately uniform run, and magnetic ellipsoid fit with positive-definite and coverage checks plus a held-out radius residual. Fits are advisory, no automatic firmware write.
-- Optical: orbitable calibrated frustums, observed rays, nearest-ray residual and solver-reported RMS; fresh 2D preview within 40 ms is not necessarily the solver's exact observation. Valid profiles and matching image size required.
+- Optical: orbitable calibrated frustums, observed rays, nearest-ray residual and solver-reported RMS; exact aligned input rays and final residuals, with a clearly labelled 40 ms preview fallback for older frames. Valid matching profiles are required for camera frustums.
 
 ## Physical acceptance and performance
 1. Flash the BIMU v2 Mosaico firmware and mount-calibrate. Enable magnetic diagnostics. Confirm orientation, gyro and accel rates independently at 100 and 200 Hz.
@@ -32,7 +32,7 @@ Open Devices → Sensor Studio using a simulated or physical rig. Verify filteri
 5. With calibrated cameras, move a ChArUco board or known rigid target through the capture volume; inspect reprojection RMS and rejected views. Compare against surveyed dimensions, not visual agreement alone.
 6. Test draggable instruments, export, browser memory, phone layout and GPU cleanup. Keep screenshots and test reports under a dated local acceptance directory.
 
-TODO: physical acceptance, unrestricted floating-window docking, exact solver-input residual trace, validated metrological calibration and hardware performance baselines.
+TODO: physical acceptance, unrestricted floating-window docking, validated metrological calibration and hardware performance baselines.
 
 The independent browser test uses deterministic synthetic telemetry, not real hardware: `cd apps/desktop && npx playwright install chromium && npx playwright test -c playwright.sensor-studio.config.ts`. CI uploads screenshots for desktop dark/light and phone views. Narrow-screen overrides are scoped to Sensor Studio; the other workspaces retain their desktop minimum width. This is a UI acceptance test, not a measurement-accuracy test or pixel-baseline regression suite.
 
@@ -61,7 +61,7 @@ Capture and import reject duplicate, missing or out-of-order journal cursors unl
 
 Inspection snapshots expose an opaque reference generation. Guided bench captures and tracker comparison baselines are invalidated on reference changes; a prior orientation must never be compared to a new reference. Triangulation only interpolates frames with matching landmark schema, count and calibrated resolution.
 
-BMAG sequence filtering now follows every accepted sample rather than the decimated chart, extends wrapping counters, and splits diagnostic journals on a detected auxiliary reboot. BMAG v1 still lacks a firmware reference identifier; late datagrams cannot be unambiguously distinguished from every reboot. Optical preview rays require the reconstruction's calibration profile IDs and compatible schema/resolution; they remain preview observations.
+BMAG sequence filtering now follows every accepted sample rather than the decimated chart, extends wrapping counters, and splits diagnostic journals on a detected auxiliary reboot. Legacy BMAG v1 lacks a firmware reference identifier; prefer BMAG v2. Legacy optical preview rays require the reconstruction's calibration profile IDs and compatible schema/resolution.
 
 The CLI recovery analyzer now applies the same structural checks as the browser (device membership, channel shape, finite samples, contiguous cursor or explicit loss, reference and footer counts). A cleanly closed but truncated-at-limit or reset-terminated capture is not proof of continuous sampling.
 
@@ -71,7 +71,7 @@ BMAG v2 (40 bytes) appends the same little-endian nonzero u64 reference as BIMU 
 
 Triangulated landmarks optionally carry exact aligned per-view detections, final projections, residuals and the original world-space rays. Rejected views are reprojected against the final accepted point, not the intermediate outlier fit. The optical lab prefers this evidence; older frames retain the explicitly labelled preview fallback. This additive wire field increases landmark message size and should be included in performance acceptance.
 
-Persistent recordings activate all selected device cursors before establishing a common engine-clock start. Stop captures an engine timestamp, duration uses that clock, and the recorder drains for up to 250 ms after the boundary. Raw journal rows and cursor integrity remain intact; the browser import selects the half-open interval [window_start_us, window_end_us), and the CLI reports raw channel statistics plus in-window counts. Clock-estimation uncertainty, late observations beyond the drain and physical triggering remain hardware-dependent. Browser quick capture still uses a browser-controlled request boundary; use engine recording for synchronized comparisons.
+Persistent recordings activate all selected device cursors before establishing a common engine-clock start. Stop captures an engine timestamp, duration uses that clock, and the recorder drains for up to 250 ms after the boundary. Raw journal rows and cursor integrity remain intact; the browser import selects the half-open interval [window_start_us, window_end_us), and the CLI reports raw channel statistics plus in-window counts. Clock-estimation uncertainty, late observations beyond the drain and physical triggering remain hardware-dependent. Both recorders use mapped engine time windows; persistent recording avoids browser polling latency when establishing stop.
 
 The native UDP integration now sends valid and foreign-reference BMAG v2 samples to verify filtering through the engine actor. The real-time image-folder test suite runs its three camera fixtures serially to reduce competing decode and scheduler load without reducing measurement acceptance requirements.
 

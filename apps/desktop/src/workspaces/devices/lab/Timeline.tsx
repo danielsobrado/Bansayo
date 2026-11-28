@@ -26,7 +26,7 @@ export function Timeline({capture}:{capture:Capture}) {
   const selected=channels?.has(channel)?channel:channels?.keys().next().value??"gyro";
   const points=channels?.get(selected)??[];
   const a=Math.min(axis,CHANNELS[selected].axes.length-1);
-  const bounds={min:Number.isFinite(indexed.min)?indexed.min:0,max:indexed.max};
+  const bounds=capture.window?{min:capture.window.start_us,max:capture.window.end_us}:{min:Number.isFinite(indexed.min)?indexed.min:0,max:indexed.max};
   const duration=(bounds.max-bounds.min)/1e6;
   const span=Math.max(.001,Math.min(windowSec,duration));
   const effectiveOffset=Math.min(offset,Math.max(0,duration-span));
