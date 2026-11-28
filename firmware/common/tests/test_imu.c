@@ -64,6 +64,12 @@ static void test_magnetic_packet(void)
         42,0,0,0,0x78,0x56,0x34,0x12,0x9c,0xff,0,0,0xff,0x7f,0,0
     };
     assert(memcmp(b,expected,sizeof(b))==0);
+    uint8_t v2[BMAG_V2_PACKET_SIZE];
+    const uint8_t reference[8] = {0xef,0xcd,0xab,0x90,0x78,0x56,0x34,0x12};
+    bmag_encode_v2(v2,mac,0,1,42,0x12345678,values,UINT64_C(0x1234567890abcdef));
+    assert(v2[4]==BMAG_VERSION_V2 && memcmp(v2+32,reference,sizeof(reference))==0);
+    v2[4]=1;
+    assert(memcmp(v2,expected,sizeof(expected))==0);
 }
 
 int main(void)

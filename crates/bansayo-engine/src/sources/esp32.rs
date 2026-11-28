@@ -199,6 +199,7 @@ struct Track {
 // Accept forward modular sequences, including wrap. A backwards sequence is a
 // reset only after a quiet interval and a backwards device clock.
 const RESET_QUIET_US: u64 = 500_000;
+const MAG_MAX_OFFSET_US: u64 = 1_000_000;
 
 #[derive(Default)]
 struct Sequence {
@@ -231,6 +232,22 @@ impl Sequence {
 }
 
 impl Track {
+    fn magnetic_time(&self, packet: &magnetic::Packet, now: u64) -> Option<u64> {
+        if packet.reference != self.reference {
+            return None;
+        }
+        if packet.reference.is_none() {
+            return Some(now);
+        }
+        let (_, raw, _) = self.sequence.last?;
+        let mapped = self.last_mapped_us?;
+        let delta = i64::from(packet.time_us.wrapping_sub(raw) as i32);
+        if delta.unsigned_abs() > MAG_MAX_OFFSET_US {
+            return None;
+        }
+        Some(mapped.saturating_add_signed(delta).min(now))
+    }
+
     /// Do not let a delayed packet from a previous AHRS reference revive it.
     fn observe(&mut self, p: &Packet, reference: Option<u64>, now: u64) -> Option<(u64, bool)> {
         let mut changed = false;
@@ -283,15 +300,24 @@ impl Source for Esp32Source {
                 if let Ok(packet) = magnetic::parse(&buf[..n])
                     && let Some(id) = by_key.get(key(&packet.mac, packet.sensor).as_str())
                 {
-                    crate::sources::inspection::magnetic(
-                        &self.runtime,
-                        id,
-                        packet.channel,
-                        now,
-                        packet.seq,
-                        packet.time_us,
-                        packet.values,
-                    );
+                    let time = tracks
+                        .get(*id)
+                        .and_then(|track| track.magnetic_time(&packet, now));
+                    if let Some(t_us) = time {
+                        let event = Ingest::Magnetic {
+                            device_id: (*id).clone(),
+                            channel: packet.channel,
+                            t_us,
+                            seq: packet.seq,
+                            device_time_us: packet.time_us,
+                            values: packet.values,
+                        };
+                        if context.events.try_send(event).is_err()
+                            && let Some(counter) = context.dropped.get(*id)
+                        {
+                            counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        }
+                    }
                 }
                 continue;
             }

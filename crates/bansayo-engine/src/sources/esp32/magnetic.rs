@@ -1,4 +1,6 @@
-//! BMAG v1: 32-byte auxiliary datagram, independent of BIMU v1.
+//! BMAG v1 is 32 bytes; v2 appends the nonzero BIMU orientation reference.
+pub const V1_LEN: usize = 32;
+pub const V2_LEN: usize = 40;
 pub struct Packet {
     pub mac: [u8; 6],
     pub sensor: u8,
@@ -6,12 +8,24 @@ pub struct Packet {
     pub seq: u32,
     pub time_us: u32,
     pub values: [i16; 3],
+    pub reference: Option<u64>,
 }
 
 pub fn parse(b: &[u8]) -> Result<Packet, &'static str> {
-    if b.len() != 32 || &b[..4] != b"BMAG" || b[4] != 1 {
+    if b.len() < 5 || &b[..4] != b"BMAG" {
         return Err("invalid magnetic packet");
     }
+    let reference = match (b[4], b.len()) {
+        (1, V1_LEN) => None,
+        (2, V2_LEN) => {
+            let id = u64::from_le_bytes(b[32..40].try_into().map_err(|_| "reference")?);
+            if id == 0 {
+                return Err("invalid magnetic reference");
+            }
+            Some(id)
+        }
+        _ => return Err("invalid magnetic packet"),
+    };
     let channel = match b[6] {
         0 => "mag0",
         1 => "mag1",
@@ -28,6 +42,7 @@ pub fn parse(b: &[u8]) -> Result<Packet, &'static str> {
         seq: u32::from_le_bytes(b[16..20].try_into().map_err(|_| "seq")?),
         time_us: u32::from_le_bytes(b[20..24].try_into().map_err(|_| "time")?),
         values,
+        reference,
     })
 }
 
@@ -48,6 +63,13 @@ mod tests {
         assert_eq!(packet.channel, "mag1");
         assert_eq!(packet.values, [-100, 0, 0]);
         assert_eq!(packet.seq, 42);
+        assert_eq!(packet.reference, None);
+        let mut v2 = [0_u8; V2_LEN];
+        v2[..V1_LEN].copy_from_slice(&b);
+        v2[4] = 2;
+        assert!(parse(&v2).is_err());
+        v2[32..].copy_from_slice(&42_u64.to_le_bytes());
+        assert_eq!(parse(&v2).unwrap().reference, Some(42));
         assert!(parse(&b[..31]).is_err());
         b[6] = 2;
         assert!(parse(&b).is_err());

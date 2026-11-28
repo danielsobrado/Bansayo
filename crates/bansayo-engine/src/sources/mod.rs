@@ -31,6 +31,14 @@ pub struct SourceError(pub String);
 #[allow(clippy::large_enum_variant)]
 pub enum Ingest {
     Event(SourceEvent),
+    Magnetic {
+        device_id: DeviceId,
+        channel: &'static str,
+        t_us: u64,
+        seq: u32,
+        device_time_us: u32,
+        values: [i16; 3],
+    },
     /// A condition the user should see that is not a device state, e.g. `multiple_people`.
     Notice {
         code: String,

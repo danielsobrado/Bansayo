@@ -284,6 +284,26 @@ impl Runtime {
                         0,
                     ));
                 }
+                Event::Input(Some(crate::sources::Ingest::Magnetic {
+                    device_id,
+                    channel,
+                    t_us,
+                    seq,
+                    device_time_us,
+                    values,
+                })) => {
+                    if self.replay.is_none() {
+                        crate::sources::inspection::magnetic(
+                            &engine.registry.runtime,
+                            &device_id,
+                            channel,
+                            t_us,
+                            seq,
+                            device_time_us,
+                            values,
+                        );
+                    }
+                }
                 Event::Input(Some(crate::sources::Ingest::Event(event))) => {
                     if self.replay.is_some()
                         && !matches!(&event, SourceEvent::DeviceLink { device_id, .. }

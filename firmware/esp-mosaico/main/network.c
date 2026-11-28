@@ -109,9 +109,10 @@ bool tracker_network_send(const bimu_sample_t *sample)
 }
 
 bool tracker_network_mag(const uint8_t mac[6], uint8_t index, uint32_t seq,
-                         uint32_t time_us, const int16_t values[3])
+                         uint32_t time_us, const int16_t values[3], uint64_t reference_id)
 {
-    uint8_t packet[BMAG_PACKET_SIZE];
-    bmag_encode(packet, mac, TRACKER_SENSOR_NUMBER, index, seq, time_us, values);
+    if (reference_id == 0) return false;
+    uint8_t packet[BMAG_V2_PACKET_SIZE];
+    bmag_encode_v2(packet, mac, TRACKER_SENSOR_NUMBER, index, seq, time_us, values, reference_id);
     return send_packet(packet, sizeof(packet));
 }

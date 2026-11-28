@@ -127,7 +127,7 @@ void app_main(void)
                 read_errors, (int)sample.rssi_dbm);
         }
 #ifdef CONFIG_BANSAYO_MAG_DIAGNOSTICS
-        if (now - last_mag >= TRACKER_MAG_INTERVAL_US) {
+        if (calibrated && now - last_mag >= TRACKER_MAG_INTERVAL_US) {
             last_mag = now;
             int16_t values[3];
             const unsigned index = mag_index;
@@ -135,7 +135,7 @@ void app_main(void)
             if (tracker_mag_read(index, values)) {
                 const uint32_t sample_time = (uint32_t)esp_timer_get_time();
                 ++mag_seq[index];
-                (void)tracker_network_mag(sample.mac, index, mag_seq[index], sample_time, values);
+                (void)tracker_network_mag(sample.mac, index, mag_seq[index], sample_time, values, sample.reference_id);
             }
         }
 #endif

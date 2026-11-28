@@ -64,3 +64,13 @@ void bmag_encode(uint8_t out[BMAG_PACKET_SIZE], const uint8_t mac[6],
         out[25 + 2*i] = (uint8_t)(bits >> 8);
     }
 }
+
+void bmag_encode_v2(uint8_t out[BMAG_V2_PACKET_SIZE], const uint8_t mac[6],
+                    uint8_t sensor, uint8_t index, uint32_t seq,
+                    uint32_t time_us, const int16_t values[3], uint64_t reference_id)
+{
+    bmag_encode(out, mac, sensor, index, seq, time_us, values);
+    out[4] = BMAG_VERSION_V2;
+    put_u32(out + 32, (uint32_t)reference_id);
+    put_u32(out + 36, (uint32_t)(reference_id >> 32));
+}
