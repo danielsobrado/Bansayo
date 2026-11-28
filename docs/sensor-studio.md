@@ -20,7 +20,7 @@ Open Devices → Sensor Studio using a simulated or physical rig. Verify filteri
 ## Advanced bench
 - Capture: up to four non-camera devices, 10/60/300/600 s requested duration, 500,000 total observation limit. Stop on errors or epoch resets; report journal losses. Export JSON before closing.
 - Timeline: session-relative min/max envelope, per-device/channel selection, time-window navigation and operator event markers at the latest received session timestamp (not a hardware trigger).
-- Signals: drag to reorder within the instrument grid, keyboard move buttons and wide docking. Panel order persists. No arbitrary floating windows or cross-workspace docking.
+- Signals: drag to reorder within the instrument grid, keyboard move buttons and wide docking. Panel order persists. Pinned instruments can float within the Studio viewport; no cross-workspace or native OS-window docking.
 - Analysis: mean-removed Hann FFT, one-sided periodogram power spectral density, overlapping Allan deviation from the latest contiguous approximately uniform run, and magnetic ellipsoid fit with positive-definite and coverage checks plus a held-out radius residual. Fits are advisory, no automatic firmware write.
 - Optical: orbitable calibrated frustums, observed rays, nearest-ray residual and solver-reported RMS; exact aligned input rays and final residuals, with a clearly labelled 40 ms preview fallback for older frames. Valid matching profiles are required for camera frustums.
 
@@ -32,14 +32,14 @@ Open Devices → Sensor Studio using a simulated or physical rig. Verify filteri
 5. With calibrated cameras, move a ChArUco board or known rigid target through the capture volume; inspect reprojection RMS and rejected views. Compare against surveyed dimensions, not visual agreement alone.
 6. Test draggable instruments, export, browser memory, phone layout and GPU cleanup. Keep screenshots and test reports under a dated local acceptance directory.
 
-TODO: physical acceptance, unrestricted floating-window docking, validated metrological calibration and hardware performance baselines.
+TODO: physical acceptance, native OS-window and cross-workspace docking, validated metrological calibration and hardware performance baselines.
 
 The independent browser test uses deterministic synthetic telemetry, not real hardware: `cd apps/desktop && npx playwright install chromium && npx playwright test -c playwright.sensor-studio.config.ts`. CI uploads screenshots for desktop dark/light and phone views. Narrow-screen overrides are scoped to Sensor Studio; the other workspaces retain their desktop minimum width. This is a UI acceptance test, not a measurement-accuracy test or pixel-baseline regression suite.
 
 ## Persistent recording and pinned instruments
 Capture → Persistent engine recording is separate from browser capture. One engine-owned job, up to four non-camera devices, 1–3600 seconds (UI presets 1–60 min), 256 MiB per file and 32 directory entries maximum. Files are under `engine.data_dir/diagnostics`. The worker renews journal leases, writes incremental JSONL batches off the tracking thread, flushes periodically, synchronizes on clean completion and renames the partial file. A crash or write error can leave a recoverable partial file; never interpret a missing footer as a complete capture. Stop or engine shutdown closes the file; a reference reset terminates capture. Archive files manually to free capacity. The API reports the latest job in memory; previous files remain on disk. No automatic file upload or deletion.
 
-The pinned instrument shelf supports up to three independent device/channel or room views, remains visible across Studio tabs and persists panel choices/order. Drag or use the reorder buttons; unpin to release resources. On narrow screens it stacks below the active workspace. This is constrained docking, not a general floating-window manager.
+The pinned instrument shelf supports up to three independent device/channel or room views, remains visible across Studio tabs and persists panel choices/order. Drag or use the reorder buttons; unpin to release resources. On narrow screens it stacks below the active workspace. Each pinned instrument can float inside the application, move and resize with pointer handles or arrow keys, and dock back to the shelf. Geometry persists, clamps to the viewport, and falls back to inline panels on narrow screens. The active window is raised; floating instruments remain visible when the shelf is collapsed. Native OS windows and cross-workspace docking are not supported.
 
 ## Repeatable performance baseline
 Enable `diagnostics: { timing: true }` in the engine YAML. Start the engine with the actual hardware configuration (or use `config/sim-six-trackers.yaml` for a clearly labelled simulation). With no active capture, run:
